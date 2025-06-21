@@ -1,0 +1,203 @@
+{
+  "comment": "複数AIプレイヤー設定ファイル - 10人まで個別設定可能",
+  "global": {
+    "spawnDelay": 2000,
+    "autoReconnect": true,
+    "maxReconnectAttempts": 10,
+    "debugMode": true
+  },
+  "players": [
+    {
+      "id": 1,
+      "enabled": true,
+      "host": "localhost",
+      "port": 25565,
+      "username": "ExplorerAI",
+      "auth": "offline",
+      "aiPersonality": "explorer",
+      "spawnDelay": 0
+    },
+    {
+      "id": 2,
+      "enabled": true,
+      "host": "localhost",
+      "port": 25565,
+      "username": "MinerAI",
+      "auth": "offline",
+      "aiPersonality": "miner",
+      "spawnDelay": 2000
+    },
+    {
+      "id": 3,
+      "enabled": true,
+      "host": "localhost",
+      "port": 25565,
+      "username": "BuilderAI",
+      "auth": "offline",
+      "aiPersonality": "builder",
+      "spawnDelay": 4000
+    },
+    {
+      "id": 4,
+      "enabled": true,
+      "host": "localhost",
+      "port": 25565,
+      "username": "FarmerAI",
+      "auth": "offline",
+      "aiPersonality": "farmer",
+      "spawnDelay": 6000
+    },
+    {
+      "id": 5,
+      "enabled": true,
+      "host": "localhost",
+      "port": 25565,
+      "username": "GuardAI",
+      "auth": "offline",
+      "aiPersonality": "guard",
+      "spawnDelay": 8000
+    },
+    {
+      "id": 6,
+      "enabled": false,
+      "host": "localhost",
+      "port": 25565,
+      "username": "CollectorAI",
+      "auth": "offline",
+      "aiPersonality": "collector",
+      "spawnDelay": 10000
+    },
+    {
+      "id": 7,
+      "enabled": false,
+      "host": "localhost",
+      "port": 25565,
+      "username": "ScoutAI",
+      "auth": "offline",
+      "aiPersonality": "scout",
+      "spawnDelay": 12000
+    },
+    {
+      "id": 8,
+      "enabled": false,
+      "host": "localhost",
+      "port": 25565,
+      "username": "CrafterAI",
+      "auth": "offline",
+      "aiPersonality": "crafter",
+      "spawnDelay": 14000
+    },
+    {
+      "id": 9,
+      "enabled": false,
+      "host": "localhost",
+      "port": 25565,
+      "username": "TradingAI",
+      "auth": "offline",
+      "aiPersonality": "trader",
+      "spawnDelay": 16000
+    },
+    {
+      "id": 10,
+      "enabled": false,
+      "host": "localhost",
+      "port": 25565,
+      "username": "HelperAI",
+      "auth": "offline",
+      "aiPersonality": "helper",
+      "spawnDelay": 18000
+    }
+  ],
+  "personalities": {
+    "explorer": {
+      "description": "探索重視 - 新しいエリアを積極的に探索",
+      "primaryGoals": ["explore", "gather_wood", "find_food"],
+      "behaviour": {
+        "explorationRadius": 100,
+        "stayTime": 30000,
+        "riskTolerance": "medium"
+      }
+    },
+    "miner": {
+      "description": "採掘重視 - 鉱石とブロックの収集に特化",
+      "primaryGoals": ["gather_wood", "craft_basic_tools", "find_stone", "mine_safely"],
+      "behaviour": {
+        "explorationRadius": 50,
+        "stayTime": 60000,
+        "riskTolerance": "low"
+      }
+    },
+    "builder": {
+      "description": "建築重視 - 構造物の建設に特化",
+      "primaryGoals": ["gather_wood", "craft_basic_tools", "build_shelter", "find_stone"],
+      "behaviour": {
+        "explorationRadius": 30,
+        "stayTime": 120000,
+        "riskTolerance": "low"
+      }
+    },
+    "farmer": {
+      "description": "農業重視 - 食料生産と動物の管理",
+      "primaryGoals": ["find_food", "gather_wood", "explore"],
+      "behaviour": {
+        "explorationRadius": 40,
+        "stayTime": 90000,
+        "riskTolerance": "low"
+      }
+    },
+    "guard": {
+      "description": "警備重視 - エリアの保護と敵対MOBの排除",
+      "primaryGoals": ["craft_basic_tools", "find_food", "explore"],
+      "behaviour": {
+        "explorationRadius": 25,
+        "stayTime": 180000,
+        "riskTolerance": "high"
+      }
+    },
+    "collector": {
+      "description": "収集重視 - あらゆるアイテムの収集",
+      "primaryGoals": ["explore", "gather_wood", "find_stone", "find_food"],
+      "behaviour": {
+        "explorationRadius": 70,
+        "stayTime": 45000,
+        "riskTolerance": "medium"
+      }
+    },
+    "scout": {
+      "description": "偵察重視 - 広範囲の探索と情報収集",
+      "primaryGoals": ["explore", "find_food"],
+      "behaviour": {
+        "explorationRadius": 150,
+        "stayTime": 15000,
+        "riskTolerance": "high"
+      }
+    },
+    "crafter": {
+      "description": "クラフト重視 - アイテム製作に特化",
+      "primaryGoals": ["gather_wood", "craft_basic_tools", "craft_stone_tools", "find_stone"],
+      "behaviour": {
+        "explorationRadius": 35,
+        "stayTime": 100000,
+        "riskTolerance": "low"
+      }
+    },
+    "trader": {
+      "description": "交易重視 - 村人との取引に特化",
+      "primaryGoals": ["explore", "gather_wood", "find_food"],
+      "behaviour": {
+        "explorationRadius": 80,
+        "stayTime": 60000,
+        "riskTolerance": "medium"
+      }
+    },
+    "helper": {
+      "description": "支援重視 - 他のプレイヤーのサポート",
+      "primaryGoals": ["gather_wood", "find_food", "explore"],
+      "behaviour": {
+        "explorationRadius": 50,
+        "stayTime": 45000,
+        "riskTolerance": "low"
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "host": "localhost",
+    "port": 25565,
+    "username": "AIPlayer1",
+    "auth": "offline",
+    "description": "Local server 1"
+  },
+  {
+    "host": "localhost", 
+    "port": 25566,
+    "username": "AIPlayer2",
+    "auth": "offline",
+    "description": "Local server 2"
+  },
+  {
+    "host": "localhost",
+    "port": 25567,
+    "username": "AIPlayer3", 
+    "auth": "offline",
+    "description": "Local server 3"
+  }
+]
