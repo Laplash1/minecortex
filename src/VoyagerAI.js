@@ -236,21 +236,41 @@ Always prioritize safety and efficiency in your implementations.`;
   }
 
   async learnFromExperience(task, result, context) {
-    // Guard against null/undefined task objects
-    if (!task) {
+    // Enhanced guard against null/undefined task objects
+    if (!task || typeof task !== 'object') {
       console.log('Error in learning analysis: Cannot read properties of null (reading \'type\')');
-      return; // Skip learning if task is null
+      return; // Skip learning if task is null or not an object
     }
     
-    // Ensure result has a success property
-    if (!result || typeof result.success === 'undefined') {
+    // Guard against missing task type
+    if (!task.type || typeof task.type !== 'string') {
+      console.log('Error in learning analysis: Cannot read properties of null (reading \'type\')');
+      return; // Skip learning if task type is invalid
+    }
+    
+    // Enhanced result validation
+    if (!result || typeof result !== 'object') {
       result = { success: false, error: '結果オブジェクトが不正です' };
     }
     
+    // Ensure result has a success property
+    if (typeof result.success === 'undefined') {
+      result.success = false;
+    }
+    
+    // Create experience object with additional safety
     const experience = {
       timestamp: Date.now(),
-      task: task,
-      result: result,
+      task: {
+        type: task.type,
+        params: task.params || {},
+        startTime: task.startTime || Date.now()
+      },
+      result: {
+        success: result.success,
+        error: result.error || null,
+        message: result.message || null
+      },
       context: context || {},
       success: result.success
     };

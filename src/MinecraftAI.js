@@ -24,32 +24,8 @@ class MinecraftAI {
     this.isInitialized = false;
     this.debugMode = process.env.DEBUG_MODE === 'true';
 
-    // Enhanced socket safety to prevent EPIPE errors
-    if (typeof bot.chat === 'function') {
-      const originalChat = bot.chat.bind(bot);
-      bot.chat = (message) => {
-        try {
-          // Multiple layers of socket validation
-          if (bot._client && 
-              bot._client.socket && 
-              !bot._client.socket.destroyed && 
-              !bot._client.socket.readyState !== 'closed' &&
-              bot._client.socket.writable) {
-            originalChat(message);
-          } else {
-            // Socket is gone; suppress to prevent EPIPE
-            if (this.debugMode) {
-              console.log('[SafeChat] Suppressed chat - socket unavailable');
-            }
-          }
-        } catch (err) {
-          if (err.code !== 'EPIPE') {
-            console.log(`[SafeChat] Non-EPIPE error: ${err.message}`);
-          }
-          // Silently ignore EPIPE errors
-        }
-      };
-    }
+    // Enhanced socket safety to prevent EPIPE errors - comprehensive protection
+    this.setupComprehensiveEPIPEProtection();
     
     // Enhanced disconnect handling with immediate shutdown
     const handleDisconnect = (reason) => {
@@ -399,6 +375,72 @@ class MinecraftAI {
     }
   }
 
+  setupComprehensiveEPIPEProtection() {
+    // Protect chat function
+    if (typeof this.bot.chat === 'function') {
+      const originalChat = this.bot.chat.bind(this.bot);
+      this.bot.chat = (message) => {
+        if (!this.isSocketSafe()) {
+          if (this.debugMode) console.log('[SafeChat] Socket unsafe, suppressing chat');
+          return;
+        }
+        try {
+          originalChat(message);
+        } catch (err) {
+          if (err.code === 'EPIPE') {
+            this.log('EPIPE error in chat, initiating graceful shutdown', 'warn');
+            this.handleEPIPEError();
+          } else {
+            console.log(`[SafeChat] Error: ${err.message}`);
+          }
+        }
+      };
+    }
+
+    // Protect all bot write operations
+    const protectedMethods = ['activateItem', 'deactivateItem', 'useOn', 'attack', 'dig'];
+    protectedMethods.forEach(method => {
+      if (typeof this.bot[method] === 'function') {
+        const original = this.bot[method].bind(this.bot);
+        this.bot[method] = (...args) => {
+          if (!this.isSocketSafe()) {
+            if (this.debugMode) console.log(`[Safe${method}] Socket unsafe, suppressing ${method}`);
+            return Promise.resolve();
+          }
+          try {
+            return original(...args);
+          } catch (err) {
+            if (err.code === 'EPIPE') {
+              this.handleEPIPEError();
+              return Promise.reject(err);
+            }
+            throw err;
+          }
+        };
+      }
+    });
+  }
+
+  isSocketSafe() {
+    return this.bot._client && 
+           this.bot._client.socket && 
+           !this.bot._client.socket.destroyed && 
+           this.bot._client.socket.readyState !== 'closed' &&
+           this.bot._client.socket.writable;
+  }
+
+  handleEPIPEError() {
+    this.log('EPIPE error detected, initiating immediate shutdown', 'error');
+    this.isInitialized = false;
+    if (this.bot._client && this.bot._client.socket) {
+      try {
+        this.bot._client.socket.destroy();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+    }
+  }
+
   async mainLoopIteration() {
     try {
       // Synchronize state with bot
@@ -438,13 +480,30 @@ class MinecraftAI {
         this.currentTask = null;
       }
       
-      // Select next task if none active
+      // Select next task if none active with enhanced validation
       if (!this.currentTask && this.goals.length > 0) {
         const nextGoal = this.goals.shift();
-        this.currentTask = await this.taskPlanner.planTask(nextGoal);
         
-        if (this.currentTask) {
-          this.log(`新しいタスクを開始: ${this.currentTask.type}`);
+        // Validate goal before planning
+        if (!nextGoal || !nextGoal.type) {
+          this.log('Invalid goal detected, skipping', 'warn');
+          return;
+        }
+        
+        try {
+          this.currentTask = await this.taskPlanner.planTask(nextGoal);
+          
+          if (this.currentTask && this.currentTask.type) {
+            // Add startTime for proper lifecycle tracking
+            this.currentTask.startTime = Date.now();
+            this.log(`新しいタスクを開始: ${this.currentTask.type}`);
+          } else {
+            this.log('Task planning returned invalid task', 'warn');
+            this.currentTask = null;
+          }
+        } catch (planError) {
+          this.log(`Task planning failed: ${planError.message}`, 'error');
+          this.currentTask = null;
         }
       }
       
@@ -542,12 +601,29 @@ class MinecraftAI {
   }
 
   async executeCurrentTask() {
-    if (!this.currentTask) return;
+    // Enhanced validation to prevent null reference errors
+    if (!this.currentTask || typeof this.currentTask !== 'object') {
+      this.log('executeCurrentTask: 無効なタスク', 'warn');
+      return;
+    }
+    
+    if (!this.currentTask.type) {
+      this.log('executeCurrentTask: タスクタイプが空です', 'warn');
+      this.currentTask = null;
+      return;
+    }
     
     const taskName = this.currentTask.type;
     this.log(`タスク実行中: ${taskName}`);
     
     try {
+      // Check if bot is still connected before executing
+      if (!this.isSocketSafe()) {
+        this.log('ソケットが安全ではないため、タスクをスキップします', 'warn');
+        this.currentTask = null;
+        return;
+      }
+      
       const skill = await this.getOrGenerateSkill(taskName);
       if (!skill) {
         this.handleTaskFailure(taskName, 'No skill available');
@@ -643,29 +719,34 @@ class MinecraftAI {
 
   async handleTaskError(error, taskName) {
     this.log(`タスク実行で致命的エラー ${taskName}: ${error.message}`);
-    // If currentTask already cleared, just log and abort further processing
+    
+    // Enhanced error handling with better logging
     if (!this.currentTask) {
       this.log('handleTaskError: currentTask is null, skipping learning/progress updates', 'warn');
       return;
     }
-    this.handleTaskFailure(taskName, error.message);
     
-    // Learn from the critical error with comprehensive null protection
+    // Create a safe task object for learning even if currentTask becomes corrupted
+    const safeTask = {
+      type: taskName,
+      startTime: this.currentTask.startTime || Date.now(),
+      params: this.currentTask.params || {}
+    };
+    
     try {
-      if (this.currentTask) {
-        // Ensure startTime exists to prevent null reference errors
-        if (!this.currentTask.startTime) {
-          this.currentTask.startTime = Date.now();
-        }
-        const context = this.observer.getObservationSummary();
-        const errorResult = { success: false, error: error.message, critical: true };
-        await this.voyagerAI.learnFromExperience(this.currentTask, errorResult, context);
-      } else {
-        this.log('handleTaskError: currentTask became null during processing', 'warn');
-      }
+      // Learn from the failure with enhanced safety
+      const context = this.observer ? this.observer.getObservationSummary() : {};
+      await this.voyagerAI.learnFromExperience(
+        safeTask, 
+        { success: false, error: error.message }, 
+        context
+      );
     } catch (learningError) {
       this.log(`失敗から学習中にエラー: ${learningError.message}`);
     }
+    
+    this.log(`タスク ${taskName} が失敗: ${error.message}`);
+    this.handleTaskFailure(taskName, error.message);
   }
 
   async executeSkillWithTimeout(skill, params, timeoutMs) {

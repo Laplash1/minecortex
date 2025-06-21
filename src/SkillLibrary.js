@@ -107,10 +107,14 @@ class MoveToSkill extends Skill {
       if (typeof bot.pathfinder.goto === 'function') {
         const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
         try {
-          await bot.pathfinder.goto(goal, { timeout: 10000 }); // 10 second timeout
+          await bot.pathfinder.goto(goal, { timeout: 6000 }); // 6 second timeout
           return { success: true, message: '目的地に到着しました' };
         } catch (gotoErr) {
-          console.log(`[移動スキル] 移動失敗: ${gotoErr.message}`);
+          console.log(`[移動スキル] goto失敗: ${gotoErr.message}`);
+          // Try fallback to basic movement
+          if (gotoErr.message.includes('timeout') || gotoErr.message.includes('path')) {
+            return await this.executeBasicMovement(bot, x, y, z);
+          }
           return { success: false, error: gotoErr.message };
         }
       }
@@ -133,7 +137,7 @@ class MoveToSkill extends Skill {
             bot.pathfinder.stop();
             resolve({ success: false, error: 'パスファインディングタイムアウト (8秒)' });
           }
-        }, 8000); // Reduced timeout to 8 seconds
+        }, 5000); // Further reduced timeout to 5 seconds
         
         const onGoalReached = () => {
           if (!resolved) {
@@ -183,6 +187,62 @@ class MoveToSkill extends Skill {
     } catch (error) {
       console.log(`[移動スキル] エラー: ${error.message}`);
       return { success: false, error: error.message };
+    }
+  }
+
+  // Fallback basic movement when pathfinder fails
+  async executeBasicMovement(bot, x, y, z) {
+    try {
+      console.log(`[移動スキル] 基本移動フォールバック: (${x}, ${y}, ${z})`);
+      
+      const currentPos = bot.entity.position;
+      const distance = Math.sqrt(
+        Math.pow(x - currentPos.x, 2) + 
+        Math.pow(z - currentPos.z, 2)
+      );
+      
+      // If distance is too far, don't attempt basic movement
+      if (distance > 50) {
+        return { success: false, error: '目的地が遠すぎます (基本移動)' };
+      }
+      
+      // Simple approach: move towards target step by step
+      const steps = Math.ceil(distance / 2);
+      const stepX = (x - currentPos.x) / steps;
+      const stepZ = (z - currentPos.z) / steps;
+      
+      for (let i = 0; i < steps; i++) {
+        const targetX = currentPos.x + stepX * (i + 1);
+        const targetZ = currentPos.z + stepZ * (i + 1);
+        
+        // Use bot.lookAt and bot.setControlState for basic movement
+        try {
+          await bot.lookAt(new bot.Vec3(targetX, currentPos.y, targetZ));
+          bot.setControlState('forward', true);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          bot.setControlState('forward', false);
+          
+          // Check if we're close enough
+          const newPos = bot.entity.position;
+          const newDistance = Math.sqrt(
+            Math.pow(x - newPos.x, 2) + 
+            Math.pow(z - newPos.z, 2)
+          );
+          
+          if (newDistance < 3) {
+            return { success: true, message: '基本移動で目的地に到着' };
+          }
+        } catch (moveError) {
+          console.log(`[移動スキル] 基本移動ステップエラー: ${moveError.message}`);
+          // Continue with next step
+        }
+      }
+      
+      return { success: false, error: '基本移動でも目的地に到達できませんでした' };
+      
+    } catch (error) {
+      console.log(`[移動スキル] 基本移動エラー: ${error.message}`);
+      return { success: false, error: `基本移動失敗: ${error.message}` };
     }
   }
 }
@@ -240,27 +300,52 @@ class ExploreSkill extends Skill {
   }
 
   async execute(bot, params) {
-    const { radius = 50 } = params;
-    const pos = bot.entity.position;
-    
-    // Generate random exploration target
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * radius;
-    
-    const targetX = Math.floor(pos.x + Math.cos(angle) * distance);
-    const targetZ = Math.floor(pos.z + Math.sin(angle) * distance);
-    const targetY = pos.y;
-    
-    console.log(`[探索スキル] (${targetX}, ${targetY}, ${targetZ})を探索中...`);
-    
-    const moveSkill = new MoveToSkill();
-    const result = await moveSkill.execute(bot, { x: targetX, y: targetY, z: targetZ });
-    
-    if (result.success) {
-      bot.chat(`新しいエリアを探索しました！ 🗺️`);
+    try {
+      const { radius = 30, timeout = 8000 } = params; // Reduced default radius and added timeout
+      
+      if (!bot.entity || !bot.entity.position) {
+        return { success: false, error: 'ボットの位置情報が取得できません' };
+      }
+      
+      const pos = bot.entity.position;
+      
+      // Generate random exploration target with safer bounds
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * radius;
+      
+      const targetX = Math.floor(pos.x + Math.cos(angle) * distance);
+      const targetZ = Math.floor(pos.z + Math.sin(angle) * distance);
+      const targetY = pos.y;
+      
+      console.log(`[探索スキル] (${targetX}, ${targetY}, ${targetZ})を探索中...`);
+      
+      const moveSkill = new MoveToSkill();
+      
+      // Execute with timeout protection
+      const movePromise = moveSkill.execute(bot, { x: targetX, y: targetY, z: targetZ });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('探索タイムアウト')), timeout)
+      );
+      
+      const result = await Promise.race([movePromise, timeoutPromise]);
+      
+      if (result.success) {
+        // Safe chat with EPIPE protection
+        try {
+          if (bot.chat && typeof bot.chat === 'function') {
+            bot.chat(`新しいエリアを探索しました！ 🗺️`);
+          }
+        } catch (chatError) {
+          console.log(`[探索スキル] チャットエラー: ${chatError.message}`);
+        }
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.log(`[探索スキル] エラー: ${error.message}`);
+      return { success: false, error: error.message };
     }
-    
-    return result;
   }
 }
 

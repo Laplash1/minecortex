@@ -1,6 +1,6 @@
 {
   "name": "minecortex",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "MineCortex - Intelligent Minecraft bot cluster with Voyager-inspired AI capabilities for autonomous gameplay, learning, and multi-player coordination.",
   "main": "index.js",
   "scripts": {

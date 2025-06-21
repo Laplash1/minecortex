@@ -6,6 +6,17 @@ class TaskPlanner {
   }
 
   async planTask(goal) {
+    // Enhanced goal validation to prevent "No valid type given" errors
+    if (!goal || typeof goal !== 'object') {
+      console.log('タスクプランナー: 無効な目標オブジェクト');
+      return null;
+    }
+    
+    if (!goal.type || typeof goal.type !== 'string') {
+      console.log(`タスクプランナー: 無効な目標タイプ: ${goal.type}`);
+      return null;
+    }
+    
     switch (goal.type) {
       case 'explore':
         return this.planExploration(goal);
@@ -48,8 +59,14 @@ class TaskPlanner {
         return this.planGenericTask(goal);
       
       default:
-        console.log(`不明な目標タイプ: ${goal.type}, 汎用タスクを作成`);
-        return this.planGenericTask(goal);
+        // Enhanced handling for unknown goal types
+        if (goal.type && typeof goal.type === 'string') {
+          console.log(`不明な目標タイプ: ${goal.type}, 汎用タスクを作成`);
+          return this.planGenericTask(goal);
+        } else {
+          console.log('タスクプランナー: 無効な目標タイプで汎用タスクを作成できません');
+          return null;
+        }
     }
   }
 
