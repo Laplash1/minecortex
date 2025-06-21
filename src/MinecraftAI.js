@@ -178,8 +178,37 @@ class MinecraftAI {
   }
 
   displayLearningStats() {
-    const stats = this.voyagerAI.getLearningStats();
-    this.bot.chat(`学習状況: ${stats.totalExperiences}回の経験、成功率 ${Math.round(stats.successRate * 100)}%`);
+    try {
+      // Enhanced safety for !learn command
+      if (!this.voyagerAI) {
+        this.bot.chat('学習システムが初期化されていません');
+        return;
+      }
+      
+      const stats = this.voyagerAI.getLearningStats();
+      
+      if (!stats) {
+        this.bot.chat('学習統計の取得に失敗しました');
+        return;
+      }
+      
+      // Safe number handling for display
+      const totalExp = stats.totalExperiences || 0;
+      const successRate = stats.successRate || 0;
+      const taskCount = stats.taskTypes ? stats.taskTypes.size : 0;
+      
+      this.bot.chat(`学習状況: ${totalExp}回の経験、成功率 ${Math.round(successRate * 100)}%、${taskCount}種類のタスク`);
+      
+      // Additional info if available
+      if (stats.recentPerformance && stats.recentPerformance.length > 0) {
+        const recentSuccesses = stats.recentPerformance.filter(p => p.success).length;
+        this.bot.chat(`直近${stats.recentPerformance.length}タスク中${recentSuccesses}回成功`);
+      }
+      
+    } catch (error) {
+      console.log(`Error in displayLearningStats: ${error.message}`);
+      this.bot.chat('学習統計の表示中にエラーが発生しました');
+    }
   }
 
   async generateNewCurriculum() {

@@ -455,20 +455,51 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
       recentPerformance: []
     };
     
-    if (this.learningHistory.length > 0) {
-      const successes = this.learningHistory.filter(exp => exp.success);
-      stats.successRate = successes.length / this.learningHistory.length;
-      
-      this.learningHistory.forEach(exp => stats.taskTypes.add(exp.task.type));
-      
-      // Get recent performance (last 10 tasks)
-      stats.recentPerformance = this.learningHistory
-        .slice(-10)
-        .map(exp => ({
-          task: exp.task.type,
-          success: exp.success,
-          timestamp: exp.timestamp
-        }));
+    try {
+      if (this.learningHistory.length > 0) {
+        // Filter out invalid experiences to prevent crashes
+        const validExperiences = this.learningHistory.filter(exp => 
+          exp && 
+          exp.task && 
+          exp.task.type && 
+          typeof exp.task.type === 'string' &&
+          typeof exp.success === 'boolean'
+        );
+        
+        if (validExperiences.length > 0) {
+          const successes = validExperiences.filter(exp => exp.success);
+          stats.successRate = successes.length / validExperiences.length;
+          
+          // Safely add task types with validation
+          validExperiences.forEach(exp => {
+            if (exp.task && exp.task.type) {
+              stats.taskTypes.add(exp.task.type);
+            }
+          });
+          
+          // Get recent performance (last 10 valid tasks) with safety checks
+          stats.recentPerformance = validExperiences
+            .slice(-10)
+            .map(exp => ({
+              task: exp.task?.type || 'unknown',
+              success: exp.success || false,
+              timestamp: exp.timestamp || Date.now()
+            }))
+            .filter(item => item.task !== 'unknown'); // Remove unknown tasks
+        }
+        
+        // Update total experiences to reflect valid ones
+        stats.totalExperiences = validExperiences.length;
+      }
+    } catch (error) {
+      console.log(`Error in getLearningStats: ${error.message}`);
+      // Return safe default stats if anything fails
+      return {
+        totalExperiences: 0,
+        successRate: 0,
+        taskTypes: new Set(),
+        recentPerformance: []
+      };
     }
     
     return stats;
