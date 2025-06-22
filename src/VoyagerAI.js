@@ -207,7 +207,7 @@ Always prioritize safety and efficiency in your implementations.`;
         try {
           const { blockType, position } = params;
           
-          const item = bot.inventory.findInventoryItem(blockType);
+          const item = bot.inventory.findInventoryItem(itemObj => itemObj.name === blockType);
           if (!item) {
             return { success: false, error: `No ${blockType} in inventory` };
           }

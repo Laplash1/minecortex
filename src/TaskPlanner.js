@@ -1,3 +1,5 @@
+const { InventoryUtils } = require('./InventoryUtils');
+
 class TaskPlanner {
   constructor(bot) {
     this.bot = bot;
@@ -261,8 +263,8 @@ class TaskPlanner {
     const timeout = this.calculateTaskTimeout(goal);
     
     // Check current inventory to determine best fallback
-    const woodCount = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
-    const stoneCount = this.bot.inventory.count('stone') + this.bot.inventory.count('cobblestone');
+    const woodCount = InventoryUtils.getWoodCount(this.bot);
+    const stoneCount = InventoryUtils.getStoneCount(this.bot);
     
     // Prefer resource gathering over exploration
     if (woodCount < 15) {
@@ -438,45 +440,17 @@ class TaskPlanner {
 
   hasPickaxe() {
     const pickaxes = ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'];
-    return pickaxes.some(pickaxe => this.bot.inventory.findInventoryItem(pickaxe));
+    return InventoryUtils.hasTool(this.bot, 'pickaxe');
   }
 
   hasWeapon() {
     const weapons = ['wooden_sword', 'stone_sword', 'iron_sword', 'diamond_sword'];
-    return weapons.some(weapon => this.bot.inventory.findInventoryItem(weapon));
+    return InventoryUtils.hasTool(this.bot, 'sword');
   }
 
   checkWoodRequirements(tools) {
-    let woodNeeded = 0;
-    
-    for (const tool of tools) {
-      if (tool.includes('wooden_')) {
-        switch (tool) {
-          case 'wooden_pickaxe':
-          case 'wooden_axe':
-          case 'wooden_hoe':
-            woodNeeded += 3; // 3 planks + 2 sticks
-            break;
-          case 'wooden_sword':
-            woodNeeded += 2; // 2 planks + 1 stick
-            break;
-          case 'wooden_shovel':
-            woodNeeded += 1; // 1 plank + 2 sticks
-            break;
-        }
-        woodNeeded += 1; // Additional for sticks
-      }
-    }
-    
-    // Check current inventory
-    const currentPlanks = this.bot.inventory.count('oak_planks') + 
-                         this.bot.inventory.count('planks');
-    const currentSticks = this.bot.inventory.count('stick');
-    
-    // Convert logs to planks (1 log = 4 planks)
-    const currentLogs = this.bot.inventory.count('oak_log') + 
-                       this.bot.inventory.count('log');
-    const availablePlanks = currentPlanks + (currentLogs * 4);
+    const woodNeeded = InventoryUtils.calculateWoodRequirements(tools);
+    const availablePlanks = InventoryUtils.getAvailablePlanks(this.bot);
     
     return Math.max(0, woodNeeded - availablePlanks);
   }
@@ -512,10 +486,8 @@ class TaskPlanner {
 
   checkWoodGatheringComplete(task) {
     const { amount } = task.params;
-    const currentWood = this.bot.inventory.count('oak_log') + 
-                       this.bot.inventory.count('log') +
-                       (this.bot.inventory.count('oak_planks') + 
-                        this.bot.inventory.count('planks')) / 4;
+    const currentWood = InventoryUtils.getWoodCount(this.bot) + 
+                       (InventoryUtils.getPlanksCount(this.bot) / 4);
     
     return currentWood >= amount;
   }
@@ -524,7 +496,7 @@ class TaskPlanner {
     const { tools } = task.params;
     
     return tools.every(tool => {
-      return this.bot.inventory.findInventoryItem(tool) !== null;
+      return this.bot.inventory.findInventoryItem(item => item.name === tool) !== null;
     });
   }
 
@@ -564,7 +536,7 @@ class TaskPlanner {
   
   planWorkbenchCrafting(goal) {
     // Check if we already have a crafting table
-    const hasCraftingTable = this.bot.inventory.findInventoryItem('crafting_table');
+    const hasCraftingTable = InventoryUtils.hasItem(this.bot, 'crafting_table');
     
     if (hasCraftingTable) {
       console.log('作業台を既に所持しています');
@@ -584,11 +556,7 @@ class TaskPlanner {
   }
   
   hasEnoughWoodForWorkbench() {
-    const planks = this.bot.inventory.count('oak_planks') + this.bot.inventory.count('planks');
-    const logs = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
-    const availablePlanks = planks + (logs * 4); // 1 log = 4 planks
-    
-    return availablePlanks >= 4; // Need 4 planks for crafting table
+    return InventoryUtils.getAvailablePlanks(this.bot) >= 4; // Need 4 planks for crafting table
   }
 }
 

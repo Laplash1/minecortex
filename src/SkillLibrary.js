@@ -1,5 +1,6 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { Vec3 } = require('vec3');
+const { InventoryUtils } = require('./InventoryUtils');
 
 class SkillLibrary {
   constructor() {
@@ -680,7 +681,7 @@ class PlaceBlockSkill extends Skill {
 
   async execute(bot, params) {
     const { blockType, position } = params;
-    const item = bot.inventory.findInventoryItem(blockType);
+    const item = bot.inventory.findInventoryItem(itemObj => itemObj.name === blockType);
     
     if (!item) {
       return { success: false, error: `インベントリに${blockType}がありません` };
@@ -893,13 +894,13 @@ class CraftWorkbenchSkill extends Skill {
 
     try {
       // Check if we have wood planks
-      const planks = bot.inventory.findInventoryItem('oak_planks') || 
-                    bot.inventory.findInventoryItem('planks');
+      const planks = bot.inventory.findInventoryItem(item => item.name === 'oak_planks') || 
+                    bot.inventory.findInventoryItem(item => item.name === 'planks');
       
       if (!planks || planks.count < 4) {
         // Try to make planks from logs first
-        const logs = bot.inventory.findInventoryItem('oak_log') || 
-                    bot.inventory.findInventoryItem('log');
+        const logs = bot.inventory.findInventoryItem(item => item.name === 'oak_log') || 
+                    bot.inventory.findInventoryItem(item => item.name === 'log');
         
         if (logs && logs.count > 0) {
           await this.craftPlanks(bot, logs);
@@ -953,7 +954,7 @@ class CraftFurnaceSkill extends Skill {
 
     try {
       // Check if we have cobblestone
-      const cobblestone = bot.inventory.findInventoryItem('cobblestone');
+      const cobblestone = bot.inventory.findInventoryItem(item => item.name === 'cobblestone');
       
       if (!cobblestone || cobblestone.count < 8) {
         return { success: false, error: 'かまど作成には8個の石が必要です' };
@@ -1011,8 +1012,8 @@ class BuildShelterSkill extends Skill {
 
     try {
       // Check materials
-      const planks = bot.inventory.findInventoryItem('oak_planks') || 
-                    bot.inventory.findInventoryItem('planks');
+      const planks = bot.inventory.findInventoryItem(item => item.name === 'oak_planks') || 
+                    bot.inventory.findInventoryItem(item => item.name === 'planks');
       
       if (!planks || planks.count < 20) {
         return { success: false, error: '建築材料が不足しています（20個の板が必要）' };
@@ -1103,7 +1104,7 @@ class PlaceBlocksSkill extends Skill {
     console.log(`[配置スキル] ${blockType}を${pattern}パターンで配置します`);
 
     try {
-      const item = bot.inventory.findInventoryItem(blockType);
+      const item = bot.inventory.findInventoryItem(itemObj => itemObj.name === blockType);
       if (!item) {
         return { success: false, error: `${blockType}がインベントリにありません` };
       }

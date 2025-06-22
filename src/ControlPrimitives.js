@@ -1,6 +1,7 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { GoalBlock, GoalLookAtBlock } = goals;
 const { Vec3 } = require('vec3');
+const { InventoryUtils } = require('./InventoryUtils');
 
 class ControlPrimitives {
   constructor(bot) {
@@ -164,7 +165,7 @@ class ControlPrimitives {
     const tools = toolPriorities[blockData.name] || [];
     
     for (const toolName of tools) {
-      const tool = this.bot.inventory.findInventoryItem(toolName);
+      const tool = this.bot.inventory.findInventoryItem(item => item.name === toolName);
       if (tool) {
         return tool;
       }
@@ -243,10 +244,22 @@ class ControlPrimitives {
 
     for (const ingredient of recipe.ingredients) {
       const needed = ingredient.count;
-      const available = this.bot.inventory.count(ingredient.id);
-      if (available < needed) {
+      // Ensure ingredient.id is valid for count() method
+      if (typeof ingredient.id !== 'number' && typeof ingredient.id !== 'string') {
+        console.log(`[ControlPrimitives] Invalid ingredient ID type: ${typeof ingredient.id}, value: ${ingredient.id}`);
+        continue;
+      }
+      
+      try {
+        const available = this.bot.inventory.count(ingredient.id);
+        if (available < needed) {
+          const itemName = this.mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
+          missing.push(`${itemName} (need ${needed}, have ${available})`);
+        }
+      } catch (error) {
+        console.log(`[ControlPrimitives] Error counting ingredient ${ingredient.id}: ${error.message}`);
         const itemName = this.mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
-        missing.push(`${itemName} (need ${needed}, have ${available})`);
+        missing.push(`${itemName} (count error: ${error.message})`);
       }
     }
 
@@ -254,7 +267,7 @@ class ControlPrimitives {
   }
 
   async placeItem(name, position) {
-    const item = this.bot.inventory.findInventoryItem(name);
+    const item = this.bot.inventory.findInventoryItem(item => item.name === name);
     if (!item) {
       throw new Error(`No ${name} in inventory`);
     }
@@ -342,16 +355,14 @@ class ControlPrimitives {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // Utility method to check inventory
+  // Utility method to check inventory (delegated to InventoryUtils)
   hasItem(itemName, count = 1) {
-    const item = this.bot.inventory.findInventoryItem(itemName);
-    return item && item.count >= count;
+    return InventoryUtils.hasItem(this.bot, itemName, count);
   }
 
-  // Utility method to get item count
+  // Utility method to get item count (delegated to InventoryUtils)
   getItemCount(itemName) {
-    const item = this.bot.inventory.findInventoryItem(itemName);
-    return item ? item.count : 0;
+    return InventoryUtils.getItemCount(this.bot, itemName);
   }
 }
 

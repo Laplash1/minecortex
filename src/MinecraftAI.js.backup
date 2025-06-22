@@ -821,10 +821,8 @@ class MinecraftAI {
       this.announceTaskCompletion(taskName, result);
       
       // Update state manager with successful task completion
-      if (this.stateManager) {
-        this.stateManager.completeCurrentTask(result);
-        this.stateManager.updateSkillPerformance(taskName, true, executionTime);
-      }
+      this.stateManager.completeCurrentTask(result);
+      this.stateManager.updateSkillPerformance(taskName, true, executionTime);
     } else {
       if (!this.currentTask) {
         this.log(`processTaskResult: currentTask lost before failure handling`, 'warn');
@@ -834,10 +832,8 @@ class MinecraftAI {
       this.handleTaskFailure(taskName, result?.error);
       
       // Update state manager with failed task
-      if (this.stateManager) {
-        this.stateManager.completeCurrentTask(result || { success: false, error: '不明なエラー' });
-        this.stateManager.updateSkillPerformance(taskName, false, executionTime);
-      }
+      this.stateManager.completeCurrentTask(result || { success: false, error: '不明なエラー' });
+      this.stateManager.updateSkillPerformance(taskName, false, executionTime);
     }
   }
 
@@ -1297,6 +1293,106 @@ class MinecraftAI {
     this.log(`新しい目標を設定: ${goal.type}`);
   }
 
+  async executeCurrentTask() {
+    if (!this.currentTask) return;
+    
+    // Mark task start time for performance tracking
+    this.currentTask.startTime = Date.now();
+    this.stateManager.setCurrentTask(this.currentTask);
+    
+    const taskName = this.currentTask.type;
+    this.log(`タスク実行中: ${taskName}`);
+    
+    try {
+      let skill = this.skillLibrary.getSkill(taskName);
+      
+      // Register skill if not already known
+      if (skill && !this.stateManager.getState('knownSkills').has(taskName)) {
+        this.stateManager.addSkill(taskName, skill);
+      }
+      
+      // If no predefined skill exists, try to generate one with Voyager AI
+      if (!skill) {
+        this.log(`${taskName}の事前定義スキルがありません。AIで生成中...`);
+        try {
+          const context = this.observer.getObservationSummary();
+          skill = await this.voyagerAI.generateSkill(this.currentTask, context);
+          
+          if (skill) {
+            this.stateManager.addSkill(taskName, skill);
+          }
+        } catch (aiError) {
+          this.log(`AIスキル生成に失敗: ${aiError.message}`);
+          this.currentTask = null;
+          this.stateManager.setCurrentTask(null);
+          return;
+        }
+      }
+      
+      if (skill) {
+        // Calculate dynamic timeout based on task complexity
+        const dynamicTimeout = this.calculateSkillTimeout(this.currentTask);
+        
+        // Execute the skill with dynamic timeout and proper error handling
+        const result = await this.executeSkillWithTimeout(skill, this.currentTask.params, dynamicTimeout);
+        
+        // Learn from the experience if Voyager AI is available with null protection
+        try {
+          if (this.currentTask && this.currentTask.type) {
+            const context = this.observer.getObservationSummary();
+            await this.voyagerAI.learnFromExperience(this.currentTask, result, context);
+          } else {
+            this.log('Skipping learning: current task is null or invalid', 'debug');
+          }
+        } catch (learningError) {
+          this.log(`Learning failed: ${learningError.message}`);
+        }
+        
+        if (result && result.success) {
+          this.log(`タスクが正常に完了: ${taskName}`);
+          this.announceTaskCompletion(taskName, result);
+          
+          // Update state manager with successful task completion
+          this.stateManager.completeCurrentTask(result);
+          this.stateManager.updateSkillPerformance(taskName, true, Date.now() - (this.currentTask.startTime || Date.now()));
+        } else {
+          this.log(`タスクが失敗: ${taskName} - ${result?.error || '不明なエラー'}`);
+          this.handleTaskFailure(taskName, result?.error);
+          
+          // Update state manager with failed task
+          this.stateManager.completeCurrentTask(result || { success: false, error: '不明なエラー' });
+          this.stateManager.updateSkillPerformance(taskName, false, Date.now() - (this.currentTask.startTime || Date.now()));
+        }
+        
+      } else {
+        this.log(`タスク用のスキルが利用できません: ${taskName}`);
+        this.handleTaskFailure(taskName, 'No skill available');
+      }
+      
+    } catch (error) {
+      this.log(`タスク実行で致命的エラー ${taskName}: ${error.message}`);
+      this.handleTaskFailure(taskName, error.message);
+      
+      // Learn from the critical error with null protection
+      const errorResult = { success: false, error: error.message, critical: true };
+      try {
+        if (this.currentTask && this.currentTask.type) {
+          const context = this.observer.getObservationSummary();
+          await this.voyagerAI.learnFromExperience(this.currentTask, errorResult, context);
+        } else {
+          this.log('Skipping learning from critical error: current task is null or invalid', 'debug');
+        }
+        this.stateManager.completeCurrentTask(errorResult);
+        this.stateManager.updateSkillPerformance(taskName, false, Date.now() - (this.currentTask ? this.currentTask.startTime || Date.now() : Date.now()));
+      } catch (learningError) {
+        this.log(`失敗から学習中にエラー: ${learningError.message}`);
+      }
+    }
+    
+    // Always clear the current task when done
+    this.currentTask = null;
+    this.stateManager.setCurrentTask(null);
+  }
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
