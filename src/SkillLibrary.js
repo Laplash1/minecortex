@@ -1,4 +1,5 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const { Vec3 } = require('vec3');
 
 class SkillLibrary {
   constructor() {
@@ -105,27 +106,49 @@ class MoveToSkill extends Skill {
       // Prefer the high-level `goto` helper when available to avoid
       // manual event wiring issues that caused “bot.pathfinder.on is not a function”
       if (typeof bot.pathfinder.goto === 'function') {
-        const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
         try {
+          // Clear any existing goals to prevent conflicts
+          bot.pathfinder.stop();
+          await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause to clear
+          
+          const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
           await bot.pathfinder.goto(goal, { timeout: 6000 }); // 6 second timeout
           return { success: true, message: '目的地に到着しました' };
         } catch (gotoErr) {
           console.log(`[移動スキル] goto失敗: ${gotoErr.message}`);
-          // Try fallback to basic movement
-          if (gotoErr.message.includes('timeout') || gotoErr.message.includes('path')) {
+          
+          // Enhanced error handling with specific fallback strategies
+          if (gotoErr.message.includes('timeout') || 
+              gotoErr.message.includes('path') ||
+              gotoErr.message.includes('goal') ||
+              gotoErr.message.includes('changed')) {
+            console.log(`[移動スキル] パスファインディング問題を検出、基本移動にフォールバック`);
             return await this.executeBasicMovement(bot, x, y, z);
           }
-          return { success: false, error: gotoErr.message };
+          
+          // For other errors, try basic movement as well
+          console.log(`[移動スキル] 未知のエラー、基本移動を試行`);
+          return await this.executeBasicMovement(bot, x, y, z);
         }
       }
       
-      // Manual pathfinding with safety checks and error handling
+      // Manual pathfinding with enhanced safety checks and error handling
       if (!bot.pathfinder.setGoal || !bot.pathfinder.on) {
-        return { success: false, error: 'Pathfinder APIが利用できません' };
+        console.log(`[移動スキル] Pathfinder APIが利用できません、基本移動を試行`);
+        return await this.executeBasicMovement(bot, x, y, z);
       }
       
-      const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
-      bot.pathfinder.setGoal(goal);
+      // Clear any existing goals and setup new one
+      try {
+        bot.pathfinder.stop();
+        await new Promise(resolve => setTimeout(resolve, 50)); // Brief pause
+        
+        const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
+        bot.pathfinder.setGoal(goal);
+      } catch (setupError) {
+        console.log(`[移動スキル] 目標設定エラー、基本移動を試行: ${setupError.message}`);
+        return await this.executeBasicMovement(bot, x, y, z);
+      }
       
       return new Promise((resolve) => {
         let resolved = false;
@@ -135,9 +158,9 @@ class MoveToSkill extends Skill {
             resolved = true;
             cleanup();
             bot.pathfinder.stop();
-            resolve({ success: false, error: 'パスファインディングタイムアウト (8秒)' });
+            resolve({ success: false, error: 'パスファインディングタイムアウト (3秒)' });
           }
-        }, 5000); // Further reduced timeout to 5 seconds
+        }, 3000); // Optimized timeout reduced to 3 seconds for faster response
         
         const onGoalReached = () => {
           if (!resolved) {
@@ -217,7 +240,7 @@ class MoveToSkill extends Skill {
         
         // Use bot.lookAt and bot.setControlState for basic movement
         try {
-          await bot.lookAt(new bot.Vec3(targetX, currentPos.y, targetZ));
+          await bot.lookAt(new Vec3(targetX, currentPos.y, targetZ));
           bot.setControlState('forward', true);
           await new Promise(resolve => setTimeout(resolve, 1000));
           bot.setControlState('forward', false);
@@ -784,7 +807,7 @@ class BuildShelterSkill extends Skill {
           if (referenceBlock) {
             await bot.placeBlock(referenceBlock, new bot.Vec3(0, 1, 0));
             placed++;
-            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
+            await new Promise(resolve => setTimeout(resolve, 50)); // Optimized delay - reduced from 100ms to 50ms
           }
         } catch (placeError) {
           // Continue placing other blocks even if one fails
@@ -827,7 +850,7 @@ class PlaceBlocksSkill extends Skill {
           if (referenceBlock && referenceBlock.name !== 'air') {
             await bot.placeBlock(referenceBlock, new bot.Vec3(0, 1, 0));
             placed++;
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Optimized delay - reduced from 200ms to 100ms
           }
         } catch (placeError) {
           console.log(`[配置スキル] 配置失敗: ${placeError.message}`);

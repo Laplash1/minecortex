@@ -2,22 +2,36 @@
   {
     "host": "localhost",
     "port": 25565,
-    "username": "AIPlayer1",
+    "username": "TestBot1",
     "auth": "offline",
-    "description": "Local server 1"
+    "description": "Test bot 1"
   },
   {
     "host": "localhost", 
-    "port": 25566,
-    "username": "AIPlayer2",
+    "port": 25565,
+    "username": "TestBot2",
     "auth": "offline",
-    "description": "Local server 2"
+    "description": "Test bot 2"
   },
   {
     "host": "localhost",
-    "port": 25567,
-    "username": "AIPlayer3", 
+    "port": 25565,
+    "username": "TestBot3", 
     "auth": "offline",
-    "description": "Local server 3"
+    "description": "Test bot 3"
+  },
+  {
+    "host": "localhost",
+    "port": 25565,
+    "username": "TestBot4", 
+    "auth": "offline",
+    "description": "Test bot 4"
+  },
+  {
+    "host": "localhost",
+    "port": 25565,
+    "username": "TestBot5", 
+    "auth": "offline",
+    "description": "Test bot 5"
   }
 ]

@@ -1,5 +1,6 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { GoalBlock, GoalLookAtBlock } = goals;
+const { Vec3 } = require('vec3');
 
 class ControlPrimitives {
   constructor(bot) {
@@ -228,7 +229,7 @@ class ControlPrimitives {
         throw new Error(`No reference block found at ${position.offset(0, -1, 0)}`);
       }
 
-      await this.bot.placeBlock(referenceBlock, new this.bot.Vec3(0, 1, 0));
+      await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
       console.log(`[ControlPrimitives] Successfully placed ${name}`);
       return true;
     } catch (error) {
@@ -261,7 +262,7 @@ class ControlPrimitives {
 
       try {
         await this.bot.pathfinder.goto(new GoalBlock(targetPos.x, targetPos.y, targetPos.z));
-        await this.sleep(1000); // Wait a bit before next check
+        await this.sleep(500); // Optimized wait - reduced from 1000ms to 500ms for faster exploration
       } catch (error) {
         // If can't reach target, try random direction
         const angle = Math.random() * Math.PI * 2;

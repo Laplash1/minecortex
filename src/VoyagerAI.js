@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const { Vec3 } = require('vec3');
 
 class VoyagerAI {
   constructor(bot) {
@@ -212,7 +213,7 @@ Always prioritize safety and efficiency in your implementations.`;
           }
           
           const referenceBlock = bot.blockAt(position);
-          await bot.placeBlock(referenceBlock, new bot.Vec3(0, 1, 0));
+          await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
           
           return { success: true, result: `Placed ${blockType}` };
           

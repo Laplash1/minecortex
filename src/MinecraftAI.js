@@ -262,8 +262,8 @@ class MinecraftAI {
       } catch (error) {
         this.log(`メインループでエラー: ${error.message}`);
         
-        // Exponential backoff on errors
-        const errorSleep = Math.min(30000, 1000 * Math.pow(1.5, this.consecutiveErrors || 0));
+        // Optimized exponential backoff with reduced maximum delay
+        const errorSleep = Math.min(10000, 500 * Math.pow(1.3, this.consecutiveErrors || 0)); // Reduced max from 30s to 10s, base from 1000ms to 500ms
         await this.sleep(errorSleep);
         
         this.consecutiveErrors = (this.consecutiveErrors || 0) + 1;
@@ -281,30 +281,30 @@ class MinecraftAI {
   }
 
   calculateAdaptiveSleep() {
-    const baseSleep = 1000; // 1 second base
+    const baseSleep = 300; // Reduced from 1000ms to 300ms for better responsiveness
     
     // Adjust based on current situation
     let multiplier = 1.0;
     
     // Sleep less when in danger
     if (this.observer.isDangerous()) {
-      multiplier = 0.5;
+      multiplier = 0.3; // Reduced from 0.5 for faster danger response
     }
     
-    // Sleep more when idle
+    // Sleep more when idle, but not too much
     if (!this.currentTask && this.goals.length === 0) {
-      multiplier = 2.0;
+      multiplier = 1.5; // Reduced from 2.0 to stay responsive
     }
     
     // Sleep less when low on health/food
     if (this.bot.health < 10 || this.bot.food < 10) {
-      multiplier = 0.7;
+      multiplier = 0.2; // Reduced from 0.7 for urgent response
     }
     
     // Sleep more at night (if not urgent tasks)
     const state = this.stateManager.getState(['timeOfDay']);
     if (state.timeOfDay === 'night' && !this.hasUrgentTasks()) {
-      multiplier = 1.5;
+      multiplier = 1.2; // Reduced from 1.5 for better nighttime responsiveness
     }
     
     return Math.floor(baseSleep * multiplier);
@@ -405,7 +405,9 @@ class MinecraftAI {
   }
 
   setupComprehensiveEPIPEProtection() {
-    // Protect chat function
+    // Conservative EPIPE protection - remove caching for real-time safety
+    
+    // Protect chat function with real-time socket checks
     if (typeof this.bot.chat === 'function') {
       const originalChat = this.bot.chat.bind(this.bot);
       this.bot.chat = (message) => {
@@ -426,8 +428,9 @@ class MinecraftAI {
       };
     }
 
-    // Protect all bot write operations
+    // Conservative protection for all write operations
     const protectedMethods = ['activateItem', 'deactivateItem', 'useOn', 'attack', 'dig'];
+    
     protectedMethods.forEach(method => {
       if (typeof this.bot[method] === 'function') {
         const original = this.bot[method].bind(this.bot);
@@ -440,6 +443,7 @@ class MinecraftAI {
             return original(...args);
           } catch (err) {
             if (err.code === 'EPIPE') {
+              this.log(`EPIPE error in ${method}, initiating graceful shutdown`, 'warn');
               this.handleEPIPEError();
               return Promise.reject(err);
             }
@@ -459,14 +463,19 @@ class MinecraftAI {
   }
 
   handleEPIPEError() {
-    this.log('EPIPE error detected, initiating immediate shutdown', 'error');
+    this.log('EPIPE error detected, initiating graceful shutdown', 'error');
     this.isInitialized = false;
-    if (this.bot._client && this.bot._client.socket) {
-      try {
+    
+    // More conservative socket cleanup
+    try {
+      if (this.bot && typeof this.bot.quit === 'function') {
+        this.bot.quit('EPIPE error shutdown');
+      } else if (this.bot._client && this.bot._client.socket && !this.bot._client.socket.destroyed) {
         this.bot._client.socket.destroy();
-      } catch (e) {
-        // Ignore errors during cleanup
       }
+    } catch (e) {
+      // Ignore errors during cleanup
+      this.log(`Error during EPIPE cleanup: ${e.message}`, 'debug');
     }
   }
 
@@ -513,9 +522,15 @@ class MinecraftAI {
       if (!this.currentTask && this.goals.length > 0) {
         const nextGoal = this.goals.shift();
         
-        // Validate goal before planning
-        if (!nextGoal || !nextGoal.type) {
-          this.log('Invalid goal detected, skipping', 'warn');
+        // Enhanced goal validation with detailed logging
+        if (!nextGoal) {
+          this.log('Goal is null or undefined, regenerating default goals', 'warn');
+          this.regenerateDefaultGoals();
+          return;
+        }
+        
+        if (!nextGoal.type || typeof nextGoal.type !== 'string') {
+          this.log(`Invalid goal type detected: ${JSON.stringify(nextGoal)}, skipping`, 'warn');
           return;
         }
         
@@ -704,10 +719,14 @@ class MinecraftAI {
       return;
     }
     
-    // Learn from the experience if Voyager AI is available with null protection
+    // Learn from the experience if Voyager AI is available with comprehensive null protection
     try {
-      const context = this.observer.getObservationSummary();
-      await this.voyagerAI.learnFromExperience(this.currentTask, result, context);
+      if (this.currentTask && this.currentTask.type) {
+        const context = this.observer.getObservationSummary();
+        await this.voyagerAI.learnFromExperience(this.currentTask, result, context);
+      } else {
+        this.log('Skipping learning: current task is null or invalid', 'debug');
+      }
     } catch (learningError) {
       this.log(`Learning failed: ${learningError.message}`);
     }
@@ -756,22 +775,26 @@ class MinecraftAI {
     }
     
     // Create a safe task object for learning even if currentTask becomes corrupted
-    const safeTask = {
-      type: taskName,
-      startTime: this.currentTask.startTime || Date.now(),
-      params: this.currentTask.params || {}
-    };
-    
-    try {
-      // Learn from the failure with enhanced safety
-      const context = this.observer ? this.observer.getObservationSummary() : {};
-      await this.voyagerAI.learnFromExperience(
-        safeTask, 
-        { success: false, error: error.message }, 
-        context
-      );
-    } catch (learningError) {
-      this.log(`失敗から学習中にエラー: ${learningError.message}`);
+    if (taskName && typeof taskName === 'string') {
+      const safeTask = {
+        type: taskName,
+        startTime: this.currentTask ? this.currentTask.startTime || Date.now() : Date.now(),
+        params: this.currentTask ? this.currentTask.params || {} : {}
+      };
+      
+      try {
+        // Learn from the failure with enhanced safety
+        const context = this.observer ? this.observer.getObservationSummary() : {};
+        await this.voyagerAI.learnFromExperience(
+          safeTask, 
+          { success: false, error: error.message }, 
+          context
+        );
+      } catch (learningError) {
+        this.log(`失敗から学習中にエラー: ${learningError.message}`);
+      }
+    } else {
+      this.log('Skipping learning from failure: task name is invalid', 'debug');
     }
     
     this.log(`タスク ${taskName} が失敗: ${error.message}`);
@@ -933,46 +956,46 @@ class MinecraftAI {
   }
 
   calculateSkillTimeout(task) {
-    const baseTimeout = 60000; // 1 minute base
+    const baseTimeout = 30000; // Reduced from 60000ms to 30000ms for faster response
     const taskType = task.type;
     const params = task.params || {};
     
-    // Task-specific timeout multipliers
+    // Task-specific timeout multipliers - reduced for better performance
     const timeoutMultipliers = {
-      'explore': 1.5,
-      'gather_wood': 2.0,
-      'craft_tools': 3.0,
-      'mine_block': 2.5,
-      'build_shelter': 4.0,
-      'move_to': 1.0,
-      'follow': 5.0,
-      'find_food': 2.0
+      'explore': 1.2,      // Reduced from 1.5
+      'gather_wood': 1.5,  // Reduced from 2.0
+      'craft_tools': 2.0,  // Reduced from 3.0
+      'mine_block': 1.8,   // Reduced from 2.5
+      'build_shelter': 2.5, // Reduced from 4.0
+      'move_to': 0.8,      // Reduced from 1.0
+      'follow': 2.0,       // Reduced from 5.0
+      'find_food': 1.3     // Reduced from 2.0
     };
     
-    let multiplier = timeoutMultipliers[taskType] || 2.0;
+    let multiplier = timeoutMultipliers[taskType] || 1.5; // Reduced default from 2.0
     
     // Adjust based on parameters
     if (params.amount && params.amount > 10) {
-      multiplier *= 1.5; // More time for larger amounts
+      multiplier *= 1.2; // Reduced from 1.5
     }
     
     if (params.radius && params.radius > 50) {
-      multiplier *= 1.3; // More time for larger search areas
+      multiplier *= 1.1; // Reduced from 1.3
     }
     
     // Adjust based on bot health and conditions
     if (this.bot.health < 10) {
-      multiplier *= 0.8; // Less time when low health (be more cautious)
+      multiplier *= 0.7; // Reduced from 0.8 for faster response when low health
     }
     
     if (this.observer.isDangerous()) {
-      multiplier *= 0.6; // Much less time in dangerous situations
+      multiplier *= 0.5; // Reduced from 0.6 for much faster dangerous situation response
     }
     
-    // Minimum and maximum timeout limits
+    // Minimum and maximum timeout limits - reduced for better performance
     const calculatedTimeout = baseTimeout * multiplier;
-    const minTimeout = 30000; // 30 seconds minimum
-    const maxTimeout = 600000; // 10 minutes maximum
+    const minTimeout = 15000; // Reduced from 30000ms to 15000ms
+    const maxTimeout = 180000; // Reduced from 600000ms (10 minutes) to 180000ms (3 minutes)
     
     return Math.max(minTimeout, Math.min(maxTimeout, calculatedTimeout));
   }
@@ -1067,7 +1090,7 @@ class MinecraftAI {
       
       if (!accessResult.granted) {
         // Wait or find alternative
-        if (accessResult.waitTime < 60000) { // Wait if less than 1 minute
+        if (accessResult.waitTime < 20000) { // Reduced from 60000ms to 20000ms for faster response
           this.log(`リソース待機中: ${accessResult.waitTime / 1000}秒`);
           await this.sleep(accessResult.waitTime);
           return await this.executeResourceAwareTask(task); // Retry
@@ -1241,10 +1264,14 @@ class MinecraftAI {
         // Execute the skill with dynamic timeout and proper error handling
         const result = await this.executeSkillWithTimeout(skill, this.currentTask.params, dynamicTimeout);
         
-        // Learn from the experience if Voyager AI is available
+        // Learn from the experience if Voyager AI is available with null protection
         try {
-          const context = this.observer.getObservationSummary();
-          await this.voyagerAI.learnFromExperience(this.currentTask, result, context);
+          if (this.currentTask && this.currentTask.type) {
+            const context = this.observer.getObservationSummary();
+            await this.voyagerAI.learnFromExperience(this.currentTask, result, context);
+          } else {
+            this.log('Skipping learning: current task is null or invalid', 'debug');
+          }
         } catch (learningError) {
           this.log(`Learning failed: ${learningError.message}`);
         }
@@ -1274,11 +1301,15 @@ class MinecraftAI {
       this.log(`タスク実行で致命的エラー ${taskName}: ${error.message}`);
       this.handleTaskFailure(taskName, error.message);
       
-      // Learn from the critical error
+      // Learn from the critical error with null protection
       try {
-        const context = this.observer.getObservationSummary();
-        const errorResult = { success: false, error: error.message, critical: true };
-        await this.voyagerAI.learnFromExperience(this.currentTask, errorResult, context);
+        if (this.currentTask && this.currentTask.type) {
+          const context = this.observer.getObservationSummary();
+          const errorResult = { success: false, error: error.message, critical: true };
+          await this.voyagerAI.learnFromExperience(this.currentTask, errorResult, context);
+        } else {
+          this.log('Skipping learning from critical error: current task is null or invalid', 'debug');
+        }
         this.stateManager.completeCurrentTask(errorResult);
         this.stateManager.updateSkillPerformance(taskName, false, Date.now() - (this.currentTask.startTime || Date.now()));
       } catch (learningError) {
@@ -1312,8 +1343,15 @@ class MinecraftAI {
       // Ignore errors during shutdown
     }
   }
-}
 
-module.exports = { MinecraftAI };
+  regenerateDefaultGoals() {
+    this.log('Regenerating default goals', 'info');
+    this.goals = [
+      { type: 'gather_wood', priority: 1, description: '木材を収集する' },
+      { type: 'explore', priority: 2, description: '世界を探索する' },
+      { type: 'find_food', priority: 3, description: '食料源を探す' }
+    ];
+  }
+}
 
 module.exports = { MinecraftAI };
