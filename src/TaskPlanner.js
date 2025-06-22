@@ -28,6 +28,9 @@ class TaskPlanner {
       case 'craft_basic_tools':
         return this.planToolCrafting(goal);
       
+      case 'craft_workbench':
+        return this.planWorkbenchCrafting(goal);
+      
       case 'move_to':
         return this.planMovement(goal);
       
@@ -253,19 +256,55 @@ class TaskPlanner {
       return this.planCombatTask(goal);
     }
     
-    // Default exploration with context-aware parameters
-    const radius = this.calculateExplorationRadius(goal);
+    // Default to resource gathering instead of exploration
+    // Prioritize resource collection over aimless exploration
     const timeout = this.calculateTaskTimeout(goal);
+    
+    // Check current inventory to determine best fallback
+    const woodCount = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
+    const stoneCount = this.bot.inventory.count('stone') + this.bot.inventory.count('cobblestone');
+    
+    // Prefer resource gathering over exploration
+    if (woodCount < 15) {
+      return {
+        type: 'gather_wood',
+        params: { amount: 10 },
+        priority: goal.priority || 3,
+        timeout: Date.now() + timeout,
+        prerequisites: [],
+        context: {
+          originalType: taskType,
+          fallbackReason: 'Need wood for progression'
+        }
+      };
+    }
+    
+    if (stoneCount < 8) {
+      return {
+        type: 'mine_block',
+        params: { blockType: 'stone', amount: 5 },
+        priority: goal.priority || 3,
+        timeout: Date.now() + timeout,
+        prerequisites: [],
+        context: {
+          originalType: taskType,
+          fallbackReason: 'Need stone for progression'
+        }
+      };
+    }
+    
+    // Only explore as last resort with reduced radius
+    const radius = this.calculateExplorationRadius(goal) * 0.5; // Reduce exploration radius
     
     return {
       type: 'explore',
       params: { radius },
-      priority: goal.priority || 5,
+      priority: goal.priority || 6, // Lower priority for exploration
       timeout: Date.now() + timeout,
       prerequisites: [],
       context: {
         originalType: taskType,
-        fallbackReason: 'No specific planner found'
+        fallbackReason: 'All resources satisfied, minimal exploration'
       }
     };
   }
@@ -521,6 +560,35 @@ class TaskPlanner {
 
   getTaskHistory() {
     return this.taskHistory;
+  }
+  
+  planWorkbenchCrafting(goal) {
+    // Check if we already have a crafting table
+    const hasCraftingTable = this.bot.inventory.findInventoryItem('crafting_table');
+    
+    if (hasCraftingTable) {
+      console.log('作業台を既に所持しています');
+      return null; // Skip if already have one
+    }
+    
+    return {
+      type: 'craft_workbench',
+      params: { item: 'crafting_table' },
+      priority: goal.priority || 3,
+      timeout: Date.now() + 180000, // 3 minutes
+      prerequisites: this.hasEnoughWoodForWorkbench() ? [] : [{
+        type: 'gather_wood',
+        params: { amount: 5 }
+      }]
+    };
+  }
+  
+  hasEnoughWoodForWorkbench() {
+    const planks = this.bot.inventory.count('oak_planks') + this.bot.inventory.count('planks');
+    const logs = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
+    const availablePlanks = planks + (logs * 4); // 1 log = 4 planks
+    
+    return availablePlanks >= 4; // Need 4 planks for crafting table
   }
 }
 

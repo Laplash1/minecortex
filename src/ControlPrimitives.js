@@ -9,6 +9,7 @@ class ControlPrimitives {
     this.mineBlockFailCount = 0;
     this.craftItemFailCount = 0;
     this.maxFailCount = 10;
+    this.environmentObserver = null; // Will be set from MinecraftAI
     
     // Initialize pathfinder
     this.initializePathfinder();
@@ -19,10 +20,50 @@ class ControlPrimitives {
       if (this.bot.loadPlugin && !this.bot.pathfinder) {
         this.bot.loadPlugin(pathfinder);
         const movements = new Movements(this.bot, this.mcData);
-        movements.canDig = true;
-        movements.allow1by1towers = true;
-        movements.allowFreeMotion = true;
+        
+        // Enhanced movement capabilities for complex terrain navigation
+        movements.canDig = false;                   // Disable digging for safer navigation
+        movements.allow1by1towers = false;         // Disable tower building
+        movements.allowFreeMotion = true;          // Allow free motion
+        movements.allowParkour = true;             // Enable parkour movements
+        movements.allowSprinting = true;           // Enable sprinting
+        movements.canOpenDoors = true;             // Allow opening doors
+        movements.allowEntityDetection = true;     // Detect entities as obstacles
+        
+        // Liquid handling - treat as passable but with caution
+        movements.liquids = new Set();
+        movements.infiniteLiquidDropdownDistance = false; // Safer liquid handling
+        
+        // Enhanced jumping settings for obstacle navigation
+        movements.maxJumpDistance = 4;             // Increased jump distance
+        movements.maxDropDistance = 4;             // Allow controlled drops
+        movements.maxClimbDistance = 2;            // Allow climbing
+        
+        // Block breaking restrictions for safety
+        movements.blocksCantBreak = new Set([
+          this.mcData.blocksByName.bedrock?.id,
+          this.mcData.blocksByName.barrier?.id,
+          this.mcData.blocksByName.lava?.id,
+          this.mcData.blocksByName.flowing_lava?.id
+        ].filter(Boolean));
+        
+        // Scaffolding blocks (items that can be placed for building paths)
+        movements.scafoldingBlocks = [
+          this.mcData.itemsByName.dirt?.id,
+          this.mcData.itemsByName.cobblestone?.id,
+          this.mcData.itemsByName.stone?.id
+        ].filter(Boolean);
+        
+        // Safety settings
+        movements.dontMineUnderFallingBlock = true;
+        movements.dontCreateFlow = true;           // Don't create water/lava flows
+        movements.allowWaterBucket = false;
+        movements.allowLavaBucket = false;
+        movements.placeCost = 2;                   // Cost for placing blocks
+        movements.breakCost = 1;                   // Cost for breaking blocks
+        
         this.bot.pathfinder.setMovements(movements);
+        console.log('[ControlPrimitives] Enhanced pathfinder initialized with parkour and jumping');
       }
     } catch (error) {
       console.log('[ControlPrimitives] Pathfinder initialization skipped (mock bot or already loaded)');

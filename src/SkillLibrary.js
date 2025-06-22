@@ -17,6 +17,11 @@ class SkillLibrary {
     this.registerSkill('place_block', new PlaceBlockSkill());
     this.registerSkill('attack_entity', new AttackEntitySkill());
     
+    // Advanced movement skills
+    this.registerSkill('smart_jump', new SmartJumpSkill());
+    this.registerSkill('escape_water', new EscapeWaterSkill());
+    this.registerSkill('navigate_terrain', new NavigateTerrainSkill());
+    
     // Survival skills
     this.registerSkill('gather_wood', new SimpleGatherWoodSkill());
     this.registerSkill('find_food', new SimpleFindFoodSkill());
@@ -69,7 +74,21 @@ class MoveToSkill extends Skill {
       const { target } = params;
       const { x, y, z } = target || params;
       
-      console.log(`[移動スキル] (${x}, ${y}, ${z})に移動中...`);
+      // Check if movement is necessary (distance threshold)
+      const currentPos = bot.entity.position;
+      const distance = Math.sqrt(
+        Math.pow(x - currentPos.x, 2) + 
+        Math.pow(y - currentPos.y, 2) +
+        Math.pow(z - currentPos.z, 2)
+      );
+      
+      // If already close enough, don't move
+      if (distance < 3) {
+        console.log(`[移動スキル] 既に目的地に近いため移動をスキップ (距離: ${distance.toFixed(1)})`);
+        return { success: true, message: '既に目的地付近にいます' };
+      }
+      
+      console.log(`[移動スキル] (${x}, ${y}, ${z})に移動中... (距離: ${distance.toFixed(1)})`);
       
       // Ensure pathfinder and movement settings are ready with proper error handling
       if (!bot.pathfinder) {
@@ -93,9 +112,24 @@ class MoveToSkill extends Skill {
         try {
           const mcData = require('minecraft-data')(bot.version);
           const movements = new Movements(bot, mcData);
-          movements.scafoldingBlocks = []; // Prevent scaffolding issues
+          
+          // Enhanced movement settings for better navigation
+          movements.canDig = true;
+          movements.allow1by1towers = true;
+          movements.allowFreeMotion = true;
+          movements.allowParkour = true;             // Enable parkour movements
+          movements.allowSprinting = true;           // Enable sprinting
+          movements.canOpenDoors = true;             // Allow opening doors
+          movements.allowEntityDetection = true;     // Detect entities as obstacles
+          movements.blocksCantBreak = [];            // Can break most blocks
+          movements.liquids = new Set();             // Treat liquids as passable
+          
+          // Jumping and safety settings
+          movements.maxJumpDistance = 2;
+          movements.maxFallDistance = 3;
           movements.dontMineUnderFallingBlock = true; // Safety
-          movements.allow1by1towers = false; // Prevent building towers
+          movements.infiniteLiquidDropdownDistance = true;
+          
           bot.pathfinder.setMovements(movements);
         } catch (movementError) {
           console.log(`[移動スキル] Movement設定エラー: ${movementError.message}`);
@@ -109,10 +143,29 @@ class MoveToSkill extends Skill {
         try {
           // Clear any existing goals to prevent conflicts
           bot.pathfinder.stop();
-          await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause to clear
+          await new Promise(resolve => setTimeout(resolve, 100));
           
-          const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
-          await bot.pathfinder.goto(goal, { timeout: 6000 }); // 6 second timeout
+          // Check for water before pathfinding
+          const waterCheck = await this.checkAndEscapeWater(bot);
+          if (waterCheck.inWater && !waterCheck.success) {
+            console.log('[移動スキル] 水中でpathfinding困難、基本移動にフォールバック');
+            return await this.executeBasicMovement(bot, x, y, z);
+          }
+          
+          // Use appropriate goal type based on distance and height difference
+          const currentPos = bot.entity.position;
+          const heightDiff = Math.abs(y - currentPos.y);
+          
+          let goal;
+          if (heightDiff > 2) {
+            // For significant height differences, use GoalBlock
+            goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
+          } else {
+            // For same level or small height differences, use GoalNear for more flexibility
+            goal = new goals.GoalNear(Math.floor(x), Math.floor(y), Math.floor(z), 1);
+          }
+          
+          await bot.pathfinder.goto(goal, { timeout: 12000 }); // Extended timeout for complex terrain
           return { success: true, message: '目的地に到着しました' };
         } catch (gotoErr) {
           console.log(`[移動スキル] goto失敗: ${gotoErr.message}`);
@@ -160,7 +213,7 @@ class MoveToSkill extends Skill {
             bot.pathfinder.stop();
             resolve({ success: false, error: 'パスファインディングタイムアウト (3秒)' });
           }
-        }, 3000); // Optimized timeout reduced to 3 seconds for faster response
+        }, 8000); // Extended timeout to 8 seconds for more stable pathfinding
         
         const onGoalReached = () => {
           if (!resolved) {
@@ -213,10 +266,16 @@ class MoveToSkill extends Skill {
     }
   }
 
-  // Fallback basic movement when pathfinder fails
+  // Enhanced movement with obstacle detection, stuck detection, and water escape
   async executeBasicMovement(bot, x, y, z) {
     try {
-      console.log(`[移動スキル] 基本移動フォールバック: (${x}, ${y}, ${z})`);
+      console.log(`[移動スキル] 強化基本移動: (${x}, ${y}, ${z})`);
+      
+      // Check if we're in water and need to escape first
+      const waterEscapeResult = await this.checkAndEscapeWater(bot);
+      if (!waterEscapeResult.success && waterEscapeResult.inWater) {
+        return { success: false, error: '水中から脱出できませんでした' };
+      }
       
       const currentPos = bot.entity.position;
       const distance = Math.sqrt(
@@ -224,48 +283,258 @@ class MoveToSkill extends Skill {
         Math.pow(z - currentPos.z, 2)
       );
       
-      // If distance is too far, don't attempt basic movement
       if (distance > 50) {
         return { success: false, error: '目的地が遠すぎます (基本移動)' };
       }
       
-      // Simple approach: move towards target step by step
-      const steps = Math.ceil(distance / 2);
-      const stepX = (x - currentPos.x) / steps;
-      const stepZ = (z - currentPos.z) / steps;
+      const maxSteps = Math.min(Math.ceil(distance / 2), 10);
+      const stepX = (x - currentPos.x) / maxSteps;
+      const stepZ = (z - currentPos.z) / maxSteps;
       
-      for (let i = 0; i < steps; i++) {
+      let lastPos = { ...currentPos };
+      let stuckCount = 0;
+      
+      for (let i = 0; i < maxSteps; i++) {
         const targetX = currentPos.x + stepX * (i + 1);
         const targetZ = currentPos.z + stepZ * (i + 1);
         
-        // Use bot.lookAt and bot.setControlState for basic movement
         try {
+          // Check for water before each step
+          const inWater = await this.checkAndEscapeWater(bot);
+          if (inWater.inWater && !inWater.success) {
+            console.log('[移動スキル] 水中で移動困難、脱出を試行');
+            continue;
+          }
+          
+          // Look at target and move
           await bot.lookAt(new Vec3(targetX, currentPos.y, targetZ));
+          
+          // Check for obstacles ahead
+          const obstacleCheck = await this.checkObstacleAhead(bot, targetX, targetZ);
+          if (obstacleCheck.hasObstacle) {
+            console.log(`[移動スキル] 障害物検出: ${obstacleCheck.reason}`);
+            
+            // Try jumping over obstacle
+            if (obstacleCheck.canJump) {
+              console.log('[移動スキル] ジャンプで障害物を回避');
+              bot.setControlState('jump', true);
+              await new Promise(resolve => setTimeout(resolve, 200));
+              bot.setControlState('jump', false);
+            }
+          }
+          
+          // Move forward
           bot.setControlState('forward', true);
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1500));
           bot.setControlState('forward', false);
           
-          // Check if we're close enough
+          // Check if we moved (stuck detection)
           const newPos = bot.entity.position;
-          const newDistance = Math.sqrt(
+          const moved = Math.sqrt(
+            Math.pow(newPos.x - lastPos.x, 2) + 
+            Math.pow(newPos.z - lastPos.z, 2)
+          );
+          
+          if (moved < 0.5) {
+            stuckCount++;
+            console.log(`[移動スキル] スタック検出 ${stuckCount}/3`);
+            
+            if (stuckCount >= 3) {
+              // Try unstuck maneuvers
+              const unstuckResult = await this.performUnstuckManeuvers(bot);
+              if (!unstuckResult.success) {
+                return { success: false, error: 'スタック状態から脱出できませんでした' };
+              }
+              stuckCount = 0;
+            }
+          } else {
+            stuckCount = 0;
+            lastPos = { ...newPos };
+          }
+          
+          // Check if we're close enough to target
+          const targetDistance = Math.sqrt(
             Math.pow(x - newPos.x, 2) + 
             Math.pow(z - newPos.z, 2)
           );
           
-          if (newDistance < 3) {
-            return { success: true, message: '基本移動で目的地に到着' };
+          if (targetDistance < 3) {
+            return { success: true, message: '強化基本移動で目的地に到着' };
           }
+          
         } catch (moveError) {
-          console.log(`[移動スキル] 基本移動ステップエラー: ${moveError.message}`);
-          // Continue with next step
+          console.log(`[移動スキル] 移動ステップエラー: ${moveError.message}`);
+          continue;
         }
       }
       
-      return { success: false, error: '基本移動でも目的地に到達できませんでした' };
+      return { success: false, error: '強化基本移動でも目的地に到達できませんでした' };
       
     } catch (error) {
-      console.log(`[移動スキル] 基本移動エラー: ${error.message}`);
-      return { success: false, error: `基本移動失敗: ${error.message}` };
+      console.log(`[移動スキル] 強化基本移動エラー: ${error.message}`);
+      return { success: false, error: `強化基本移動失敗: ${error.message}` };
+    }
+  }
+  
+  // Water detection and escape system
+  async checkAndEscapeWater(bot) {
+    try {
+      const pos = bot.entity.position;
+      const currentBlock = bot.blockAt(pos);
+      const blockAbove = bot.blockAt(pos.offset(0, 1, 0));
+      
+      // Check if we're in water or lava
+      const inWater = currentBlock && (currentBlock.name === 'water' || currentBlock.name === 'flowing_water');
+      const inLava = currentBlock && (currentBlock.name === 'lava' || currentBlock.name === 'flowing_lava');
+      const headInWater = blockAbove && (blockAbove.name === 'water' || blockAbove.name === 'flowing_water');
+      
+      if (!inWater && !inLava && !headInWater) {
+        return { success: true, inWater: false };
+      }
+      
+      console.log(`[移動スキル] ${inLava ? 'マグマ' : '水'}中検出、脱出を試行`);
+      
+      // Emergency escape maneuvers
+      for (let i = 0; i < 10; i++) {
+        // Swim up
+        bot.setControlState('jump', true);
+        
+        // Try to move in different directions to find shore
+        const escapeAngle = (i * Math.PI * 2) / 8; // 8 directions
+        const escapeX = Math.cos(escapeAngle);
+        const escapeZ = Math.sin(escapeAngle);
+        
+        await bot.lookAt(new Vec3(pos.x + escapeX, pos.y + 1, pos.z + escapeZ));
+        
+        bot.setControlState('forward', true);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        bot.setControlState('forward', false);
+        
+        // Check if we escaped
+        const newPos = bot.entity.position;
+        const newBlock = bot.blockAt(newPos);
+        
+        if (newBlock && newBlock.name !== 'water' && newBlock.name !== 'flowing_water' && 
+            newBlock.name !== 'lava' && newBlock.name !== 'flowing_lava') {
+          bot.setControlState('jump', false);
+          console.log('[移動スキル] 水中から脱出成功');
+          return { success: true, inWater: false };
+        }
+      }
+      
+      bot.setControlState('jump', false);
+      return { success: false, inWater: true, error: '水中脱出に失敗' };
+      
+    } catch (error) {
+      console.log(`[移動スキル] 水中脱出エラー: ${error.message}`);
+      return { success: false, inWater: true, error: error.message };
+    }
+  }
+  
+  // Obstacle detection ahead
+  async checkObstacleAhead(bot, targetX, targetZ) {
+    try {
+      const pos = bot.entity.position;
+      const dirX = targetX - pos.x;
+      const dirZ = targetZ - pos.z;
+      const distance = Math.sqrt(dirX * dirX + dirZ * dirZ);
+      
+      if (distance === 0) return { hasObstacle: false };
+      
+      const normalX = dirX / distance;
+      const normalZ = dirZ / distance;
+      
+      // Check 1-2 blocks ahead
+      for (let d = 1; d <= 2; d++) {
+        const checkX = Math.floor(pos.x + normalX * d);
+        const checkY = Math.floor(pos.y);
+        const checkZ = Math.floor(pos.z + normalZ * d);
+        
+        const blockAhead = bot.blockAt(new Vec3(checkX, checkY, checkZ));
+        const blockAbove = bot.blockAt(new Vec3(checkX, checkY + 1, checkZ));
+        
+        if (blockAhead && blockAhead.name !== 'air' && 
+            !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(blockAhead.name)) {
+          
+          // Check if we can jump over it (1 block high)
+          if (blockAbove && blockAbove.name === 'air') {
+            return { hasObstacle: true, canJump: true, reason: `${blockAhead.name}を検出、ジャンプ可能` };
+          } else {
+            return { hasObstacle: true, canJump: false, reason: `${blockAhead.name}を検出、ジャンプ不可` };
+          }
+        }
+      }
+      
+      return { hasObstacle: false };
+      
+    } catch (error) {
+      console.log(`[移動スキル] 障害物検出エラー: ${error.message}`);
+      return { hasObstacle: false };
+    }
+  }
+  
+  // Unstuck maneuvers when bot gets stuck
+  async performUnstuckManeuvers(bot) {
+    try {
+      console.log('[移動スキル] スタック解除マニューバを実行');
+      
+      const maneuvers = [
+        // Jump
+        async () => {
+          bot.setControlState('jump', true);
+          await new Promise(resolve => setTimeout(resolve, 300));
+          bot.setControlState('jump', false);
+        },
+        // Back up
+        async () => {
+          bot.setControlState('back', true);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          bot.setControlState('back', false);
+        },
+        // Turn and move
+        async () => {
+          const pos = bot.entity.position;
+          await bot.lookAt(new Vec3(pos.x + Math.random() * 4 - 2, pos.y, pos.z + Math.random() * 4 - 2));
+          bot.setControlState('forward', true);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          bot.setControlState('forward', false);
+        },
+        // Jump and move
+        async () => {
+          bot.setControlState('jump', true);
+          bot.setControlState('forward', true);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          bot.setControlState('jump', false);
+          bot.setControlState('forward', false);
+        }
+      ];
+      
+      const startPos = bot.entity.position;
+      
+      for (const maneuver of maneuvers) {
+        await maneuver();
+        
+        // Check if we moved
+        const newPos = bot.entity.position;
+        const moved = Math.sqrt(
+          Math.pow(newPos.x - startPos.x, 2) + 
+          Math.pow(newPos.z - startPos.z, 2)
+        );
+        
+        if (moved > 1) {
+          console.log('[移動スキル] スタック解除成功');
+          return { success: true };
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      console.log('[移動スキル] スタック解除失敗');
+      return { success: false };
+      
+    } catch (error) {
+      console.log(`[移動スキル] スタック解除エラー: ${error.message}`);
+      return { success: false, error: error.message };
     }
   }
 }
@@ -899,6 +1168,352 @@ class PlaceBlocksSkill extends Skill {
     }
 
     return positions;
+  }
+}
+
+// Advanced Movement Skills
+class SmartJumpSkill extends Skill {
+  constructor() {
+    super('smart_jump', 'Intelligent jumping over obstacles and gaps');
+  }
+
+  async execute(bot, params) {
+    try {
+      const { direction = 'forward', distance = 1, height = 1 } = params;
+      
+      console.log(`[スマートジャンプ] ${direction}方向に${distance}ブロック、高さ${height}ブロックのジャンプ`);
+      
+      // Pre-jump analysis
+      const pos = bot.entity.position;
+      const canJump = await this.analyzeJumpPath(bot, direction, distance, height);
+      
+      if (!canJump.possible) {
+        return { success: false, error: `ジャンプ不可: ${canJump.reason}` };
+      }
+      
+      // Execute jump sequence
+      if (direction === 'forward') {
+        bot.setControlState('forward', true);
+      } else if (direction === 'back') {
+        bot.setControlState('back', true);
+      }
+      
+      // Timing-based jump
+      await new Promise(resolve => setTimeout(resolve, 200)); // Short run-up
+      
+      bot.setControlState('jump', true);
+      await new Promise(resolve => setTimeout(resolve, 300)); // Jump duration
+      
+      // Continue forward motion during jump
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Release controls
+      bot.setControlState('jump', false);
+      bot.setControlState('forward', false);
+      bot.setControlState('back', false);
+      
+      // Verify landing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const newPos = bot.entity.position;
+      const moved = Math.sqrt(
+        Math.pow(newPos.x - pos.x, 2) + Math.pow(newPos.z - pos.z, 2)
+      );
+      
+      if (moved > 0.5) {
+        return { success: true, message: `ジャンプ成功: ${moved.toFixed(1)}ブロック移動` };
+      } else {
+        return { success: false, error: 'ジャンプしたが移動できませんでした' };
+      }
+      
+    } catch (error) {
+      return { success: false, error: `ジャンプエラー: ${error.message}` };
+    }
+  }
+  
+  async analyzeJumpPath(bot, direction, distance, height) {
+    try {
+      const pos = bot.entity.position;
+      
+      // Calculate target position based on direction
+      let targetX = pos.x;
+      let targetZ = pos.z;
+      
+      if (direction === 'forward') {
+        // Use bot's current facing direction
+        const yaw = bot.entity.yaw;
+        targetX += Math.cos(yaw + Math.PI) * distance;
+        targetZ += Math.sin(yaw + Math.PI) * distance;
+      }
+      
+      // Check landing area
+      const landingBlock = bot.blockAt(new Vec3(Math.floor(targetX), Math.floor(pos.y), Math.floor(targetZ)));
+      
+      if (!landingBlock || landingBlock.name === 'air') {
+        return { possible: false, reason: '着地地点が空気ブロック' };
+      }
+      
+      // Check for obstacles in path
+      for (let i = 1; i <= distance; i++) {
+        const checkX = pos.x + (targetX - pos.x) * (i / distance);
+        const checkZ = pos.z + (targetZ - pos.z) * (i / distance);
+        
+        const blockInPath = bot.blockAt(new Vec3(Math.floor(checkX), Math.floor(pos.y + 1), Math.floor(checkZ)));
+        
+        if (blockInPath && blockInPath.name !== 'air') {
+          return { possible: false, reason: `パスに障害物: ${blockInPath.name}` };
+        }
+      }
+      
+      return { possible: true, reason: 'ジャンプパスクリア' };
+      
+    } catch (error) {
+      return { possible: false, reason: `分析エラー: ${error.message}` };
+    }
+  }
+}
+
+class EscapeWaterSkill extends Skill {
+  constructor() {
+    super('escape_water', 'Escape from water or lava');
+  }
+
+  async execute(bot, params) {
+    try {
+      const { maxAttempts = 15, emergencyMode = false } = params;
+      
+      console.log(`[水中脱出] 水中脱出を開始、最大${maxAttempts}回試行`);
+      
+      const startPos = bot.entity.position;
+      const startTime = Date.now();
+      
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const pos = bot.entity.position;
+        const currentBlock = bot.blockAt(pos);
+        const blockAbove = bot.blockAt(pos.offset(0, 1, 0));
+        
+        // Check if we're still in water/lava
+        const inLiquid = currentBlock && (
+          currentBlock.name === 'water' || currentBlock.name === 'flowing_water' ||
+          currentBlock.name === 'lava' || currentBlock.name === 'flowing_lava'
+        );
+        
+        const headInLiquid = blockAbove && (
+          blockAbove.name === 'water' || blockAbove.name === 'flowing_water' ||
+          blockAbove.name === 'lava' || blockAbove.name === 'flowing_lava'
+        );
+        
+        if (!inLiquid && !headInLiquid) {
+          const escapeTime = ((Date.now() - startTime) / 1000).toFixed(1);
+          return { success: true, message: `水中脱出成功 (${escapeTime}秒, ${attempt + 1}回目)` };
+        }
+        
+        // Emergency swim-up and movement
+        bot.setControlState('jump', true); // Swim up
+        
+        // Try different escape directions
+        const escapeAngle = (attempt * Math.PI * 2) / 8;
+        const escapeX = Math.cos(escapeAngle) * 2;
+        const escapeZ = Math.sin(escapeAngle) * 2;
+        
+        await bot.lookAt(new Vec3(pos.x + escapeX, pos.y + 2, pos.z + escapeZ));
+        bot.setControlState('forward', true);
+        
+        // Quick escape burst
+        await new Promise(resolve => setTimeout(resolve, emergencyMode ? 300 : 600));
+        
+        bot.setControlState('forward', false);
+        
+        // Check progress
+        const newPos = bot.entity.position;
+        const progress = Math.sqrt(
+          Math.pow(newPos.x - startPos.x, 2) + 
+          Math.pow(newPos.z - startPos.z, 2) + 
+          Math.pow(newPos.y - startPos.y, 2)
+        );
+        
+        if (attempt % 5 === 0) {
+          console.log(`[水中脱出] 進行状況: ${attempt + 1}/${maxAttempts}, 距離: ${progress.toFixed(1)}`);
+        }
+      }
+      
+      bot.setControlState('jump', false);
+      bot.setControlState('forward', false);
+      
+      return { success: false, error: `水中脱出失敗: ${maxAttempts}回試行後も水中` };
+      
+    } catch (error) {
+      // Clean up controls
+      bot.setControlState('jump', false);
+      bot.setControlState('forward', false);
+      return { success: false, error: `水中脱出エラー: ${error.message}` };
+    }
+  }
+}
+
+class NavigateTerrainSkill extends Skill {
+  constructor() {
+    super('navigate_terrain', 'Navigate complex terrain with obstacles');
+  }
+
+  async execute(bot, params) {
+    try {
+      const { target, maxTime = 30000, adaptive = true } = params;
+      const { x, y, z } = target;
+      
+      console.log(`[地形ナビ] 複雑地形をナビゲート: (${x}, ${y}, ${z})`);
+      
+      const startTime = Date.now();
+      const smartJump = new SmartJumpSkill();
+      const escapeWater = new EscapeWaterSkill();
+      
+      while (Date.now() - startTime < maxTime) {
+        const currentPos = bot.entity.position;
+        const distance = Math.sqrt(
+          Math.pow(x - currentPos.x, 2) + 
+          Math.pow(z - currentPos.z, 2)
+        );
+        
+        // Success if close enough
+        if (distance < 2) {
+          return { success: true, message: `地形ナビゲーション成功` };
+        }
+        
+        // Check for water
+        const currentBlock = bot.blockAt(currentPos);
+        if (currentBlock && (currentBlock.name === 'water' || currentBlock.name === 'flowing_water')) {
+          console.log('[地形ナビ] 水を検出、脱出を試行');
+          const waterResult = await escapeWater.execute(bot, { maxAttempts: 8, emergencyMode: true });
+          if (!waterResult.success) {
+            return { success: false, error: '水中脱出に失敗' };
+          }
+          continue;
+        }
+        
+        // Calculate direction to target
+        const dirX = x - currentPos.x;
+        const dirZ = z - currentPos.z;
+        const dirDistance = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        
+        if (dirDistance === 0) break;
+        
+        const normalX = dirX / dirDistance;
+        const normalZ = dirZ / dirDistance;
+        
+        // Look towards target
+        await bot.lookAt(new Vec3(x, currentPos.y, z));
+        
+        // Check for obstacles ahead
+        const obstacleAhead = await this.checkTerrainAhead(bot, normalX, normalZ);
+        
+        if (obstacleAhead.hasObstacle) {
+          console.log(`[地形ナビ] 障害物検出: ${obstacleAhead.type}`);
+          
+          if (obstacleAhead.canJump) {
+            const jumpResult = await smartJump.execute(bot, { direction: 'forward', distance: 1, height: 1 });
+            if (jumpResult.success) {
+              console.log('[地形ナビ] ジャンプで障害物を回避');
+              continue;
+            }
+          }
+          
+          // Try alternative path
+          console.log('[地形ナビ] 代替ルートを探索');
+          const altResult = await this.findAlternativePath(bot, x, z);
+          if (altResult.found) {
+            await bot.lookAt(new Vec3(altResult.x, currentPos.y, altResult.z));
+          }
+        }
+        
+        // Move forward
+        bot.setControlState('forward', true);
+        await new Promise(resolve => setTimeout(resolve, 800));
+        bot.setControlState('forward', false);
+        
+        // Small pause to reassess
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      return { success: false, error: '地形ナビゲーションタイムアウト' };
+      
+    } catch (error) {
+      // Clean up controls
+      bot.setControlState('forward', false);
+      bot.setControlState('jump', false);
+      return { success: false, error: `地形ナビエラー: ${error.message}` };
+    }
+  }
+  
+  async checkTerrainAhead(bot, dirX, dirZ) {
+    try {
+      const pos = bot.entity.position;
+      
+      // Check 1-2 blocks ahead
+      for (let distance = 1; distance <= 2; distance++) {
+        const checkX = Math.floor(pos.x + dirX * distance);
+        const checkY = Math.floor(pos.y);
+        const checkZ = Math.floor(pos.z + dirZ * distance);
+        
+        const blockAhead = bot.blockAt(new Vec3(checkX, checkY, checkZ));
+        const blockAbove = bot.blockAt(new Vec3(checkX, checkY + 1, checkZ));
+        const blockAbove2 = bot.blockAt(new Vec3(checkX, checkY + 2, checkZ));
+        
+        if (blockAhead && blockAhead.name !== 'air' && 
+            !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(blockAhead.name)) {
+          
+          // Check if we can jump over (1 block obstacle)
+          if (blockAbove && blockAbove.name === 'air' && 
+              blockAbove2 && blockAbove2.name === 'air') {
+            return { hasObstacle: true, canJump: true, type: `${blockAhead.name}(ジャンプ可能)` };
+          } else {
+            return { hasObstacle: true, canJump: false, type: `${blockAhead.name}(ジャンプ不可)` };
+          }
+        }
+      }
+      
+      return { hasObstacle: false };
+      
+    } catch (error) {
+      return { hasObstacle: false };
+    }
+  }
+  
+  async findAlternativePath(bot, targetX, targetZ) {
+    try {
+      const pos = bot.entity.position;
+      const directions = [
+        { x: 1, z: 0 },   // East
+        { x: -1, z: 0 },  // West
+        { x: 0, z: 1 },   // South
+        { x: 0, z: -1 },  // North
+        { x: 1, z: 1 },   // Southeast
+        { x: -1, z: 1 },  // Southwest
+        { x: 1, z: -1 },  // Northeast
+        { x: -1, z: -1 }  // Northwest
+      ];
+      
+      for (const dir of directions) {
+        const altX = pos.x + dir.x * 3;
+        const altZ = pos.z + dir.z * 3;
+        
+        // Check if this direction is closer to target
+        const altDistance = Math.sqrt(Math.pow(targetX - altX, 2) + Math.pow(targetZ - altZ, 2));
+        const currentDistance = Math.sqrt(Math.pow(targetX - pos.x, 2) + Math.pow(targetZ - pos.z, 2));
+        
+        if (altDistance < currentDistance) {
+          // Check if path is clear
+          const checkBlock = bot.blockAt(new Vec3(Math.floor(altX), Math.floor(pos.y), Math.floor(altZ)));
+          if (!checkBlock || checkBlock.name === 'air' || 
+              ['water', 'flowing_water'].includes(checkBlock.name)) {
+            return { found: true, x: altX, z: altZ };
+          }
+        }
+      }
+      
+      return { found: false };
+      
+    } catch (error) {
+      return { found: false };
+    }
   }
 }
 

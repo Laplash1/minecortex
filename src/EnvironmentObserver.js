@@ -458,8 +458,252 @@ class EnvironmentObserver {
       inventoryItems: this.inventoryState.size,
       isDangerous: this.isDangerous(),
       dangers: this.getNearbyDangers(),
-      opportunities: this.getResourceOpportunities()
+      opportunities: this.getResourceOpportunities(),
+      waterStatus: this.getWaterStatus(),
+      terrainAnalysis: this.getTerrainAnalysis()
     };
+  }
+  
+  // Enhanced water detection system
+  getWaterStatus() {
+    try {
+      if (!this.bot?.entity?.position) {
+        return { inWater: false, inLava: false, canEscape: false };
+      }
+      
+      const pos = this.bot.entity.position;
+      const currentBlock = this.bot.blockAt(pos);
+      const blockAbove = this.bot.blockAt(pos.offset(0, 1, 0));
+      const blockBelow = this.bot.blockAt(pos.offset(0, -1, 0));
+      
+      // Check current liquid state
+      const inWater = currentBlock && (currentBlock.name === 'water' || currentBlock.name === 'flowing_water');
+      const inLava = currentBlock && (currentBlock.name === 'lava' || currentBlock.name === 'flowing_lava');
+      const headInWater = blockAbove && (blockAbove.name === 'water' || blockAbove.name === 'flowing_water');
+      const headInLava = blockAbove && (blockAbove.name === 'lava' || blockAbove.name === 'flowing_lava');
+      
+      // Analyze escape routes if in liquid
+      let canEscape = false;
+      let escapeDirections = [];
+      
+      if (inWater || inLava || headInWater || headInLava) {
+        // Check 8 horizontal directions for escape
+        const directions = [
+          { x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 },
+          { x: 1, z: 1 }, { x: -1, z: 1 }, { x: 1, z: -1 }, { x: -1, z: -1 }
+        ];
+        
+        for (const dir of directions) {
+          const escapePos = pos.offset(dir.x, 0, dir.z);
+          const escapeBlock = this.bot.blockAt(escapePos);
+          
+          if (escapeBlock && escapeBlock.name !== 'water' && escapeBlock.name !== 'flowing_water' &&
+              escapeBlock.name !== 'lava' && escapeBlock.name !== 'flowing_lava' &&
+              escapeBlock.name !== 'air') {
+            canEscape = true;
+            escapeDirections.push({ direction: dir, position: escapePos });
+          }
+        }
+      }
+      
+      return {
+        inWater: inWater || headInWater,
+        inLava: inLava || headInLava,
+        canEscape,
+        escapeDirections,
+        waterDepth: this.calculateWaterDepth(pos),
+        nearShore: this.isNearShore(pos)
+      };
+      
+    } catch (error) {
+      console.log(`[EnvironmentObserver] Water status error: ${error.message}`);
+      return { inWater: false, inLava: false, canEscape: false };
+    }
+  }
+  
+  calculateWaterDepth(pos) {
+    try {
+      let depth = 0;
+      
+      // Check downward to find bottom
+      for (let y = Math.floor(pos.y); y >= Math.floor(pos.y) - 10; y--) {
+        const checkBlock = this.bot.blockAt({ x: Math.floor(pos.x), y: y, z: Math.floor(pos.z) });
+        
+        if (checkBlock && (checkBlock.name === 'water' || checkBlock.name === 'flowing_water')) {
+          depth++;
+        } else {
+          break;
+        }
+      }
+      
+      return depth;
+      
+    } catch (error) {
+      return 0;
+    }
+  }
+  
+  isNearShore(pos) {
+    try {
+      const radius = 3;
+      
+      for (let x = -radius; x <= radius; x++) {
+        for (let z = -radius; z <= radius; z++) {
+          const checkPos = { x: Math.floor(pos.x) + x, y: Math.floor(pos.y), z: Math.floor(pos.z) + z };
+          const checkBlock = this.bot.blockAt(checkPos);
+          
+          if (checkBlock && checkBlock.name !== 'water' && checkBlock.name !== 'flowing_water' &&
+              checkBlock.name !== 'air') {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+      
+    } catch (error) {
+      return false;
+    }
+  }
+  
+  // Enhanced terrain analysis
+  getTerrainAnalysis() {
+    try {
+      if (!this.bot?.entity?.position) {
+        return { terrain: 'unknown', obstacles: [], jumpableObstacles: [] };
+      }
+      
+      const pos = this.bot.entity.position;
+      const obstacles = [];
+      const jumpableObstacles = [];
+      const paths = [];
+      
+      // Analyze terrain in 8 directions
+      const directions = [
+        { name: 'north', x: 0, z: -1 },
+        { name: 'northeast', x: 1, z: -1 },
+        { name: 'east', x: 1, z: 0 },
+        { name: 'southeast', x: 1, z: 1 },
+        { name: 'south', x: 0, z: 1 },
+        { name: 'southwest', x: -1, z: 1 },
+        { name: 'west', x: -1, z: 0 },
+        { name: 'northwest', x: -1, z: -1 }
+      ];
+      
+      for (const dir of directions) {
+        const analysis = this.analyzeDirection(pos, dir.x, dir.z, 3);
+        
+        if (analysis.hasObstacle) {
+          if (analysis.canJump) {
+            jumpableObstacles.push({ direction: dir.name, ...analysis });
+          } else {
+            obstacles.push({ direction: dir.name, ...analysis });
+          }
+        } else {
+          paths.push({ direction: dir.name, clear: true, distance: analysis.clearDistance });
+        }
+      }
+      
+      // Determine terrain type
+      let terrainType = 'flat';
+      if (obstacles.length > 4) {
+        terrainType = 'complex';
+      } else if (jumpableObstacles.length > 2) {
+        terrainType = 'hilly';
+      } else if (obstacles.length > 0) {
+        terrainType = 'mixed';
+      }
+      
+      return {
+        terrain: terrainType,
+        obstacles,
+        jumpableObstacles,
+        clearPaths: paths,
+        heightVariation: this.analyzeHeightVariation(pos),
+        navigationDifficulty: this.calculateNavigationDifficulty(obstacles, jumpableObstacles)
+      };
+      
+    } catch (error) {
+      console.log(`[EnvironmentObserver] Terrain analysis error: ${error.message}`);
+      return { terrain: 'unknown', obstacles: [], jumpableObstacles: [] };
+    }
+  }
+  
+  analyzeDirection(startPos, dirX, dirZ, maxDistance) {
+    try {
+      for (let distance = 1; distance <= maxDistance; distance++) {
+        const checkX = Math.floor(startPos.x + dirX * distance);
+        const checkY = Math.floor(startPos.y);
+        const checkZ = Math.floor(startPos.z + dirZ * distance);
+        
+        const blockAhead = this.bot.blockAt({ x: checkX, y: checkY, z: checkZ });
+        const blockAbove = this.bot.blockAt({ x: checkX, y: checkY + 1, z: checkZ });
+        const blockAbove2 = this.bot.blockAt({ x: checkX, y: checkY + 2, z: checkZ });
+        
+        if (blockAhead && blockAhead.name !== 'air' &&
+            !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(blockAhead.name)) {
+          
+          // Check if jumpable (1 block high, 2 blocks clearance above)
+          const canJump = blockAbove && blockAbove.name === 'air' &&
+                         blockAbove2 && blockAbove2.name === 'air';
+          
+          return {
+            hasObstacle: true,
+            canJump,
+            obstacleType: blockAhead.name,
+            distance,
+            position: { x: checkX, y: checkY, z: checkZ }
+          };
+        }
+      }
+      
+      return { hasObstacle: false, clearDistance: maxDistance };
+      
+    } catch (error) {
+      return { hasObstacle: false, clearDistance: 0 };
+    }
+  }
+  
+  analyzeHeightVariation(pos) {
+    try {
+      const radius = 5;
+      const heights = [];
+      
+      for (let x = -radius; x <= radius; x += 2) {
+        for (let z = -radius; z <= radius; z += 2) {
+          const checkX = Math.floor(pos.x) + x;
+          const checkZ = Math.floor(pos.z) + z;
+          
+          // Find ground level
+          for (let y = Math.floor(pos.y) + 3; y >= Math.floor(pos.y) - 5; y--) {
+            const checkBlock = this.bot.blockAt({ x: checkX, y: y, z: checkZ });
+            if (checkBlock && checkBlock.name !== 'air') {
+              heights.push(y + 1);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (heights.length === 0) return 0;
+      
+      const minHeight = Math.min(...heights);
+      const maxHeight = Math.max(...heights);
+      
+      return maxHeight - minHeight;
+      
+    } catch (error) {
+      return 0;
+    }
+  }
+  
+  calculateNavigationDifficulty(obstacles, jumpableObstacles) {
+    const baseScore = obstacles.length * 2 + jumpableObstacles.length;
+    
+    if (baseScore === 0) return 'easy';
+    if (baseScore <= 3) return 'moderate';
+    if (baseScore <= 6) return 'difficult';
+    return 'very_difficult';
   }
 }
 

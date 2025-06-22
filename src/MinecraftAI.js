@@ -75,12 +75,14 @@ class MinecraftAI {
     // Load basic skills
     this.skillLibrary.loadBasicSkills();
     
-    // Set simple exploration goals
-    // まず木材収集を優先し、その後探索へ
+    // Set resource-focused goals prioritizing growth and crafting over exploration
+    // リソース採取とクラフトを重視し、探索の比重を下げる
     this.goals = [
       { type: 'gather_wood', priority: 1, description: '木材を収集する' },
-      { type: 'explore', priority: 2, description: '世界を探索する' },
-      { type: 'find_food', priority: 3, description: '食料源を探す' }
+      { type: 'find_stone', priority: 2, description: '石を採取する' },
+      { type: 'craft_basic_tools', priority: 3, description: '基本道具を作成する' },
+      { type: 'find_food', priority: 4, description: '食料源を探す' },
+      { type: 'explore', priority: 5, description: '世界を探索する' }
     ];
     
     this.isInitialized = true;
@@ -518,6 +520,11 @@ class MinecraftAI {
         this.currentTask = null;
       }
       
+      // Check for crafting opportunities before selecting goals
+      if (!this.currentTask) {
+        await this.checkCraftingOpportunities();
+      }
+      
       // Select next task if none active with enhanced validation
       if (!this.currentTask && this.goals.length > 0) {
         const nextGoal = this.goals.shift();
@@ -555,8 +562,8 @@ class MinecraftAI {
       if (this.currentTask) {
         await this.executeCurrentTask();
       } else {
-        // Idle behavior - simple exploration with safety checks
-        await this.safeExploration();
+        // Idle behavior - resource-focused activities instead of exploration
+        await this.performResourceFocusedIdle();
       }
       
     } catch (error) {
@@ -641,6 +648,57 @@ class MinecraftAI {
       
     } catch (error) {
       this.log(`回避行動エラー: ${error.message}`);
+    }
+  }
+  
+  // Enhanced movement with terrain-aware navigation
+  async smartNavigateTo(x, y, z) {
+    try {
+      this.log(`スマートナビゲーション: (${x}, ${y}, ${z})`);
+      
+      // Check current environment
+      const waterStatus = this.observer.getWaterStatus();
+      const terrainAnalysis = this.observer.getTerrainAnalysis();
+      
+      // If in water, escape first
+      if (waterStatus.inWater || waterStatus.inLava) {
+        const escapeSkill = this.skillLibrary.getSkill('escape_water');
+        if (escapeSkill) {
+          const escapeResult = await escapeSkill.execute(this.bot, { emergencyMode: true });
+          if (!escapeResult.success) {
+            return { success: false, error: '水中脱出失敗' };
+          }
+        }
+      }
+      
+      // Choose navigation strategy based on terrain complexity
+      let navigationSkill;
+      
+      if (terrainAnalysis.navigationDifficulty === 'very_difficult' || terrainAnalysis.navigationDifficulty === 'difficult') {
+        navigationSkill = this.skillLibrary.getSkill('navigate_terrain');
+        this.log('複雑地形でのナビゲーションスキルを使用');
+      } else {
+        navigationSkill = this.skillLibrary.getSkill('move_to');
+        this.log('標準移動スキルを使用');
+      }
+      
+      if (!navigationSkill) {
+        return { success: false, error: '適切なナビゲーションスキルが見つかりません' };
+      }
+      
+      const result = await navigationSkill.execute(this.bot, { target: { x, y, z } });
+      
+      if (result.success) {
+        this.log('スマートナビゲーション成功');
+      } else {
+        this.log(`スマートナビゲーション失敗: ${result.error}`);
+      }
+      
+      return result;
+      
+    } catch (error) {
+      this.log(`スマートナビゲーションエラー: ${error.message}`);
+      return { success: false, error: error.message };
     }
   }
 
@@ -1345,12 +1403,152 @@ class MinecraftAI {
   }
 
   regenerateDefaultGoals() {
-    this.log('Regenerating default goals', 'info');
-    this.goals = [
-      { type: 'gather_wood', priority: 1, description: '木材を収集する' },
-      { type: 'explore', priority: 2, description: '世界を探索する' },
-      { type: 'find_food', priority: 3, description: '食料源を探す' }
-    ];
+    this.log('Regenerating resource-focused goals', 'info');
+    
+    // Evaluate current inventory to determine priorities
+    const woodCount = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
+    const stoneCount = this.bot.inventory.count('stone') + this.bot.inventory.count('cobblestone');
+    const hasPickaxe = this.bot.inventory.findInventoryItem(item => item.name.includes('pickaxe'));
+    const hasAxe = this.bot.inventory.findInventoryItem(item => item.name.includes('axe'));
+    
+    // Dynamic goal generation based on current needs
+    let goals = [];
+    
+    // Always prioritize basic resources
+    if (woodCount < 20) {
+      goals.push({ type: 'gather_wood', priority: 1, description: '木材を収集する' });
+    }
+    
+    if (stoneCount < 10) {
+      goals.push({ type: 'find_stone', priority: 2, description: '石を採取する' });
+    }
+    
+    // Craft tools if needed and have materials
+    if (!hasPickaxe || !hasAxe) {
+      goals.push({ type: 'craft_basic_tools', priority: 3, description: '基本道具を作成する' });
+    }
+    
+    // Food only when actually needed
+    if (this.bot.food < 15) {
+      goals.push({ type: 'find_food', priority: 4, description: '食料源を探す' });
+    }
+    
+    // Exploration only as last resort and less frequently
+    if (Math.random() < 0.3) { // Only 30% chance to add exploration
+      goals.push({ type: 'explore', priority: 5, description: '世界を探索する' });
+    }
+    
+    // Add crafting opportunities when we have resources
+    if (woodCount >= 10 && !this.bot.inventory.findInventoryItem('crafting_table')) {
+      goals.push({ type: 'craft_workbench', priority: 3, description: '作業台を作成する' });
+    }
+    
+    // Ensure we always have some goals
+    if (goals.length === 0) {
+      goals = [
+        { type: 'gather_wood', priority: 1, description: '木材を収集する' },
+        { type: 'find_stone', priority: 2, description: '石を採取する' }
+      ];
+    }
+    
+    this.goals = goals;
+    this.log(`新しいゴールを生成: ${goals.map(g => g.type).join(', ')}`);
+  }
+  
+  async checkCraftingOpportunities() {
+    try {
+      // Check if we have enough wood for tools but no tools yet
+      const woodCount = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
+      const hasPickaxe = this.bot.inventory.findInventoryItem(item => item.name.includes('pickaxe'));
+      const hasAxe = this.bot.inventory.findInventoryItem(item => item.name.includes('axe'));
+      const hasCraftingTable = this.bot.inventory.findInventoryItem('crafting_table');
+      
+      // Priority 1: Craft workbench if we have wood but no workbench
+      if (woodCount >= 2 && !hasCraftingTable) {
+        this.goals.unshift({
+          type: 'craft_workbench',
+          priority: 2,
+          description: '作業台を作成してクラフトを可能にする'
+        });
+        this.log('作業台クラフトの機会を検出');
+        return;
+      }
+      
+      // Priority 2: Craft basic tools if we have materials but no tools
+      if (woodCount >= 5 && (!hasPickaxe || !hasAxe)) {
+        this.goals.unshift({
+          type: 'craft_basic_tools',
+          priority: 2,
+          description: '基本道具を作成して効率を向上させる'
+        });
+        this.log('道具クラフトの機会を検出');
+        return;
+      }
+      
+    } catch (error) {
+      this.log(`クラフト機会チェックエラー: ${error.message}`);
+    }
+  }
+  
+  async performResourceFocusedIdle() {
+    try {
+      // Instead of random exploration, focus on resource gathering
+      const woodCount = this.bot.inventory.count('oak_log') + this.bot.inventory.count('log');
+      const stoneCount = this.bot.inventory.count('stone') + this.bot.inventory.count('cobblestone');
+      const health = this.bot.health || 0;
+      const food = this.bot.food || 0;
+      
+      // Priority-based idle activities
+      if (food < 12) {
+        this.goals.unshift({
+          type: 'find_food',
+          priority: 1,
+          description: '体力保持のための食料確保'
+        });
+        this.log('アイドル中: 食料不足を検出');
+        return;
+      }
+      
+      if (woodCount < 15) {
+        this.goals.unshift({
+          type: 'gather_wood',
+          priority: 2,
+          description: 'アイドル中の木材収集'
+        });
+        this.log('アイドル中: 木材を収集します');
+        return;
+      }
+      
+      if (stoneCount < 10) {
+        this.goals.unshift({
+          type: 'find_stone',
+          priority: 2,
+          description: 'アイドル中の石材収集'
+        });
+        this.log('アイドル中: 石を採取します');
+        return;
+      }
+      
+      // Only explore as absolute last resort and for shorter duration
+      if (Math.random() < 0.2) { // Only 20% chance
+        this.goals.unshift({
+          type: 'explore',
+          priority: 6,
+          description: '短時間の探索活動',
+          radius: 30 // Smaller exploration radius
+        });
+        this.log('アイドル中: 短時間の探索を実行');
+      } else {
+        // Most of the time, just rest briefly
+        this.log('アイドル中: リソースが十分なため休憩');
+        await this.sleep(2000);
+      }
+      
+    } catch (error) {
+      this.log(`アイドル処理エラー: ${error.message}`);
+      // Fallback to short rest
+      await this.sleep(3000);
+    }
   }
 }
 
