@@ -13,7 +13,7 @@ class InventoryUtils {
    */
   static getWoodCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return bot.inventory.count('oak_log') + bot.inventory.count('log');
+    return bot.inventory.count(item => item.name === 'oak_log' || item.name === 'log');
   }
 
   /**
@@ -23,7 +23,7 @@ class InventoryUtils {
    */
   static getStoneCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return bot.inventory.count('stone') + bot.inventory.count('cobblestone');
+    return bot.inventory.count(item => item.name === 'stone' || item.name === 'cobblestone');
   }
 
   /**
@@ -33,7 +33,7 @@ class InventoryUtils {
    */
   static getPlanksCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return bot.inventory.count('oak_planks') + bot.inventory.count('planks');
+    return bot.inventory.count(item => item.name === 'oak_planks' || item.name === 'planks');
   }
 
   /**
@@ -66,9 +66,16 @@ class InventoryUtils {
    */
   static hasTool(bot, toolType) {
     if (!bot || !bot.inventory) return false;
-    return bot.inventory.findInventoryItem(item => 
-      item.name && item.name.includes(toolType)
-    ) !== null;
+    try {
+      // Use bot.inventory.items() for safer access
+      const items = bot.inventory.items();
+      return items.some(item => 
+        item && item.name && typeof item.name === 'string' && item.name.includes(toolType)
+      );
+    } catch (error) {
+      console.error(`[InventoryUtils] hasTool error for toolType "${toolType}":`, error.message);
+      return false;
+    }
   }
 
   /**
@@ -80,8 +87,17 @@ class InventoryUtils {
    */
   static hasItem(bot, itemName, minCount = 1) {
     if (!bot || !bot.inventory) return false;
-    const item = bot.inventory.findInventoryItem(item => item.name === itemName);
-    return item && item.count >= minCount;
+    try {
+      // Use bot.inventory.items() for safer access
+      const items = bot.inventory.items();
+      const item = items.find(item => 
+        item && item.name && typeof item.name === 'string' && item.name === itemName
+      );
+      return item && item.count >= minCount;
+    } catch (error) {
+      console.error(`[InventoryUtils] hasItem error for itemName "${itemName}":`, error.message);
+      return false;
+    }
   }
 
   /**
@@ -92,8 +108,17 @@ class InventoryUtils {
    */
   static getItemCount(bot, itemName) {
     if (!bot || !bot.inventory) return 0;
-    const item = bot.inventory.findInventoryItem(item => item.name === itemName);
-    return item ? item.count : 0;
+    try {
+      // Use bot.inventory.items() for safer access
+      const items = bot.inventory.items();
+      const item = items.find(item => 
+        item && item.name && typeof item.name === 'string' && item.name === itemName
+      );
+      return item ? item.count : 0;
+    } catch (error) {
+      console.error(`[InventoryUtils] getItemCount error for itemName "${itemName}":`, error.message);
+      return 0;
+    }
   }
 
   /**

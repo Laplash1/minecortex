@@ -165,7 +165,7 @@ class ControlPrimitives {
     const tools = toolPriorities[blockData.name] || [];
     
     for (const toolName of tools) {
-      const tool = this.bot.inventory.findInventoryItem(item => item.name === toolName);
+      const tool = this.bot.inventory.items().find(item => item && item.name === toolName);
       if (tool) {
         return tool;
       }
@@ -267,7 +267,7 @@ class ControlPrimitives {
   }
 
   async placeItem(name, position) {
-    const item = this.bot.inventory.findInventoryItem(item => item.name === name);
+    const item = this.bot.inventory.items().find(item => item && item.name === name);
     if (!item) {
       throw new Error(`No ${name} in inventory`);
     }

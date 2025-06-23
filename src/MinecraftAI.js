@@ -1401,6 +1401,8 @@ class MinecraftAI {
       
     } catch (error) {
       this.log(`クラフト機会チェックエラー: ${error.message}`);
+      console.error('Full error details:', error);
+      console.error('Error stack:', error.stack);
     }
   }
   

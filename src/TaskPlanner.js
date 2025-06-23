@@ -91,8 +91,8 @@ class TaskPlanner {
     const { amount = 20 } = goal;
     
     // Check if we have an axe
-    const hasAxe = this.bot.inventory.findInventoryItem(item => 
-      item.name.includes('axe')
+    const hasAxe = this.bot.inventory.items().some(item => 
+      item && item.name && item.name.includes('axe')
     );
     
     const task = {
@@ -174,8 +174,8 @@ class TaskPlanner {
     };
     
     // Check if we have weapons for hunting  
-    const hasWeapon = this.bot.inventory.findInventoryItem(item => 
-      item.name.includes('sword') || item.name.includes('axe')
+    const hasWeapon = this.bot.inventory.items().some(item => 
+      item && item.name && (item.name.includes('sword') || item.name.includes('axe'))
     );
     
     if (!hasWeapon) {
@@ -496,7 +496,7 @@ class TaskPlanner {
     const { tools } = task.params;
     
     return tools.every(tool => {
-      return this.bot.inventory.findInventoryItem(item => item.name === tool) !== null;
+      return this.bot.inventory.items().some(item => item && item.name === tool);
     });
   }
 
