@@ -1326,27 +1326,47 @@ class MineBlockSkill extends Skill {
       console.log('[マイニング] ドロップアイテム回収開始');
 
       let itemsCollected = 0;
-      const maxCollectionTime = 5000; // 5 seconds to collect items
+      const maxCollectionTime = 8000; // Extended to 8 seconds for better collection
       const startTime = Date.now();
+      let lastItemCount = -1;
+
+      // Wait a bit initially for items to spawn
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       while (Date.now() - startTime < maxCollectionTime) {
-        // Find nearby dropped items
+        // Find nearby dropped items with more generous range
         const droppedItems = Object.values(bot.entities).filter(entity => {
           return entity.name === 'item' &&
                  entity.position &&
-                 entity.position.distanceTo(miningPosition) < 5;
+                 entity.position.distanceTo(miningPosition) < 8; // Increased range
         });
 
+        console.log(`[マイニング] 発見したアイテム: ${droppedItems.length}個`);
+
         if (droppedItems.length === 0) {
-          break; // No more items to collect
+          // If no items found, wait a bit more in case they're still spawning
+          if (Date.now() - startTime < 3000) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          } else {
+            break; // No more items to collect after reasonable wait
+          }
         }
+
+        // Check if item count hasn't changed for efficiency
+        if (droppedItems.length === lastItemCount) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          continue;
+        }
+        lastItemCount = droppedItems.length;
 
         // Move to each dropped item and collect it
         for (const itemEntity of droppedItems) {
           try {
             const distance = bot.entity.position.distanceTo(itemEntity.position);
+            console.log(`[マイニング] アイテムまでの距離: ${distance.toFixed(2)}`);
 
-            if (distance > 1.5) {
+            if (distance > 2.0) { // Slightly increased pickup distance
               // Move closer to the item
               if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
                 const { goals } = require('mineflayer-pathfinder');
@@ -1354,25 +1374,38 @@ class MineBlockSkill extends Skill {
                   itemEntity.position.x,
                   itemEntity.position.y,
                   itemEntity.position.z,
-                  1
+                  1.5 // Slightly more generous goal distance
                 );
                 bot.pathfinder.setGoal(goal);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for movement
+                
+                // Wait for movement with timeout
+                const moveStartTime = Date.now();
+                while (Date.now() - moveStartTime < 2000) {
+                  const newDistance = bot.entity.position.distanceTo(itemEntity.position);
+                  if (newDistance <= 2.0) break;
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
               }
             }
 
             // Items are automatically collected when bot gets close enough
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Extended wait time for pickup
+            await new Promise(resolve => setTimeout(resolve, 400));
             itemsCollected++;
+            console.log(`[マイニング] アイテム回収済み: ${itemsCollected}個`);
           } catch (error) {
             console.log(`[マイニング] アイテム回収エラー: ${error.message}`);
           }
         }
 
-        // Short delay before next collection attempt
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Longer delay between collection attempts for stability
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
 
+      // Final inventory sync wait
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log(`[マイニング] アイテム回収完了: ${itemsCollected}個`);
       return {
         success: true,
         itemsCollected
@@ -2017,19 +2050,45 @@ class CraftWorkbenchSkill extends Skill {
     console.log('[作業台スキル] 作業台を作成します');
 
     try {
+      // Detailed material check using InventoryUtils
+      const InventoryUtils = require('./InventoryUtils');
+      const inventorySummary = InventoryUtils.getInventorySummary(bot);
+      
+      console.log(`[作業台スキル] 素材チェック: 木材${inventorySummary.wood}個, 板材${inventorySummary.planks}個, 利用可能板材${inventorySummary.availablePlanks}個`);
+
+      // Check if we already have a crafting table
+      if (inventorySummary.hasCraftingTable) {
+        console.log('[作業台スキル] 既に作業台を所持しています');
+        return { success: true, message: '既に作業台を所持しています' };
+      }
+
+      // Check if we have enough materials for workbench
+      if (inventorySummary.availablePlanks < 4) {
+        const deficit = 4 - inventorySummary.availablePlanks;
+        return { 
+          success: false, 
+          error: `作業台作成に板材が${deficit}個不足しています（必要4個、利用可能${inventorySummary.availablePlanks}個）` 
+        };
+      }
+
       // Check if we have wood planks
       const planks = bot.inventory.items().find(item => item && item.name === 'oak_planks') ||
                     bot.inventory.items().find(item => item && item.name === 'planks');
 
       if (!planks || planks.count < 4) {
+        console.log('[作業台スキル] 板材が不足、原木から板材を作成します');
+        
         // Try to make planks from logs first
         const logs = bot.inventory.items().find(item => item && item.name === 'oak_log') ||
                     bot.inventory.items().find(item => item && item.name === 'log');
 
         if (logs && logs.count > 0) {
-          await this.craftPlanks(bot, logs);
+          const planksCreated = await this.craftPlanks(bot, logs);
+          if (!planksCreated) {
+            return { success: false, error: '原木から板材の作成に失敗しました' };
+          }
         } else {
-          return { success: false, error: '木材が不足しています' };
+          return { success: false, error: '木材が不足しています（原木または板材が必要）' };
         }
       }
 
@@ -2057,12 +2116,37 @@ class CraftWorkbenchSkill extends Skill {
       const recipe = bot.recipesFor(planksItem.id, null, 1, null)[0];
 
       if (recipe) {
-        const planksToCraft = Math.min(logs.count, 4);
-        await bot.craft(recipe, planksToCraft, null);
-        console.log(`[作業台スキル] ${planksToCraft * 4}個の板を作成`);
+        const logsToCraft = Math.min(logs.count, 2); // Craft up to 2 logs for 8 planks
+        const expectedPlanks = logsToCraft * 4;
+        
+        console.log(`[作業台スキル] 原木${logsToCraft}個から板材${expectedPlanks}個を作成中...`);
+        
+        // Get planks count before crafting
+        const planksBefore = bot.inventory.count(item => 
+          item.name === 'oak_planks' || item.name === 'planks'
+        );
+        
+        await bot.craft(recipe, logsToCraft, null);
+        
+        // Wait for inventory update
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Get planks count after crafting
+        const planksAfter = bot.inventory.count(item => 
+          item.name === 'oak_planks' || item.name === 'planks'
+        );
+        
+        const actualPlanksCreated = planksAfter - planksBefore;
+        console.log(`[作業台スキル] 板材作成完了: ${actualPlanksCreated}個（期待値: ${expectedPlanks}個）`);
+        
+        return actualPlanksCreated > 0;
+      } else {
+        console.log('[作業台スキル] 板材のレシピが見つかりません');
+        return false;
       }
     } catch (error) {
       console.log(`[作業台スキル] 板の作成に失敗: ${error.message}`);
+      return false;
     }
   }
 }

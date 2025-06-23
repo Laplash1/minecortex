@@ -136,19 +136,31 @@ class InventoryUtils {
         hasPickaxe: false,
         hasAxe: false,
         hasSword: false,
-        hasCraftingTable: false
+        hasCraftingTable: false,
+        canCraftWorkbench: false,
+        canCraftBasicTools: false
       };
     }
 
+    const wood = this.getWoodCount(bot);
+    const stone = this.getStoneCount(bot);
+    const planks = this.getPlanksCount(bot);
+    const availablePlanks = this.getAvailablePlanks(bot);
+    const hasCraftingTable = this.hasItem(bot, 'crafting_table');
+
     return {
-      wood: this.getWoodCount(bot),
-      stone: this.getStoneCount(bot),
-      planks: this.getPlanksCount(bot),
-      availablePlanks: this.getAvailablePlanks(bot),
+      wood,
+      stone,
+      planks,
+      availablePlanks,
       hasPickaxe: this.hasTool(bot, 'pickaxe'),
       hasAxe: this.hasTool(bot, 'axe'),
       hasSword: this.hasTool(bot, 'sword'),
-      hasCraftingTable: this.hasItem(bot, 'crafting_table')
+      hasCraftingTable,
+      // 作業台作成可能判定: 板材4個が利用可能で作業台未所持
+      canCraftWorkbench: availablePlanks >= 4 && !hasCraftingTable,
+      // 基本ツール作成可能判定: 板材8個が利用可能（作業台4個+ツール4個）
+      canCraftBasicTools: availablePlanks >= 8
     };
   }
 

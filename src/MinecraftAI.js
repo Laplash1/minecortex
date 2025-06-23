@@ -834,6 +834,17 @@ class MinecraftAI {
         this.stateManager.completeCurrentTask(result);
         this.stateManager.updateSkillPerformance(taskName, true, executionTime);
       }
+
+      // Schedule tool crafting check after resource gathering tasks
+      if (this.isResourceGatheringTask(taskName)) {
+        this.log('資源収集タスク完了後、ツール作成をチェックします');
+        // Schedule check in next loop iteration to allow inventory to sync
+        setTimeout(async () => {
+          if (!this.currentTask) { // Only check if not busy
+            await this.checkAutoToolCrafting();
+          }
+        }, 1000);
+      }
     } else {
       if (!this.currentTask) {
         this.log('processTaskResult: currentTask lost before failure handling', 'warn');
@@ -1464,14 +1475,24 @@ class MinecraftAI {
       this.log('自動ツール作成チェック開始');
 
       const inventorySummary = InventoryUtils.getInventorySummary(this.bot);
-      const { wood: woodCount, hasPickaxe, hasAxe, hasCraftingTable } = inventorySummary;
+      const { 
+        wood: woodCount, 
+        availablePlanks, 
+        hasPickaxe, 
+        hasAxe, 
+        hasCraftingTable,
+        canCraftWorkbench,
+        canCraftBasicTools 
+      } = inventorySummary;
+
+      this.log(`素材状況: 木材${woodCount}個, 利用可能板材${availablePlanks}個, 作業台${hasCraftingTable ? '有' : '無'}`);
 
       // Check if we have enough resources for tool upgrades
       const currentTools = this.getCurrentTools();
 
-      // Priority 1: Create workbench if we have wood but no workbench
-      if (woodCount >= 4 && !hasCraftingTable) {
-        this.log('自動作成: 作業台が必要です');
+      // Priority 1: Create workbench if we can craft one
+      if (canCraftWorkbench) {
+        this.log(`自動作成: 作業台が必要です（板材${availablePlanks}個利用可能）`);
         this.goals.unshift({
           type: 'craft_workbench',
           priority: 1,
@@ -1482,8 +1503,8 @@ class MinecraftAI {
       }
 
       // Priority 2: Create basic tools if we have resources but no tools
-      if (woodCount >= 8 && !hasPickaxe && !hasAxe) {
-        this.log('自動作成: 基本ツールが必要です');
+      if (canCraftBasicTools && !hasPickaxe && !hasAxe) {
+        this.log(`自動作成: 基本ツールが必要です（板材${availablePlanks}個利用可能）`);
         this.goals.unshift({
           type: 'craft_tools',
           priority: 1,
@@ -1604,6 +1625,22 @@ class MinecraftAI {
 
     // Sort by priority
     return needs.sort((a, b) => a.priority - b.priority);
+  }
+
+  isResourceGatheringTask(taskName) {
+    const resourceTasks = [
+      'gather_wood',
+      'mine_block', 
+      'collect_item',
+      'find_food',
+      'harvest',
+      'dig',
+      'mine_stone',
+      'mine_coal',
+      'mine_iron'
+    ];
+    
+    return resourceTasks.includes(taskName);
   }
 
   handleDeath() {
