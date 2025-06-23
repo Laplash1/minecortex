@@ -284,7 +284,7 @@ class MoveToSkill extends Skill {
         Math.pow(z - currentPos.z, 2)
       );
       
-      if (distance > 50) {
+      if (distance > 100) {
         return { success: false, error: '目的地が遠すぎます (基本移動)' };
       }
       
@@ -614,10 +614,10 @@ class ExploreSkill extends Skill {
       
       const moveSkill = new MoveToSkill();
       
-      // Execute with timeout protection
+      // Execute with extended timeout protection
       const movePromise = moveSkill.execute(bot, { x: targetX, y: targetY, z: targetZ });
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('探索タイムアウト')), timeout)
+        setTimeout(() => reject(new Error('探索タイムアウト')), timeout * 2) // Double timeout for exploration
       );
       
       const result = await Promise.race([movePromise, timeoutPromise]);
@@ -654,23 +654,117 @@ class MineBlockSkill extends Skill {
     
     if (position) {
       block = bot.blockAt(position);
+      if (!block || block.name !== blockType) {
+        console.log(`[マイニング] 指定位置に${blockType}がありません: ${block ? block.name : 'null'}`);
+        return { success: false, error: `指定位置に${blockType}がありません` };
+      }
     } else {
-      block = bot.findBlock({
-        matching: blockType,
-        maxDistance: 32
-      });
+      // Stage 1: Find block nearby with progressive search
+      block = this.findBlockWithProgressiveSearch(bot, blockType);
     }
     
     if (!block) {
+      console.log(`[マイニング] ${blockType}が見つかりません。地下探索を試みます...`);
+      
+      // Stage 2: Try mining downward to find stone/ore
+      if (blockType === 'stone' || blockType === 'cobblestone' || blockType.includes('ore')) {
+        const result = await this.digDownForStone(bot, blockType);
+        if (result.success) {
+          return result;
+        }
+      }
+      
       return { success: false, error: `ブロック ${blockType} が見つかりません` };
     }
     
     try {
+      console.log(`[マイニング] ${block.position}で${block.name}を採掘中...`);
       await bot.dig(block);
+      bot.chat(`${block.name}を採掘しました！ ⛏️`);
       return { success: true, message: `${block.name}を採掘しました` };
     } catch (error) {
+      console.log(`[マイニング] 採掘に失敗: ${error.message}`);
       return { success: false, error: error.message };
     }
+  }
+
+  async digDownForStone(bot, blockType) {
+    console.log(`[マイニング] ${blockType}を求めて地下探索開始...`);
+    
+    const startY = bot.entity.position.y;
+    const maxDepth = 10; // Maximum blocks to dig down
+    
+    for (let i = 0; i < maxDepth; i++) {
+      const currentPos = bot.entity.position;
+      const blockBelow = bot.blockAt(currentPos.offset(0, -1, 0));
+      
+      if (blockBelow && blockBelow.name !== 'air' && blockBelow.name !== 'water') {
+        // Check if this is the block we want
+        if (blockBelow.name === blockType || 
+            blockBelow.name.includes(blockType) ||
+            (blockType === 'stone' && blockBelow.name === 'cobblestone')) {
+          
+          try {
+            console.log(`[マイニング] 地下で${blockBelow.name}を発見！`);
+            await bot.dig(blockBelow);
+            bot.chat(`地下で${blockBelow.name}を採掘しました！ ⛏️`);
+            return { success: true, message: `地下で${blockBelow.name}を採掘しました` };
+          } catch (error) {
+            console.log(`[マイニング] 地下採掘失敗: ${error.message}`);
+            continue;
+          }
+        }
+        
+        // Dig the block to go deeper
+        try {
+          await bot.dig(blockBelow);
+        } catch (error) {
+          console.log(`[マイニング] 掘削失敗: ${error.message}`);
+          break;
+        }
+        
+        // Move down if possible
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait for movement
+      } else {
+        // Hit air or water, stop digging
+        break;
+      }
+    }
+    
+    console.log(`[マイニング] 地下探索でも${blockType}が見つかりませんでした`);
+    return { success: false, error: `地下探索でも${blockType}が見つかりません` };
+  }
+
+  findBlockWithProgressiveSearch(bot, blockType) {
+    console.log(`[マイニング] ${blockType}の段階的探索を開始...`);
+    
+    const searchRadii = [16, 32, 64, 96]; // High-performance progressive search distances
+    
+    for (const radius of searchRadii) {
+      console.log(`[マイニング] ${radius}ブロック範囲で${blockType}を探索中...`);
+      
+      const block = bot.findBlock({
+        matching: (candidate) => {
+          if (typeof blockType === 'string') {
+            return candidate.name === blockType || candidate.name.includes(blockType);
+          } else if (typeof blockType === 'number') {
+            return candidate.type === blockType;
+          } else if (typeof blockType === 'function') {
+            return blockType(candidate);
+          }
+          return false;
+        },
+        maxDistance: radius
+      });
+      
+      if (block) {
+        console.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name}`);
+        return block;
+      }
+    }
+    
+    console.log(`[マイニング] 段階的探索でも${blockType}が見つかりません`);
+    return null;
   }
 }
 
@@ -734,16 +828,8 @@ class SimpleGatherWoodSkill extends Skill {
     
     console.log(`[木材収集] 近くの木を探しています...`);
     
-    // Find wood blocks nearby
-    const woodBlock = bot.findBlock({
-      matching: (block) => {
-        return block.name && (
-          block.name.includes('_log') ||
-          block.name === 'log'
-        );
-      },
-      maxDistance: 32
-    });
+    // Stage 1: Find wood blocks nearby (optimized progressive search)
+    let woodBlock = this.findWoodWithProgressiveSearch(bot);
 
     if (woodBlock) {
       console.log(`[木材収集] ${woodBlock.position}で${woodBlock.name}を発見しました`);
@@ -755,10 +841,209 @@ class SimpleGatherWoodSkill extends Skill {
         console.log(`[木材収集] 採掘に失敗: ${error.message}`);
         return { success: false, error: error.message };
       }
-    } else {
-      console.log(`[木材収集] 近くに木が見つかりません`);
-      return { success: false, error: '木が見つかりません' };
     }
+
+    // Stage 2: If no wood found, try to explore and search again
+    console.log(`[木材収集] 近くに木が見つかりません。探索して木を探します...`);
+    
+    // Generate random exploration target with expanded range
+    const currentPos = bot.entity.position;
+    const searchDirections = [
+      { x: currentPos.x + 80, y: currentPos.y, z: currentPos.z },
+      { x: currentPos.x - 80, y: currentPos.y, z: currentPos.z },
+      { x: currentPos.x, y: currentPos.y, z: currentPos.z + 80 },
+      { x: currentPos.x, y: currentPos.y, z: currentPos.z - 80 },
+      // Add diagonal directions for better coverage
+      { x: currentPos.x + 60, y: currentPos.y, z: currentPos.z + 60 },
+      { x: currentPos.x - 60, y: currentPos.y, z: currentPos.z - 60 },
+      { x: currentPos.x + 60, y: currentPos.y, z: currentPos.z - 60 },
+      { x: currentPos.x - 60, y: currentPos.y, z: currentPos.z + 60 }
+    ];
+    
+    for (const target of searchDirections) {
+      console.log(`[木材収集] ${target.x}, ${target.z}方向を探索中...`);
+      
+      // Move towards target
+      try {
+        const moveResult = await this.moveToPosition(bot, target, 15000); // 15 second timeout
+        if (moveResult.success) {
+          // Search for wood at new position with expanded range
+          woodBlock = bot.findBlock({
+            matching: (block) => {
+              return block.name && (
+                block.name.includes('_log') ||
+                block.name === 'log'
+              );
+            },
+            maxDistance: 64  // Expanded range for movement search
+          });
+          
+          if (woodBlock) {
+            console.log(`[木材収集] 探索後に${woodBlock.position}で${woodBlock.name}を発見しました`);
+            try {
+              await bot.dig(woodBlock);
+              bot.chat(`探索して${woodBlock.name}を採取しました！ 🌳`);
+              return { success: true, gathered: 1 };
+            } catch (error) {
+              console.log(`[木材収集] 採掘に失敗: ${error.message}`);
+              continue; // Try next direction
+            }
+          }
+        }
+      } catch (moveError) {
+        console.log(`[木材収集] 探索移動に失敗: ${moveError.message}`);
+        continue; // Try next direction
+      }
+    }
+    
+    console.log(`[木材収集] 全方向探索後も木が見つかりません`);
+    return { success: false, error: '探索後も木が見つかりません' };
+  }
+
+  async moveToPosition(bot, target, timeout = 10000) {
+    const { pathfinder, Movements, goals: Goals } = require('mineflayer-pathfinder');
+    
+    if (!bot.pathfinder) {
+      console.log('[木材収集] Pathfinder not initialized, using basic movement');
+      return await this.basicMovement(bot, target);
+    }
+
+    return new Promise((resolve) => {
+      const goal = new Goals.GoalNear(target.x, target.y, target.z, 3);
+      let resolved = false;
+
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          if (bot.pathfinder && bot.pathfinder.stop) {
+            bot.pathfinder.stop();
+          }
+          resolve({ success: false, error: 'Movement timeout' });
+        }
+      }, timeout);
+
+      const onGoalReached = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve({ success: true });
+        }
+      };
+
+      const onPathUpdate = (r) => {
+        if (!resolved && r.status === 'noPath') {
+          resolved = true;
+          clearTimeout(timer);
+          if (bot.pathfinder && bot.pathfinder.stop) {
+            bot.pathfinder.stop();
+          }
+          cleanup();
+          resolve({ success: false, error: 'No path found' });
+        }
+      };
+
+      const cleanup = () => {
+        try {
+          if (bot.pathfinder && typeof bot.pathfinder.removeListener === 'function') {
+            bot.pathfinder.removeListener('goal_reached', onGoalReached);
+            bot.pathfinder.removeListener('path_update', onPathUpdate);
+          }
+        } catch (cleanupError) {
+          console.log(`[木材収集] Event cleanup error: ${cleanupError.message}`);
+        }
+      };
+
+      try {
+        if (bot.pathfinder && typeof bot.pathfinder.on === 'function') {
+          bot.pathfinder.on('goal_reached', onGoalReached);
+          bot.pathfinder.on('path_update', onPathUpdate);
+          bot.pathfinder.setGoal(goal);
+        } else {
+          resolved = true;
+          clearTimeout(timer);
+          resolve({ success: false, error: 'Pathfinder events not supported' });
+        }
+      } catch (error) {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve({ success: false, error: error.message });
+        }
+      }
+    });
+  }
+
+  async basicMovement(bot, target) {
+    console.log(`[木材収集] Basic movement to ${target.x}, ${target.z}`);
+    const currentPos = bot.entity.position;
+    const distance = Math.sqrt(
+      Math.pow(target.x - currentPos.x, 2) + 
+      Math.pow(target.z - currentPos.z, 2)
+    );
+    
+    if (distance > 80) {
+      return { success: false, error: 'Target too far for basic movement' };
+    }
+
+    // Simple movement towards target
+    const maxSteps = Math.min(Math.ceil(distance / 3), 10);
+    const stepX = (target.x - currentPos.x) / maxSteps;
+    const stepZ = (target.z - currentPos.z) / maxSteps;
+
+    for (let i = 0; i < maxSteps; i++) {
+      const targetX = currentPos.x + stepX * (i + 1);
+      const targetZ = currentPos.z + stepZ * (i + 1);
+      
+      // Look towards target direction
+      try {
+        const Vec3 = require('vec3');
+        const lookDirection = new Vec3(targetX, currentPos.y, targetZ);
+        bot.lookAt(lookDirection);
+      } catch (lookError) {
+        console.log(`[木材収集] Look direction error: ${lookError.message}`);
+        // Continue without looking - just move
+      }
+      
+      // Move forward
+      bot.setControlState('forward', true);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      bot.setControlState('forward', false);
+      
+      // Small delay between steps
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    return { success: true };
+  }
+
+  findWoodWithProgressiveSearch(bot) {
+    console.log(`[木材収集] 段階的探索を開始...`);
+    
+    const searchRadii = [16, 32, 64, 96]; // High-performance progressive search distances
+    
+    for (const radius of searchRadii) {
+      console.log(`[木材収集] ${radius}ブロック範囲で探索中...`);
+      
+      const woodBlock = bot.findBlock({
+        matching: (block) => {
+          return block.name && (
+            block.name.includes('_log') ||
+            block.name === 'log'
+          );
+        },
+        maxDistance: radius
+      });
+      
+      if (woodBlock) {
+        console.log(`[木材収集] ${radius}ブロック範囲で発見: ${woodBlock.name}`);
+        return woodBlock;
+      }
+    }
+    
+    console.log(`[木材収集] 段階的探索でも木が見つかりません`);
+    return null;
   }
 }
 

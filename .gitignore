@@ -37,6 +37,9 @@ jspm_packages/
 # TypeScript v1 declaration files
 typings/
 
+# development daily
+dev_daily/
+
 # Optional npm cache directory
 .npm
 
