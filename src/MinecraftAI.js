@@ -81,10 +81,24 @@ class MinecraftAI {
     this.setupStateSync();
   }
 
-  initialize() {
+  async initialize() {
     if (this.isInitialized) return;
 
     this.log('AIシステムを初期化中...');
+
+    // マルチプレイヤー環境での同期開始チェック
+    if (this.coordinator && this.coordinator.syncStartEnabled) {
+      this.log('同期開始モードが有効です。他のプレイヤーを待機中...');
+      
+      // 準備完了を報告
+      const result = this.coordinator.reportPlayerReady(this.playerId);
+      
+      if (!result.canStart) {
+        this.log(`${result.reason}`, 'warn');
+        // 全員準備完了まで待機
+        await this.waitForAllPlayersReady();
+      }
+    }
 
     // Load basic skills
     this.skillLibrary.loadBasicSkills();
@@ -1754,6 +1768,29 @@ class MinecraftAI {
         resolve();
       }, ms);
     });
+  }
+
+  // 全プレイヤーの準備完了を待機
+  async waitForAllPlayersReady() {
+    const maxWaitTime = 300000; // 5分でタイムアウト
+    const checkInterval = 2000; // 2秒間隔でチェック
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const canStart = this.coordinator.canStartTasks(this.playerId);
+      
+      if (canStart.canStart) {
+        this.log(`✅ ${canStart.reason} - タスクを開始します！`);
+        return;
+      }
+
+      this.log(`⏳ ${canStart.reason} (残り${canStart.waitingFor}人)`, 'info');
+      await this.sleep(checkInterval);
+    }
+
+    // タイムアウト時は強制的に開始
+    this.log('⚠️ 待機タイムアウト - タスクを強制開始します', 'warn');
+    this.coordinator.isAllPlayersReady = true;
   }
 
   // Enhanced shutdown functionality integrated with main shutdown method above

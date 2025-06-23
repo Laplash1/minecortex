@@ -8,6 +8,12 @@ class MultiPlayerCoordinator {
 
     this.maxResourceDistance = 32; // Distance for resource conflict detection
     this.claimTimeout = 300000; // 5 minutes claim timeout
+    
+    // 同期開始機能
+    this.expectedPlayersCount = 0; // 期待するプレイヤー数
+    this.readyPlayers = new Set(); // 準備完了プレイヤー
+    this.isAllPlayersReady = false; // 全員準備完了フラグ
+    this.syncStartEnabled = true; // 同期開始を有効にするか
   }
 
   // Register a player in the coordination system
@@ -378,6 +384,72 @@ class MultiPlayerCoordinator {
     }
   }
 
+  // 同期開始機能の設定
+  configureSyncStart(expectedPlayersCount, enabled = true) {
+    this.expectedPlayersCount = expectedPlayersCount;
+    this.syncStartEnabled = enabled;
+    this.readyPlayers.clear();
+    this.isAllPlayersReady = false;
+    
+    console.log(`[Coordinator] 同期開始設定: 期待プレイヤー数=${expectedPlayersCount}, 有効=${enabled}`);
+  }
+
+  // プレイヤーの準備完了を報告
+  reportPlayerReady(playerId) {
+    if (!this.syncStartEnabled) {
+      return { canStart: true, reason: '同期開始が無効' };
+    }
+
+    this.readyPlayers.add(playerId);
+    const readyCount = this.readyPlayers.size;
+    
+    console.log(`[Coordinator] ${playerId} 準備完了 (${readyCount}/${this.expectedPlayersCount})`);
+
+    // 全員準備完了チェック
+    if (readyCount >= this.expectedPlayersCount && !this.isAllPlayersReady) {
+      this.isAllPlayersReady = true;
+      console.log(`[Coordinator] 🎉 全${this.expectedPlayersCount}人の準備完了！タスク開始を許可`);
+      
+      // 全プレイヤーに開始通知
+      this.notifyAllPlayers('全員の準備が完了しました！AIタスクを開始します');
+      
+      return { canStart: true, reason: '全員準備完了' };
+    }
+
+    return { 
+      canStart: false, 
+      reason: `他のプレイヤーを待機中 (${readyCount}/${this.expectedPlayersCount})`,
+      waitingFor: this.expectedPlayersCount - readyCount
+    };
+  }
+
+  // 全員準備完了かチェック
+  canStartTasks(playerId) {
+    if (!this.syncStartEnabled) {
+      return { canStart: true, reason: '同期開始が無効' };
+    }
+
+    if (this.isAllPlayersReady) {
+      return { canStart: true, reason: '全員準備完了済み' };
+    }
+
+    const readyCount = this.readyPlayers.size;
+    return { 
+      canStart: false, 
+      reason: `他のプレイヤーを待機中 (${readyCount}/${this.expectedPlayersCount})`,
+      waitingFor: this.expectedPlayersCount - readyCount
+    };
+  }
+
+  // 全プレイヤーに通知
+  async notifyAllPlayers(message) {
+    const notifications = [];
+    for (const playerId of this.players.keys()) {
+      notifications.push(this.notifyPlayer(playerId, message));
+    }
+    await Promise.all(notifications);
+  }
+
   // Get coordination status
   getStatus() {
     return {
@@ -385,7 +457,15 @@ class MultiPlayerCoordinator {
       activeResourceClaims: this.resourceClaims.size,
       sharedGoalsCount: this.sharedGoals.length,
       conflictsInQueue: this.conflictResolutionQueue.length,
-      averageCooperationScore: this.calculateAverageCooperationScore()
+      averageCooperationScore: this.calculateAverageCooperationScore(),
+      // 同期開始ステータス
+      syncStart: {
+        enabled: this.syncStartEnabled,
+        expectedPlayers: this.expectedPlayersCount,
+        readyPlayers: this.readyPlayers.size,
+        allReady: this.isAllPlayersReady,
+        readyPlayersList: Array.from(this.readyPlayers)
+      }
     };
   }
 

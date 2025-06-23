@@ -77,6 +77,13 @@ class MultiplePlayersManager {
         const { MultiPlayerCoordinator } = require('../src/MultiPlayerCoordinator');
         coordinator = new MultiPlayerCoordinator();
         this.coordinator = coordinator;
+        
+        // マルチプレイヤー環境なので同期開始を設定
+        const expectedPlayersCount = useConfigFile ? 
+          this.getExpectedPlayersCount(configFile) : 
+          (parseInt(process.env.MULTIPLE_PLAYERS_COUNT) || 3);
+        
+        coordinator.configureSyncStart(expectedPlayersCount, true);
       }
 
       const ai = new MinecraftAI(bot, coordinator);
@@ -111,10 +118,10 @@ class MultiplePlayersManager {
       playerInfo.reconnectAttempts = 0;
     });
 
-    bot.on('spawn', () => {
+    bot.on('spawn', async () => {
       console.log(`[プレイヤー${playerIndex}] ワールドにスポーンしました`);
       ai.onSpawn();
-      ai.initialize();
+      await ai.initialize(); // initializeを非同期で実行
     });
 
     bot.on('chat', async (username, message) => {
@@ -242,6 +249,18 @@ class MultiplePlayersManager {
 
     this.players.clear();
     console.log('全プレイヤーのシャットダウン完了');
+  }
+
+  // 設定ファイルから期待プレイヤー数を取得
+  getExpectedPlayersCount(configFile) {
+    try {
+      const fs = require('fs');
+      const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      return config.players.filter(p => p.enabled).length;
+    } catch (error) {
+      console.error(`設定ファイル読み込みエラー: ${error.message}`);
+      return parseInt(process.env.MULTIPLE_PLAYERS_COUNT) || 3;
+    }
   }
 
   // ユーティリティ
