@@ -2,7 +2,7 @@
 const { SkillLibrary } = require('./src/SkillLibrary');
 const { ControlPrimitives } = require('./src/ControlPrimitives');
 const { MinecraftAI } = require('./src/MinecraftAI');
-const { EnvironmentObserver } = require('./src/EnvironmentObserver');
+// const { EnvironmentObserver } = require('./src/EnvironmentObserver');
 
 console.log('=== Minecraft AI Verification Test ===\n');
 
@@ -24,7 +24,7 @@ try {
   skillLib.loadBasicSkills();
   const skills = skillLib.listSkills();
   console.log(`✓ Loaded ${skills.length} skills:`, skills.join(', '));
-  
+
   // Test specific skill retrieval
   const gatherWoodSkill = skillLib.getSkill('gather_wood');
   if (gatherWoodSkill) {
@@ -57,22 +57,22 @@ try {
       constructor(x, y, z) {
         this.x = x; this.y = y; this.z = z;
       }
+
       offset(dx, dy, dz) {
         return new this.constructor(this.x + dx, this.y + dy, this.z + dz);
       }
     }
   };
-  
+
   const primitives = new ControlPrimitives(mockBot);
   console.log('✓ ControlPrimitives created with mock bot');
-  
+
   // Test utility methods
   const hasItem = primitives.hasItem('wooden_pickaxe');
   console.log('✓ hasItem method works:', hasItem);
-  
+
   const itemCount = primitives.getItemCount('stone');
   console.log('✓ getItemCount method works:', itemCount);
-  
 } catch (error) {
   console.log('✗ ControlPrimitives test failed:', error.message);
 }
@@ -81,14 +81,14 @@ try {
 console.log('\n4. Testing configuration...');
 try {
   const fs = require('fs');
-  
+
   // Check if .env.example exists
   if (fs.existsSync('.env.example')) {
     console.log('✓ .env.example file exists');
   } else {
     console.log('⚠ .env.example file missing');
   }
-  
+
   // Check servers.json
   if (fs.existsSync('servers.json')) {
     const serversConfig = JSON.parse(fs.readFileSync('servers.json', 'utf8'));
@@ -96,7 +96,6 @@ try {
   } else {
     console.log('✗ servers.json file missing');
   }
-  
 } catch (error) {
   console.log('✗ Configuration test failed:', error.message);
 }
@@ -109,10 +108,10 @@ try {
     inventory: { items: () => [] },
     entity: { position: { x: 0, y: 64, z: 0 } }
   };
-  
+
   const ai = new MinecraftAI(mockBot);
   console.log('✓ MinecraftAI instance created');
-  
+
   // Check initial goals
   if (ai.goals && ai.goals.length > 0) {
     console.log(`✓ Initial goals set: ${ai.goals.length} goals`);
@@ -123,7 +122,6 @@ try {
       console.log(`⚠ First goal is ${firstGoal.type}, expected gather_wood`);
     }
   }
-  
 } catch (error) {
   console.log('✗ Goal progression test failed:', error.message);
 }

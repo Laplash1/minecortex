@@ -7,7 +7,7 @@ class StateManager {
       health: 20,
       food: 20,
       experience: 0,
-      
+
       // Inventory state
       inventory: new Map(),
       inventorySlots: 36,
@@ -18,37 +18,37 @@ class StateManager {
         legs: null,
         feet: null
       },
-      
+
       // Environmental state
       timeOfDay: 'unknown',
       weather: 'clear',
       dimension: 'overworld',
       nearbyEntities: new Map(),
       nearbyBlocks: new Map(),
-      
+
       // Task and goal state
       currentTask: null,
       taskQueue: [],
       completedTasks: [],
       activeGoals: [],
-      
+
       // Learning and skill state
       knownSkills: new Set(),
       learningHistory: [],
       skillPerformance: new Map(),
-      
+
       // Multi-player state
       nearbyPlayers: new Map(),
       resourceClaims: new Set(),
       cooperationScore: 100,
-      
+
       // AI behavior state
       currentStrategy: 'exploration',
       riskTolerance: 'medium',
       energyLevel: 100,
       lastActivity: Date.now()
     };
-    
+
     this.subscribers = new Map(); // Component subscriptions to state changes
     this.stateHistory = []; // For state rollback if needed
     this.maxHistorySize = 100;
@@ -61,9 +61,9 @@ class StateManager {
     if (!this.subscribers.has(componentName)) {
       this.subscribers.set(componentName, []);
     }
-    
+
     this.subscribers.get(componentName).push({
-      callback: callback,
+      callback,
       stateKeys: stateKeys.length > 0 ? stateKeys : null // null means all keys
     });
   }
@@ -77,31 +77,31 @@ class StateManager {
   updateState(updates, source = 'unknown') {
     const previousState = this.cloneState();
     const changedKeys = new Set();
-    
+
     // Apply updates
     for (const [key, value] of Object.entries(updates)) {
-      if (this.state.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(this.state, key)) {
         this.state[key] = value;
         changedKeys.add(key);
       }
     }
-    
+
     // Record in history
     this.stateHistory.push({
       timestamp: Date.now(),
-      source: source,
+      source,
       changes: updates,
-      previousState: previousState
+      previousState
     });
-    
+
     // Limit history size
     if (this.stateHistory.length > this.maxHistorySize) {
       this.stateHistory.shift();
     }
-    
+
     // Notify subscribers
     this.notifySubscribers(changedKeys, updates);
-    
+
     this.lastSync = Date.now();
   }
 
@@ -110,21 +110,21 @@ class StateManager {
     if (keys === null) {
       return this.cloneState();
     }
-    
+
     if (Array.isArray(keys)) {
       const partialState = {};
       for (const key of keys) {
-        if (this.state.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(this.state, key)) {
           partialState[key] = this.cloneValue(this.state[key]);
         }
       }
       return partialState;
     }
-    
-    if (this.state.hasOwnProperty(keys)) {
+
+    if (Object.prototype.hasOwnProperty.call(this.state, keys)) {
       return this.cloneValue(this.state[keys]);
     }
-    
+
     return null;
   }
 
@@ -133,9 +133,9 @@ class StateManager {
     if (!this.bot || Date.now() - this.lastSync < this.syncInterval) {
       return;
     }
-    
+
     const botUpdates = {};
-    
+
     // Sync basic bot properties
     if (this.bot.entity && this.bot.entity.position) {
       const pos = this.bot.entity.position;
@@ -143,19 +143,19 @@ class StateManager {
         botUpdates.position = { x: pos.x, y: pos.y, z: pos.z };
       }
     }
-    
+
     if (this.bot.health !== this.state.health) {
       botUpdates.health = this.bot.health;
     }
-    
+
     if (this.bot.food !== this.state.food) {
       botUpdates.food = this.bot.food;
     }
-    
+
     if (this.bot.experience !== this.state.experience) {
       botUpdates.experience = this.bot.experience;
     }
-    
+
     // Sync time and weather
     if (this.bot.time) {
       const timeOfDay = this.calculateTimeOfDay(this.bot.time.timeOfDay);
@@ -163,18 +163,18 @@ class StateManager {
         botUpdates.timeOfDay = timeOfDay;
       }
     }
-    
+
     const weather = this.getWeatherState();
     if (weather !== this.state.weather) {
       botUpdates.weather = weather;
     }
-    
+
     // Sync inventory
     const inventoryUpdates = this.syncInventory();
     if (Object.keys(inventoryUpdates).length > 0) {
       Object.assign(botUpdates, inventoryUpdates);
     }
-    
+
     // Apply updates if any
     if (Object.keys(botUpdates).length > 0) {
       this.updateState(botUpdates, 'bot_sync');
@@ -185,7 +185,7 @@ class StateManager {
   syncInventory() {
     const updates = {};
     const newInventory = new Map();
-    
+
     if (this.bot.inventory && this.bot.inventory.items) {
       try {
         for (const item of this.bot.inventory.items()) {
@@ -204,12 +204,12 @@ class StateManager {
         return updates;
       }
     }
-    
+
     // Check if inventory has changed
     if (!this.mapsEqual(this.state.inventory, newInventory)) {
       updates.inventory = newInventory;
     }
-    
+
     return updates;
   }
 
@@ -235,7 +235,7 @@ class StateManager {
       for (const subscription of subscriptions) {
         try {
           const { callback, stateKeys } = subscription;
-          
+
           // Check if this subscription is interested in the changed keys
           if (stateKeys === null || stateKeys.some(key => changedKeys.has(key))) {
             callback(updates, changedKeys, this.state);
@@ -266,17 +266,17 @@ class StateManager {
   completeCurrentTask(result) {
     const completedTask = {
       task: this.state.currentTask,
-      result: result,
+      result,
       completedAt: Date.now()
     };
-    
+
     const newCompleted = [...this.state.completedTasks, completedTask];
-    
+
     // Limit completed tasks history
     if (newCompleted.length > 50) {
       newCompleted.shift();
     }
-    
+
     this.updateState({
       currentTask: null,
       completedTasks: newCompleted
@@ -299,9 +299,9 @@ class StateManager {
   addSkill(skillName, skillData = null) {
     const newSkills = new Set(this.state.knownSkills);
     newSkills.add(skillName);
-    
+
     const updates = { knownSkills: newSkills };
-    
+
     if (skillData) {
       const newPerformance = new Map(this.state.skillPerformance);
       newPerformance.set(skillName, {
@@ -310,11 +310,11 @@ class StateManager {
         failures: 0,
         averageTime: 0,
         lastUsed: null,
-        skillData: skillData
+        skillData
       });
       updates.skillPerformance = newPerformance;
     }
-    
+
     this.updateState(updates, 'skill_manager');
   }
 
@@ -327,22 +327,22 @@ class StateManager {
       averageTime: 0,
       lastUsed: null
     };
-    
+
     current.uses += 1;
     if (success) {
       current.successes += 1;
     } else {
       current.failures += 1;
     }
-    
+
     // Update average execution time
     if (executionTime > 0) {
       current.averageTime = ((current.averageTime * (current.uses - 1)) + executionTime) / current.uses;
     }
-    
+
     current.lastUsed = Date.now();
     newPerformance.set(skillName, current);
-    
+
     this.updateState({ skillPerformance: newPerformance }, 'skill_performance');
   }
 
@@ -367,26 +367,26 @@ class StateManager {
   // State validation and recovery
   validateState() {
     const issues = [];
-    
+
     // Validate basic constraints
     if (this.state.health < 0 || this.state.health > 20) {
       issues.push('Invalid health value');
     }
-    
+
     if (this.state.food < 0 || this.state.food > 20) {
       issues.push('Invalid food value');
     }
-    
+
     if (this.state.cooperationScore < 0 || this.state.cooperationScore > 100) {
       issues.push('Invalid cooperation score');
     }
-    
+
     // Validate task state consistency
     if (this.state.currentTask && this.state.taskQueue.length === 0) {
       // This might be normal, but worth noting
       issues.push('Current task exists but task queue is empty');
     }
-    
+
     return issues;
   }
 
@@ -396,10 +396,10 @@ class StateManager {
       console.log('[StateManager] No state history available for rollback');
       return false;
     }
-    
+
     const lastEntry = this.stateHistory[this.stateHistory.length - 1];
     this.state = this.cloneState(lastEntry.previousState);
-    
+
     console.log('[StateManager] State rolled back to previous valid state');
     return true;
   }
@@ -408,11 +408,11 @@ class StateManager {
   cloneState(stateObj = null) {
     const source = stateObj || this.state;
     const clone = {};
-    
+
     for (const [key, value] of Object.entries(source)) {
       clone[key] = this.cloneValue(value);
     }
-    
+
     return clone;
   }
 
@@ -440,10 +440,10 @@ class StateManager {
 
   mapsEqual(map1, map2) {
     if (map1.size !== map2.size) return false;
-    
+
     for (const [key, value] of map1.entries()) {
       if (!map2.has(key)) return false;
-      
+
       const otherValue = map2.get(key);
       if (typeof value === 'object' && typeof otherValue === 'object') {
         if (JSON.stringify(value) !== JSON.stringify(otherValue)) return false;
@@ -451,7 +451,7 @@ class StateManager {
         return false;
       }
     }
-    
+
     return true;
   }
 
@@ -476,24 +476,24 @@ class StateManager {
       cooperationScore: this.state.cooperationScore,
       activeClaims: this.state.resourceClaims.size
     };
-    
+
     if (this.state.skillPerformance.size > 0) {
       let totalUses = 0;
       let totalSuccesses = 0;
       let totalTime = 0;
-      
+
       for (const performance of this.state.skillPerformance.values()) {
         totalUses += performance.uses;
         totalSuccesses += performance.successes;
         totalTime += performance.averageTime * performance.uses;
       }
-      
+
       if (totalUses > 0) {
         stats.overallSuccessRate = (totalSuccesses / totalUses) * 100;
         stats.averageTaskTime = totalTime / totalUses;
       }
     }
-    
+
     return stats;
   }
 }

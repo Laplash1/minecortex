@@ -23,7 +23,7 @@ class MockBot {
     };
     this.entities = {};
     this.players = {};
-    
+
     this.eventHandlers = new Map();
   }
 
@@ -50,7 +50,7 @@ class MockBot {
     console.log(`[CHAT] ${message}`);
   }
 
-  look(yaw, pitch) {
+  look(_yaw, _pitch) {
     return Promise.resolve();
   }
 
@@ -58,7 +58,7 @@ class MockBot {
     return { name: 'air', position };
   }
 
-  findBlock(options) {
+  findBlock(_options) {
     return null; // Simulate no blocks found
   }
 
@@ -67,7 +67,7 @@ class MockBot {
   }
 
   // Mock pathfinder
-  loadPlugin(plugin) {
+  loadPlugin(_plugin) {
     // Mock plugin loading
   }
 }
@@ -75,31 +75,33 @@ class MockBot {
 // Test the AI system
 async function testAI() {
   console.log('Testing MineCortex...');
-  
+
   const mockBot = new MockBot();
-  const ai = new MinecraftAI(mockBot);
-  
+  // Create test AI instance
+  const testAI = new MinecraftAI(mockBot);
+
   // Simulate login
   mockBot.emit('login');
-  
+
   // Simulate spawn
   mockBot.emit('spawn');
-  
+
   // Test chat commands
   setTimeout(() => {
     mockBot.emit('chat', 'TestUser', '!status');
   }, 1000);
-  
+
   setTimeout(() => {
     mockBot.emit('chat', 'TestUser', '!learn');
   }, 2000);
-  
+
   setTimeout(() => {
     mockBot.emit('chat', 'TestUser', '!stop');
     mockBot.quit();
   }, 10000);
-  
+
   console.log('AI test started. Will run for 10 seconds...');
+  return testAI;
 }
 
 // Run test if this file is executed directly

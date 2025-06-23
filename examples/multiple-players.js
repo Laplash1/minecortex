@@ -27,7 +27,7 @@ class MultiplePlayersManager {
         const fs = require('fs');
         const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
         const playerConfig = config.players.find(p => p.id === playerIndex && p.enabled);
-        
+
         if (playerConfig) {
           return {
             host: playerConfig.host,
@@ -42,10 +42,10 @@ class MultiplePlayersManager {
         console.log(`設定ファイル読み込みエラー: ${error.message}`);
       }
     }
-    
+
     // Fallback to environment variables
     const prefix = `PLAYER${playerIndex}`;
-    
+
     return {
       host: process.env[`${prefix}_HOST`] || process.env.MINECRAFT_HOST || 'localhost',
       port: parseInt(process.env[`${prefix}_PORT`]) || parseInt(process.env.MINECRAFT_PORT) || 25565,
@@ -61,16 +61,16 @@ class MultiplePlayersManager {
     try {
       const configFile = useConfigFile ? './config/players-config.json' : null;
       const config = this.getPlayerConfig(playerIndex, configFile);
-      
+
       console.log(`プレイヤー${playerIndex}を起動中...`);
       console.log(`設定: ${JSON.stringify(config)}`);
 
       const bot = mineflayer.createBot(config);
-      
+
       // Load essential plugins
       const { pathfinder } = require('mineflayer-pathfinder');
       bot.loadPlugin(pathfinder);
-      
+
       // Initialize coordinator if multiple players
       let coordinator = this.coordinator;
       if (!coordinator && this.players.size === 0) {
@@ -78,14 +78,14 @@ class MultiplePlayersManager {
         coordinator = new MultiPlayerCoordinator();
         this.coordinator = coordinator;
       }
-      
+
       const ai = new MinecraftAI(bot, coordinator);
 
       // プレイヤー情報を保存
       this.players.set(playerIndex, {
-        bot: bot,
-        ai: ai,
-        config: config,
+        bot,
+        ai,
+        config,
         connected: false,
         reconnectAttempts: 0
       });
@@ -131,7 +131,7 @@ class MultiplePlayersManager {
       console.log(`[プレイヤー${playerIndex}] ボットが切断されました`);
       ai.shutdown('end');
       playerInfo.connected = false;
-      
+
       // 自動再接続（シャットダウン中でなければ）
       if (!this.isShuttingDown && process.env.AUTO_RESPAWN === 'true') {
         this.scheduleReconnect(playerIndex);
@@ -158,7 +158,7 @@ class MultiplePlayersManager {
     playerInfo.reconnectAttempts++;
     const delay = Math.min(5000 * playerInfo.reconnectAttempts, 30000); // 最大30秒
 
-    console.log(`[プレイヤー${playerIndex}] ${delay/1000}秒後に再接続を試行... (試行回数: ${playerInfo.reconnectAttempts})`);
+    console.log(`[プレイヤー${playerIndex}] ${delay / 1000}秒後に再接続を試行... (試行回数: ${playerInfo.reconnectAttempts})`);
 
     setTimeout(async () => {
       if (!this.isShuttingDown && playerInfo.reconnectAttempts <= 10) {
@@ -188,7 +188,7 @@ class MultiplePlayersManager {
           .filter(p => p.enabled)
           .slice(0, Math.min(playerCount, 10))
           .map(p => p.id);
-        
+
         console.log(`設定ファイルから有効なプレイヤー: ${playerIds.join(', ')}`);
       } catch (error) {
         console.error(`設定ファイル読み込みエラー: ${error.message}`);
@@ -201,7 +201,7 @@ class MultiplePlayersManager {
 
     for (const playerId of playerIds) {
       const result = await this.spawnPlayer(playerId, useConfigFile);
-      
+
       if (result.success) {
         console.log(`✅ プレイヤー${playerId} 起動成功`);
       } else {

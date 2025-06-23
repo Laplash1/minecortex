@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+*.min.js
+coverage/
+.nyc_output/
+package-lock.json
+yarn.lock
+*.log
+dev_daily/
+CHANGELOG.md

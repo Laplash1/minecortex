@@ -16,7 +16,11 @@
     "config-squad": "node examples/advanced-multi-players.js --config",
     "squad:win": "set MULTIPLE_PLAYERS_COUNT=5 && node examples/multiple-players.js",
     "army:win": "set MULTIPLE_PLAYERS_COUNT=10 && node examples/multiple-players.js",
-    "dev:win": "set DEBUG_MODE=true && node index.js"
+    "dev:win": "set DEBUG_MODE=true && node index.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": ["minecraft", "ai", "bot", "mineflyer", "voyager"],
   "author": "",
@@ -29,6 +33,14 @@
     "axios": "^1.6.0",
     "dotenv": "^16.0.0",
     "cross-env": "^7.0.3"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-n": "^16.4.0",
+    "eslint-plugin-promise": "^6.1.1",
+    "prettier": "^3.1.0"
   },
   "engines": {
     "node": ">=16.13.0"

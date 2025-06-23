@@ -8,7 +8,7 @@ class VoyagerAI {
     this.skillCache = new Map();
     this.learningHistory = [];
     this.maxHistorySize = 100;
-    
+
     // Initialize OpenAI if API key is provided
     if (process.env.OPENAI_API_KEY) {
       this.openai = new OpenAI({
@@ -25,7 +25,7 @@ class VoyagerAI {
 
     try {
       const prompt = this.buildSkillPrompt(task, context);
-      
+
       const response = await this.openai.chat.completions.create({
         model: process.env.OPENAI_SKILL_MODEL || 'gpt-4o',
         messages: [
@@ -44,7 +44,6 @@ class VoyagerAI {
 
       const skillCode = response.choices[0].message.content;
       return this.parseGeneratedSkill(skillCode);
-      
     } catch (error) {
       console.log(`Error generating skill: ${error.message}`);
       return this.generateBasicSkill(task, context);
@@ -111,36 +110,36 @@ Always prioritize safety and efficiency in your implementations.`;
       // Extract the function from code blocks
       const codeMatch = skillCode.match(/```javascript\n([\s\S]*?)\n```/);
       const code = codeMatch ? codeMatch[1] : skillCode;
-      
+
       // Create and return the skill function
+      // eslint-disable-next-line no-new-func
       const skillFunction = new Function('bot', 'params', `
         ${code}
         return executeTask(bot, params);
       `);
-      
+
       return {
         execute: skillFunction,
-        code: code,
+        code,
         generated: true
       };
-      
     } catch (error) {
       console.log(`Error parsing generated skill: ${error.message}`);
       return null;
     }
   }
 
-  generateBasicSkill(task, context) {
+  generateBasicSkill(task, _context) {
     // Fallback skill generation without AI
     switch (task.type) {
-      case 'explore_area':
-        return this.createExploreSkill();
-      case 'collect_resource':
-        return this.createCollectSkill();
-      case 'build_structure':
-        return this.createBuildSkill();
-      default:
-        return this.createGenericSkill();
+    case 'explore_area':
+      return this.createExploreSkill();
+    case 'collect_resource':
+      return this.createCollectSkill();
+    case 'build_structure':
+      return this.createBuildSkill();
+    default:
+      return this.createGenericSkill();
     }
   }
 
@@ -150,20 +149,20 @@ Always prioritize safety and efficiency in your implementations.`;
         try {
           const { radius = 50 } = params;
           const pos = bot.entity.position;
-          
+
           // Generate random exploration target
           const angle = Math.random() * Math.PI * 2;
           const distance = Math.random() * radius;
-          
+
           const targetX = Math.floor(pos.x + Math.cos(angle) * distance);
           const targetZ = Math.floor(pos.z + Math.sin(angle) * distance);
-          
+
           // Move to target
           if (bot.pathfinder) {
             const { goals } = require('mineflayer-pathfinder');
             bot.pathfinder.setGoal(new goals.GoalBlock(targetX, pos.y, targetZ));
           }
-          
+
           return { success: true, result: `Exploring towards (${targetX}, ${targetZ})` };
         } catch (error) {
           return { success: false, error: error.message };
@@ -178,20 +177,19 @@ Always prioritize safety and efficiency in your implementations.`;
     return {
       execute: async (bot, params) => {
         try {
-          const { itemType, amount = 1 } = params;
-          
+          const { itemType } = params;
+
           const block = bot.findBlock({
             matching: itemType,
             maxDistance: 32
           });
-          
+
           if (!block) {
             return { success: false, error: `No ${itemType} found nearby` };
           }
-          
+
           await bot.dig(block);
           return { success: true, result: `Collected ${itemType}` };
-          
         } catch (error) {
           return { success: false, error: error.message };
         }
@@ -206,17 +204,16 @@ Always prioritize safety and efficiency in your implementations.`;
       execute: async (bot, params) => {
         try {
           const { blockType, position } = params;
-          
+
           const item = bot.inventory.items().find(itemObj => itemObj && itemObj.name === blockType);
           if (!item) {
             return { success: false, error: `No ${blockType} in inventory` };
           }
-          
+
           const referenceBlock = bot.blockAt(position);
           await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-          
+
           return { success: true, result: `Placed ${blockType}` };
-          
         } catch (error) {
           return { success: false, error: error.message };
         }
@@ -228,7 +225,7 @@ Always prioritize safety and efficiency in your implementations.`;
 
   createGenericSkill() {
     return {
-      execute: async (bot, params) => {
+      execute: async (_bot, _params) => {
         return { success: false, error: 'Generic skill not implemented' };
       },
       code: 'Generic fallback skill',
@@ -242,23 +239,23 @@ Always prioritize safety and efficiency in your implementations.`;
       console.log('Error in learning analysis: Cannot read properties of null (reading \'type\')');
       return; // Skip learning if task is null or not an object
     }
-    
+
     // Guard against missing task type
     if (!task.type || typeof task.type !== 'string') {
       console.log('Error in learning analysis: Cannot read properties of null (reading \'type\')');
       return; // Skip learning if task type is invalid
     }
-    
+
     // Enhanced result validation
     if (!result || typeof result !== 'object') {
       result = { success: false, error: '結果オブジェクトが不正です' };
     }
-    
+
     // Ensure result has a success property
     if (typeof result.success === 'undefined') {
       result.success = false;
     }
-    
+
     // Create experience object with additional safety
     const experience = {
       timestamp: Date.now(),
@@ -275,14 +272,14 @@ Always prioritize safety and efficiency in your implementations.`;
       context: context || {},
       success: result.success
     };
-    
+
     this.learningHistory.push(experience);
-    
+
     // Limit history size
     if (this.learningHistory.length > this.maxHistorySize) {
       this.learningHistory.shift();
     }
-    
+
     // Analyze patterns and improve
     if (this.openai) {
       await this.analyzeAndImprove();
@@ -295,9 +292,9 @@ Always prioritize safety and efficiency in your implementations.`;
       const recentFailures = this.learningHistory
         .filter(exp => !exp.success && exp.task && exp.task.type)
         .slice(-10);
-      
+
       if (recentFailures.length === 0) return;
-      
+
       const analysisPrompt = `
 Analyze these recent task failures and suggest improvements:
 
@@ -328,10 +325,9 @@ Provide specific suggestions for improving task execution and avoiding these err
 
       const suggestions = response.choices[0].message.content;
       console.log('AI Learning Suggestions:', suggestions);
-      
+
       // Store suggestions for future reference
       this.storeLearnings(suggestions);
-      
     } catch (error) {
       console.log(`Error in learning analysis: ${error.message}`);
     }
@@ -342,21 +338,21 @@ Provide specific suggestions for improving task execution and avoiding these err
     if (!this.learnings) {
       this.learnings = [];
     }
-    
+
     this.learnings.push({
       timestamp: Date.now(),
-      suggestions: suggestions
+      suggestions
     });
-    
+
     // Keep only recent learnings
     if (this.learnings.length > 20) {
       this.learnings.shift();
     }
   }
 
-  getRelevantLearnings(taskType) {
+  getRelevantLearnings(_taskType) {
     if (!this.learnings) return '';
-    
+
     // Return recent learnings that might be relevant
     return this.learnings
       .slice(-5)
@@ -375,9 +371,9 @@ Current bot skills: ${Array.from(currentSkills.keys()).join(', ')}
 Current goals: ${goals.map(g => g.type).join(', ')}
 
 Recent learning history (last 10 experiences):
-${this.learningHistory.slice(-10).map(exp => 
-  `${exp.task.type}: ${exp.success ? 'SUCCESS' : 'FAILED - ' + exp.result.error}`
-).join('\n')}
+${this.learningHistory.slice(-10).map(exp =>
+    `${exp.task.type}: ${exp.success ? 'SUCCESS' : 'FAILED - ' + exp.result.error}`
+  ).join('\n')}
 
 Generate a learning curriculum with 5 progressive tasks that will help the bot:
 1. Build upon existing skills
@@ -406,7 +402,6 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
 
       const curriculumText = response.choices[0].message.content;
       return this.parseCurriculum(curriculumText);
-      
     } catch (error) {
       console.log(`Error generating curriculum: ${error.message}`);
       return this.generateBasicCurriculum(currentSkills, goals);
@@ -420,17 +415,16 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-      
+
       // Fallback parsing
       return this.generateBasicCurriculum(new Map(), []);
-      
     } catch (error) {
       console.log(`Error parsing curriculum: ${error.message}`);
       return this.generateBasicCurriculum(new Map(), []);
     }
   }
 
-  generateBasicCurriculum(currentSkills, goals) {
+  generateBasicCurriculum(_currentSkills, _goals) {
     return [
       { type: 'explore_area', description: 'Explore nearby area', difficulty: 2 },
       { type: 'gather_wood', description: 'Collect wood resources', difficulty: 3 },
@@ -443,7 +437,7 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
   getSuccessRate(taskType) {
     const taskExperiences = this.learningHistory.filter(exp => exp.task.type === taskType);
     if (taskExperiences.length === 0) return 0;
-    
+
     const successes = taskExperiences.filter(exp => exp.success);
     return successes.length / taskExperiences.length;
   }
@@ -455,29 +449,29 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
       taskTypes: new Set(),
       recentPerformance: []
     };
-    
+
     try {
       if (this.learningHistory.length > 0) {
         // Filter out invalid experiences to prevent crashes
-        const validExperiences = this.learningHistory.filter(exp => 
-          exp && 
-          exp.task && 
-          exp.task.type && 
+        const validExperiences = this.learningHistory.filter(exp =>
+          exp &&
+          exp.task &&
+          exp.task.type &&
           typeof exp.task.type === 'string' &&
           typeof exp.success === 'boolean'
         );
-        
+
         if (validExperiences.length > 0) {
           const successes = validExperiences.filter(exp => exp.success);
           stats.successRate = successes.length / validExperiences.length;
-          
+
           // Safely add task types with validation
           validExperiences.forEach(exp => {
             if (exp.task && exp.task.type) {
               stats.taskTypes.add(exp.task.type);
             }
           });
-          
+
           // Get recent performance (last 10 valid tasks) with safety checks
           stats.recentPerformance = validExperiences
             .slice(-10)
@@ -488,7 +482,7 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
             }))
             .filter(item => item.task !== 'unknown'); // Remove unknown tasks
         }
-        
+
         // Update total experiences to reflect valid ones
         stats.totalExperiences = validExperiences.length;
       }
@@ -502,7 +496,7 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
         recentPerformance: []
       };
     }
-    
+
     return stats;
   }
 }

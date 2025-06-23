@@ -5,7 +5,7 @@ class MultiPlayerCoordinator {
     this.sharedGoals = [];
     this.conflictResolutionQueue = [];
     this.coordinationChannel = new Map(); // For inter-bot communication
-    
+
     this.maxResourceDistance = 32; // Distance for resource conflict detection
     this.claimTimeout = 300000; // 5 minutes claim timeout
   }
@@ -16,21 +16,21 @@ class MultiPlayerCoordinator {
       console.error(`[Coordinator] Cannot register player ${playerId}: bot is null`);
       return;
     }
-    
+
     const position = bot.entity?.position || { x: 0, y: 64, z: 0 };
-    
+
     this.players.set(playerId, {
       id: playerId,
-      bot: bot,
-      ai: ai,
-      position: position,
+      bot,
+      ai,
+      position,
       currentTask: null,
       resourceClaims: new Set(),
       lastActivity: Date.now(),
       personality: this.detectPersonality(playerId),
       cooperationScore: 100 // Initial cooperation score
     });
-    
+
     console.log(`[Coordinator] Player ${playerId} registered with personality: ${this.detectPersonality(playerId)}`);
   }
 
@@ -62,7 +62,7 @@ class MultiPlayerCoordinator {
       return 'generalist'; // Fallback when ID is not yet available
     }
     const id = playerId.toLowerCase();
-    
+
     if (id.includes('explorer') || id.includes('scout')) return 'explorer';
     if (id.includes('miner') || id.includes('digger')) return 'miner';
     if (id.includes('builder') || id.includes('architect')) return 'builder';
@@ -72,7 +72,7 @@ class MultiPlayerCoordinator {
     if (id.includes('crafter') || id.includes('smith')) return 'crafter';
     if (id.includes('trader') || id.includes('merchant')) return 'trader';
     if (id.includes('helper') || id.includes('assistant')) return 'helper';
-    
+
     return 'generalist';
   }
 
@@ -80,7 +80,7 @@ class MultiPlayerCoordinator {
   async requestResourceAccess(playerId, resourceLocation, resourceType, estimatedTime = 300000) {
     const resourceKey = this.generateResourceKey(resourceLocation, resourceType);
     const currentClaim = this.resourceClaims.get(resourceKey);
-    
+
     // Check if resource is already claimed
     if (currentClaim && currentClaim.playerId !== playerId) {
       // Check if claim has expired
@@ -94,11 +94,11 @@ class MultiPlayerCoordinator {
 
     // Grant resource access
     this.resourceClaims.set(resourceKey, {
-      playerId: playerId,
-      resourceType: resourceType,
+      playerId,
+      resourceType,
       location: resourceLocation,
       timestamp: Date.now(),
-      estimatedTime: estimatedTime
+      estimatedTime
     });
 
     const player = this.players.get(playerId);
@@ -115,12 +115,12 @@ class MultiPlayerCoordinator {
     const claim = this.resourceClaims.get(resourceKey);
     if (claim && claim.playerId === playerId) {
       this.resourceClaims.delete(resourceKey);
-      
+
       const player = this.players.get(playerId);
       if (player) {
         player.resourceClaims.delete(resourceKey);
       }
-      
+
       console.log(`[Coordinator] Resource ${resourceKey} released by ${playerId}`);
       return true;
     }
@@ -159,18 +159,19 @@ class MultiPlayerCoordinator {
     }
 
     switch (decision) {
-      case 'takeover':
-        this.releaseResourceClaim(this.generateResourceKey(resourceLocation, resourceType), currentClaim.playerId);
-        await this.notifyPlayer(claimant.id, `Resource ${resourceType} reassigned to ${requesterId}`);
-        return await this.requestResourceAccess(requesterId, resourceLocation, resourceType);
+    case 'takeover':
+      this.releaseResourceClaim(this.generateResourceKey(resourceLocation, resourceType), currentClaim.playerId);
+      await this.notifyPlayer(claimant.id, `Resource ${resourceType} reassigned to ${requesterId}`);
+      return await this.requestResourceAccess(requesterId, resourceLocation, resourceType);
 
-      case 'share':
-        await this.coordinateSharedResource(requesterId, currentClaim.playerId, resourceLocation, resourceType);
-        return { granted: true, shared: true, partner: currentClaim.playerId };
+    case 'share':
+      await this.coordinateSharedResource(requesterId, currentClaim.playerId, resourceLocation, resourceType);
+      return { granted: true, shared: true, partner: currentClaim.playerId };
 
-      default: // wait
-        const estimatedWaitTime = Math.max(0, currentClaim.timestamp + currentClaim.estimatedTime - Date.now());
-        return { granted: false, waitTime: estimatedWaitTime, reason: 'Resource currently in use' };
+    default: { // wait
+      const estimatedWaitTime = Math.max(0, currentClaim.timestamp + currentClaim.estimatedTime - Date.now());
+      return { granted: false, waitTime: estimatedWaitTime, reason: 'Resource currently in use' };
+    }
     }
   }
 
@@ -179,12 +180,12 @@ class MultiPlayerCoordinator {
     let basePriority = 5; // Default priority
 
     const personalityBonus = {
-      'miner': { 'stone': 3, 'iron_ore': 3, 'coal_ore': 2 },
-      'builder': { 'wood': 3, 'stone': 2, 'cobblestone': 2 },
-      'crafter': { 'wood': 2, 'iron': 3, 'coal': 2 },
-      'farmer': { 'water': 3, 'seeds': 3, 'animals': 2 },
-      'explorer': { 'food': 2 },
-      'collector': { 'wood': 1, 'stone': 1, 'iron': 1 }
+      miner: { stone: 3, iron_ore: 3, coal_ore: 2 },
+      builder: { wood: 3, stone: 2, cobblestone: 2 },
+      crafter: { wood: 2, iron: 3, coal: 2 },
+      farmer: { water: 3, seeds: 3, animals: 2 },
+      explorer: { food: 2 },
+      collector: { wood: 1, stone: 1, iron: 1 }
     };
 
     const bonus = personalityBonus[player.personality]?.[resourceType] || 0;
@@ -227,7 +228,7 @@ class MultiPlayerCoordinator {
 
     // Score players for this task
     const scoredPlayers = availablePlayers.map(player => ({
-      player: player,
+      player,
       score: this.calculateTaskSuitability(player, taskType, requirements)
     }));
 
@@ -235,12 +236,12 @@ class MultiPlayerCoordinator {
     scoredPlayers.sort((a, b) => b.score - a.score);
 
     const selectedPlayer = scoredPlayers[0].player;
-    
+
     // Assign task
     const taskAssignment = {
       playerId: selectedPlayer.id,
-      taskType: taskType,
-      requirements: requirements,
+      taskType,
+      requirements,
       assignedAt: Date.now()
     };
 
@@ -256,13 +257,13 @@ class MultiPlayerCoordinator {
 
     // Personality-based scoring
     const personalityScores = {
-      'explore': { explorer: 10, scout: 9, generalist: 5 },
-      'mine': { miner: 10, collector: 7, generalist: 5 },
-      'build': { builder: 10, crafter: 7, generalist: 5 },
-      'craft': { crafter: 10, builder: 6, generalist: 5 },
-      'farm': { farmer: 10, collector: 6, generalist: 5 },
-      'guard': { guard: 10, generalist: 4 },
-      'trade': { trader: 10, helper: 6, generalist: 5 }
+      explore: { explorer: 10, scout: 9, generalist: 5 },
+      mine: { miner: 10, collector: 7, generalist: 5 },
+      build: { builder: 10, crafter: 7, generalist: 5 },
+      craft: { crafter: 10, builder: 6, generalist: 5 },
+      farm: { farmer: 10, collector: 6, generalist: 5 },
+      guard: { guard: 10, generalist: 4 },
+      trade: { trader: 10, helper: 6, generalist: 5 }
     };
 
     score += personalityScores[taskType]?.[player.personality] || 0;
@@ -295,7 +296,7 @@ class MultiPlayerCoordinator {
     const messageData = {
       from: fromPlayerId,
       to: toPlayerId,
-      message: message,
+      message,
       type: messageType,
       timestamp: Date.now()
     };
@@ -346,7 +347,7 @@ class MultiPlayerCoordinator {
   // Maintenance and cleanup
   cleanup() {
     const now = Date.now();
-    
+
     // Clean up expired resource claims
     for (const [resourceKey, claim] of this.resourceClaims.entries()) {
       if (now - claim.timestamp > this.claimTimeout) {
@@ -390,10 +391,10 @@ class MultiPlayerCoordinator {
 
   calculateAverageCooperationScore() {
     if (this.players.size === 0) return 0;
-    
+
     const totalScore = Array.from(this.players.values())
       .reduce((sum, player) => sum + player.cooperationScore, 0);
-    
+
     return Math.round(totalScore / this.players.size);
   }
 }

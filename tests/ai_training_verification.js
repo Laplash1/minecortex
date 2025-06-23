@@ -21,9 +21,9 @@ class AITrainingVerification {
         findInventoryItem: (itemId) => {
           // モックインベントリ実装
           const mockItems = {
-            'oak_planks': { count: 10 },
-            'stick': { count: 5 },
-            'cobblestone': { count: 15 }
+            oak_planks: { count: 10 },
+            stick: { count: 5 },
+            cobblestone: { count: 15 }
           };
           return mockItems[itemId] || null;
         }
@@ -35,16 +35,16 @@ class AITrainingVerification {
           type: options.matching
         };
       },
-      dig: async (block) => {
+      dig: async (_block) => {
         // モック採掘
         return Promise.resolve();
       },
-      craft: async (recipe, count) => {
+      craft: async (_recipe, _count) => {
         // モッククラフト
         return Promise.resolve();
       },
       pathfinder: {
-        setGoal: (goal) => {
+        setGoal: (_goal) => {
           // モック移動
           return Promise.resolve();
         }
@@ -77,7 +77,7 @@ class AITrainingVerification {
 
   async verifyBasicSkillGeneration() {
     console.log('📝 1. 基本スキル生成の検証...');
-    
+
     const testTask = {
       type: 'gather_wood',
       params: { amount: 5, wood_type: 'oak' }
@@ -95,11 +95,11 @@ class AITrainingVerification {
 
     try {
       const skill = await this.voyagerAI.generateSkill(testTask, testContext);
-      
+
       if (skill && typeof skill.execute === 'function') {
         console.log('   ✅ スキル生成成功');
         this.addTestResult('スキル生成', true, 'GPT使用可能またはフォールバック成功');
-        
+
         // スキル実行のテスト
         const result = await skill.execute(this.mockBot, testTask.params);
         if (result && typeof result.success === 'boolean') {
@@ -141,14 +141,14 @@ class AITrainingVerification {
 
     try {
       const initialHistoryLength = this.voyagerAI.learningHistory.length;
-      
+
       await this.voyagerAI.learnFromExperience(testTask, testResult, testContext);
-      
+
       const newHistoryLength = this.voyagerAI.learningHistory.length;
-      
+
       if (newHistoryLength > initialHistoryLength) {
         console.log('   ✅ 学習履歴への記録成功');
-        
+
         const latestExperience = this.voyagerAI.learningHistory[newHistoryLength - 1];
         if (latestExperience && latestExperience.task.type === testTask.type) {
           console.log('   ✅ 学習データの整合性確認');
@@ -181,16 +181,16 @@ class AITrainingVerification {
       ];
 
       const curriculum = await this.voyagerAI.generateCurriculum(mockSkills, mockGoals);
-      
+
       if (Array.isArray(curriculum) && curriculum.length > 0) {
         console.log('   ✅ カリキュラム生成成功');
         console.log(`   📋 生成されたタスク数: ${curriculum.length}`);
-        
+
         // カリキュラムの構造検証
-        const validTask = curriculum.every(task => 
+        const validTask = curriculum.every(task =>
           task.type && task.description && typeof task.difficulty === 'number'
         );
-        
+
         if (validTask) {
           console.log('   ✅ カリキュラム構造の妥当性確認');
           this.addTestResult('カリキュラム生成', true, `${curriculum.length}個のタスクを生成`);
@@ -211,16 +211,16 @@ class AITrainingVerification {
 
     try {
       const basicScenario = TrainingScenarios.getBasicSurvivalScenario();
-      
+
       if (basicScenario && basicScenario.tasks && basicScenario.tasks.length > 0) {
         console.log('   ✅ シナリオ構造の妥当性確認');
         console.log(`   📊 シナリオ名: ${basicScenario.name}`);
         console.log(`   📝 タスク数: ${basicScenario.tasks.length}`);
-        
+
         // 最初のタスクを実行テスト
         const firstTask = basicScenario.tasks[0];
         const skill = await this.voyagerAI.generateSkill(firstTask, basicScenario.initialState);
-        
+
         if (skill) {
           console.log('   ✅ シナリオタスクのスキル生成成功');
           this.addTestResult('シナリオ実行', true, 'シナリオの構造とタスク実行可能');
@@ -242,13 +242,13 @@ class AITrainingVerification {
     try {
       // 学習統計の取得
       const stats = this.voyagerAI.getLearningStats();
-      
-      if (stats && typeof stats.totalExperiences === 'number' && 
+
+      if (stats && typeof stats.totalExperiences === 'number' &&
           typeof stats.successRate === 'number') {
         console.log('   ✅ 学習統計の取得成功');
         console.log(`   📈 総経験数: ${stats.totalExperiences}`);
         console.log(`   📊 成功率: ${(stats.successRate * 100).toFixed(1)}%`);
-        
+
         // 特定タスクの成功率
         const taskSuccessRate = this.voyagerAI.getSuccessRate('gather_wood');
         if (typeof taskSuccessRate === 'number') {
@@ -275,28 +275,28 @@ class AITrainingVerification {
       const sampleDataPath = path.join(__dirname, '../training/sample_training_data.json');
       if (fs.existsSync(sampleDataPath)) {
         const sampleData = JSON.parse(fs.readFileSync(sampleDataPath, 'utf8'));
-        
+
         if (Array.isArray(sampleData) && sampleData.length > 0) {
           console.log('   ✅ サンプルデータの読み込み成功');
           console.log(`   📋 サンプル数: ${sampleData.length}`);
-          
+
           // データ構造の検証
-          const validData = sampleData.every(sample => 
+          const validData = sampleData.every(sample =>
             sample.task && sample.context && sample.result && sample.timestamp
           );
-          
+
           if (validData) {
             console.log('   ✅ データ構造の妥当性確認');
-            
+
             // データを学習履歴に追加テスト
             for (const sample of sampleData.slice(0, 3)) { // 最初の3つをテスト
               await this.voyagerAI.learnFromExperience(
-                sample.task, 
-                sample.result, 
+                sample.task,
+                sample.result,
                 sample.context
               );
             }
-            
+
             console.log('   ✅ 訓練データの処理成功');
             this.addTestResult('訓練データ処理', true, '訓練データの読み込みと処理が正常');
           } else {
@@ -317,8 +317,8 @@ class AITrainingVerification {
   addTestResult(testName, success, details) {
     this.testResults.push({
       test: testName,
-      success: success,
-      details: details,
+      success,
+      details,
       timestamp: new Date().toISOString()
     });
   }
@@ -354,14 +354,14 @@ class AITrainingVerification {
     }, null, 2));
 
     console.log(`📄 詳細レポートを保存: ${reportPath}`);
-    
+
     // 結果に基づく推奨事項
     this.generateRecommendations(successRate);
   }
 
   generateRecommendations(successRate) {
     console.log('\n🔧 推奨事項:');
-    
+
     if (successRate >= 90) {
       console.log('✅ AI学習システムは正常に動作しています');
       console.log('✅ 本格的な学習を開始できます');

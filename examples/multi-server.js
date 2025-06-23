@@ -39,7 +39,7 @@ function generateRandomUsername() {
 // Load server configurations
 function loadServerConfigs() {
   const configPath = path.join(__dirname, 'servers.json');
-  
+
   if (fs.existsSync(configPath)) {
     try {
       const configData = fs.readFileSync(configPath, 'utf8');
@@ -71,7 +71,7 @@ class BotInstance {
   async start() {
     try {
       console.log(`[Instance ${this.instanceId}] Starting bot with config:`, this.config);
-      
+
       // Apply environment variable overrides
       const botConfig = {
         host: this.config.host,
@@ -84,7 +84,6 @@ class BotInstance {
       this.ai = new MinecraftAI(this.bot);
 
       this.setupEventHandlers();
-      
     } catch (error) {
       console.error(`[Instance ${this.instanceId}] Failed to start:`, error);
       this.scheduleReconnect();
@@ -140,7 +139,7 @@ class BotInstance {
 
     this.reconnectAttempts++;
     console.log(`[Instance ${this.instanceId}] Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
-    
+
     setTimeout(() => {
       this.start();
     }, this.reconnectDelay);
@@ -167,7 +166,7 @@ class MultiServerManager {
     this.configs.forEach((config, index) => {
       const instance = new BotInstance(config, index + 1);
       this.instances.push(instance);
-      
+
       // Stagger bot connections to avoid overwhelming servers
       setTimeout(() => {
         instance.start();
@@ -194,7 +193,7 @@ class MultiServerManager {
     return this.instances.map((instance, index) => ({
       instanceId: index + 1,
       config: instance.config,
-      connected: instance.bot && instance.bot.entity ? true : false,
+      connected: !!(instance.bot && instance.bot.entity),
       username: instance.bot ? instance.bot.username : 'Not connected',
       reconnectAttempts: instance.reconnectAttempts
     }));

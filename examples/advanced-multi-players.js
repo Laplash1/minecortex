@@ -58,11 +58,11 @@ class AdvancedMultiPlayersManager {
     }
 
     const personalityConfig = this.config.personalities[personality];
-    
+
     // 目標の上書き
     if (personalityConfig.primaryGoals) {
       ai.goals = personalityConfig.primaryGoals.map((type, index) => ({
-        type: type,
+        type,
         priority: index + 1,
         description: `${personality}の主要目標: ${type}`
       }));
@@ -107,7 +107,7 @@ class AdvancedMultiPlayersManager {
   async spawnPlayer(playerIndex) {
     try {
       const config = this.getPlayerConfig(playerIndex);
-      
+
       console.log(`[管理システム] プレイヤー${playerIndex}を起動中...`);
       console.log(`[管理システム] 設定: ${JSON.stringify(config)}`);
 
@@ -117,7 +117,7 @@ class AdvancedMultiPlayersManager {
         username: config.username,
         auth: config.auth
       });
-      
+
       const ai = new MinecraftAI(bot);
 
       // パーソナリティを適用
@@ -125,9 +125,9 @@ class AdvancedMultiPlayersManager {
 
       // プレイヤー情報を保存
       this.players.set(playerIndex, {
-        bot: bot,
-        ai: ai,
-        config: config,
+        bot,
+        ai,
+        config,
         connected: false,
         reconnectAttempts: 0,
         spawnTime: new Date(),
@@ -136,7 +136,7 @@ class AdvancedMultiPlayersManager {
 
       // イベントハンドラーの設定
       this.setupPlayerEvents(playerIndex, bot, ai);
-      
+
       this.stats.totalSpawned++;
       return { success: true, config };
     } catch (error) {
@@ -161,7 +161,7 @@ class AdvancedMultiPlayersManager {
     bot.on('spawn', () => {
       console.log(`[プレイヤー${playerIndex}] ワールドにスポーンしました`);
       ai.onSpawn();
-      
+
       // パーソナリティに応じたカスタムメッセージ
       const personality = this.config.personalities[playerInfo.personality];
       if (personality) {
@@ -183,7 +183,7 @@ class AdvancedMultiPlayersManager {
       console.log(`[プレイヤー${playerIndex}] ボットが切断されました`);
       playerInfo.connected = false;
       this.stats.currentActive = Math.max(0, this.stats.currentActive - 1);
-      
+
       // 自動再接続
       if (!this.isShuttingDown && this.config.global.autoReconnect) {
         this.scheduleReconnect(playerIndex);
@@ -209,14 +209,14 @@ class AdvancedMultiPlayersManager {
 
     playerInfo.reconnectAttempts++;
     const maxAttempts = this.config.global.maxReconnectAttempts || 10;
-    
+
     if (playerInfo.reconnectAttempts > maxAttempts) {
       console.log(`[プレイヤー${playerIndex}] 最大再接続試行回数に達しました。自動再接続を停止します。`);
       return;
     }
 
     const delay = Math.min(5000 * playerInfo.reconnectAttempts, 30000);
-    console.log(`[プレイヤー${playerIndex}] ${delay/1000}秒後に再接続を試行... (試行回数: ${playerInfo.reconnectAttempts}/${maxAttempts})`);
+    console.log(`[プレイヤー${playerIndex}] ${delay / 1000}秒後に再接続を試行... (試行回数: ${playerInfo.reconnectAttempts}/${maxAttempts})`);
 
     setTimeout(async () => {
       if (!this.isShuttingDown) {
@@ -237,7 +237,7 @@ class AdvancedMultiPlayersManager {
 
     for (let i = 1; i <= Math.min(playerCount, 10); i++) {
       const result = await this.spawnPlayer(i);
-      
+
       if (result.success) {
         console.log(`✅ プレイヤー${i} 起動成功`);
       } else {
@@ -255,7 +255,7 @@ class AdvancedMultiPlayersManager {
   // 複数プレイヤーの起動（JSON設定ベース）
   async spawnMultiplePlayersFromConfig() {
     const enabledPlayers = this.config.players.filter(p => p.enabled);
-    
+
     if (enabledPlayers.length === 0) {
       console.log('[管理システム] 有効なプレイヤー設定がありません。環境変数から起動します...');
       return this.spawnMultiplePlayersFromEnv();
@@ -268,7 +268,7 @@ class AdvancedMultiPlayersManager {
 
     for (const playerConfig of enabledPlayers) {
       const result = await this.spawnPlayer(playerConfig.id);
-      
+
       if (result.success) {
         console.log(`✅ プレイヤー${playerConfig.id} (${playerConfig.username}) 起動成功`);
       } else {
@@ -289,12 +289,12 @@ class AdvancedMultiPlayersManager {
     console.log('\n=== プレイヤーステータス詳細 ===');
     console.log(`統計: 起動済み${this.stats.totalSpawned}人 | アクティブ${this.stats.currentActive}人 | 再接続${this.stats.totalReconnects}回`);
     console.log('----------------------------------------');
-    
+
     for (const [index, playerInfo] of this.players.entries()) {
       const status = playerInfo.connected ? '🟢 接続中' : '🔴 切断中';
       const uptime = playerInfo.spawnTime ? Math.floor((Date.now() - playerInfo.spawnTime.getTime()) / 1000) : 0;
       const personality = playerInfo.personality || 'unknown';
-      
+
       console.log(`プレイヤー${index}: ${playerInfo.config.username}`);
       console.log(`  状態: ${status} | パーソナリティ: ${personality} | 稼働時間: ${uptime}秒`);
       console.log(`  再接続回数: ${playerInfo.reconnectAttempts} | サーバー: ${playerInfo.config.host}:${playerInfo.config.port}`);

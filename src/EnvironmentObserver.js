@@ -10,7 +10,7 @@ class EnvironmentObserver {
     this.health = 20;
     this.food = 20;
     this.experience = 0;
-    
+
     // Observation history
     this.observationHistory = [];
     this.maxHistorySize = 1000;
@@ -23,7 +23,7 @@ class EnvironmentObserver {
     this.updateInventory();
     this.updatePlayerStats();
     this.updateEnvironment();
-    
+
     this.recordObservation();
   }
 
@@ -32,7 +32,7 @@ class EnvironmentObserver {
       // Keep last known position if current position is unavailable
       return;
     }
-    
+
     const pos = this.bot.entity.position;
     this.lastPosition = {
       x: Math.round(pos.x * 100) / 100,
@@ -44,16 +44,16 @@ class EnvironmentObserver {
 
   updateNearbyEntities() {
     this.nearbyEntities.clear();
-    
+
     // Validate bot position before processing entities
     if (!this.bot?.entity?.position || !this.bot?.entities) {
       return;
     }
-    
+
     // Get all entities within 32 blocks
     for (const entity of Object.values(this.bot.entities)) {
       if (entity === this.bot.entity || !entity?.position) continue;
-      
+
       try {
         const distance = entity.position.distanceTo(this.bot.entity.position);
         if (distance <= 32) {
@@ -75,14 +75,14 @@ class EnvironmentObserver {
 
   updateNearbyBlocks() {
     this.nearbyBlocks.clear();
-    
+
     if (!this.bot?.entity?.position) {
       return;
     }
-    
+
     const pos = this.bot.entity.position;
     const radius = 16;
-    
+
     // Sample blocks in a grid around the bot
     for (let x = -radius; x <= radius; x += 4) {
       for (let z = -radius; z <= radius; z += 4) {
@@ -91,7 +91,7 @@ class EnvironmentObserver {
             const block = this.bot.blockAt(
               pos.offset(x, y, z)
             );
-            
+
             if (block && block.name !== 'air' && block.position) {
               const key = `${Math.floor(pos.x + x)},${Math.floor(pos.y + y)},${Math.floor(pos.z + z)}`;
               this.nearbyBlocks.set(key, {
@@ -114,12 +114,12 @@ class EnvironmentObserver {
       const terrainMap = new Map();
       const pos = this.bot.entity.position;
       const radius = 8;
-      
+
       // Use integer coordinates to avoid floating point errors
       const centerX = Math.floor(pos.x);
       const centerY = Math.floor(pos.y);
       const centerZ = Math.floor(pos.z);
-      
+
       for (let x = -radius; x <= radius; x += 2) {
         for (let z = -radius; z <= radius; z += 2) {
           for (let y = -4; y <= 4; y += 2) {
@@ -127,14 +127,14 @@ class EnvironmentObserver {
               const blockX = centerX + x;
               const blockY = centerY + y;
               const blockZ = centerZ + z;
-              
+
               const block = this.bot.blockAt({ x: blockX, y: blockY, z: blockZ });
               if (block && block.name !== 'air') {
                 const key = `${blockX},${blockY},${blockZ}`;
                 terrainMap.set(key, {
                   type: block.name,
                   position: { x: blockX, y: blockY, z: blockZ },
-                  distance: Math.sqrt(x*x + y*y + z*z),
+                  distance: Math.sqrt(x * x + y * y + z * z),
                   accessible: this.isBlockAccessible(block)
                 });
               }
@@ -145,9 +145,8 @@ class EnvironmentObserver {
           }
         }
       }
-      
+
       return terrainMap;
-      
     } catch (error) {
       console.log(`[EnvironmentObserver] Terrain scan error: ${error.message}`);
       return new Map();
@@ -159,27 +158,27 @@ class EnvironmentObserver {
       const pos = this.bot.entity.position;
       const heightChanges = [];
       const radius = 8;
-      
+
       const centerX = Math.floor(pos.x);
       const centerY = Math.floor(pos.y);
       const centerZ = Math.floor(pos.z);
-      
+
       // Sample height at several points around the bot
       for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 4) {
         const sampleX = centerX + Math.floor(Math.cos(angle) * radius);
         const sampleZ = centerZ + Math.floor(Math.sin(angle) * radius);
-        
+
         try {
           // Find ground level at sample point
           let groundY = centerY;
           for (let y = centerY + 5; y >= centerY - 10; y--) {
-            const testBlock = this.bot.blockAt({ x: sampleX, y: y, z: sampleZ });
+            const testBlock = this.bot.blockAt({ x: sampleX, y, z: sampleZ });
             if (testBlock && testBlock.name !== 'air') {
               groundY = y + 1; // One block above solid ground
               break;
             }
           }
-          
+
           const heightDiff = groundY - centerY;
           if (Math.abs(heightDiff) > 0.5) {
             heightChanges.push({
@@ -190,15 +189,13 @@ class EnvironmentObserver {
               isNavigable: Math.abs(heightDiff) <= 2
             });
           }
-          
         } catch (sampleError) {
           // Skip individual sample errors
           continue;
         }
       }
-      
+
       return heightChanges;
-      
     } catch (error) {
       console.log(`[EnvironmentObserver] Height analysis error: ${error.message}`);
       return [];
@@ -207,31 +204,30 @@ class EnvironmentObserver {
 
   isBlockAccessible(block) {
     if (!block) return false;
-    
+
     try {
       // Check if block is at a reasonable height
       const pos = this.bot.entity.position;
       const blockPos = block.position;
-      
+
       const heightDiff = blockPos.y - pos.y;
       const horizontalDistance = Math.sqrt(
-        Math.pow(blockPos.x - pos.x, 2) + 
+        Math.pow(blockPos.x - pos.x, 2) +
         Math.pow(blockPos.z - pos.z, 2)
       );
-      
+
       // Basic accessibility rules
       if (Math.abs(heightDiff) > 4) return false; // Too high/low
       if (horizontalDistance > 32) return false; // Too far
-      
+
       // Check if there's a path (simplified)
       const airAbove = this.bot.blockAt({
         x: blockPos.x,
         y: blockPos.y + 1,
         z: blockPos.z
       });
-      
+
       return airAbove && airAbove.name === 'air';
-      
     } catch (error) {
       return false;
     }
@@ -239,11 +235,11 @@ class EnvironmentObserver {
 
   updateInventory() {
     this.inventoryState.clear();
-    
+
     if (this.bot.inventory && this.bot.inventory.items) {
       for (const item of this.bot.inventory.items()) {
         if (this.inventoryState.has(item.name)) {
-          this.inventoryState.set(item.name, 
+          this.inventoryState.set(item.name,
             this.inventoryState.get(item.name) + item.count
           );
         } else {
@@ -285,7 +281,7 @@ class EnvironmentObserver {
       'witch', 'slime', 'phantom', 'drowned', 'husk',
       'stray', 'wither_skeleton', 'blaze', 'ghast'
     ];
-    
+
     return hostileEntities.includes(entityName);
   }
 
@@ -296,7 +292,7 @@ class EnvironmentObserver {
       'wheat', 'carrots', 'potatoes', 'sugar_cane',
       'dirt', 'grass_block', 'sand', 'gravel'
     ];
-    
+
     return harvestableBlocks.includes(blockName);
   }
 
@@ -314,9 +310,9 @@ class EnvironmentObserver {
         .filter((type, index, arr) => arr.indexOf(type) === index),
       inventoryItems: Array.from(this.inventoryState.keys())
     };
-    
+
     this.observationHistory.push(observation);
-    
+
     // Limit history size
     if (this.observationHistory.length > this.maxHistorySize) {
       this.observationHistory.shift();
@@ -327,21 +323,21 @@ class EnvironmentObserver {
   findNearestEntity(entityType) {
     let nearest = null;
     let minDistance = Infinity;
-    
+
     for (const entity of this.nearbyEntities.values()) {
       if (entity.type === entityType && entity.distance < minDistance) {
         nearest = entity;
         minDistance = entity.distance;
       }
     }
-    
+
     return nearest;
   }
 
   findNearestBlock(blockType) {
     let nearest = null;
     let minDistance = Infinity;
-    
+
     for (const block of this.nearbyBlocks.values()) {
       if (block.type === blockType) {
         const distance = block.position.distanceTo(this.bot.entity.position);
@@ -351,7 +347,7 @@ class EnvironmentObserver {
         }
       }
     }
-    
+
     return nearest;
   }
 
@@ -370,23 +366,23 @@ class EnvironmentObserver {
         return true;
       }
     }
-    
+
     // Check health and food levels
     if (this.health < 6 || this.food < 6) {
       return true;
     }
-    
+
     // Check time and weather
     if (this.timeOfDay === 'night' && this.weather === 'thunder') {
       return true;
     }
-    
+
     return false;
   }
 
   getNearbyDangers() {
     const dangers = [];
-    
+
     for (const entity of this.nearbyEntities.values()) {
       if (entity.isHostile) {
         dangers.push({
@@ -397,27 +393,27 @@ class EnvironmentObserver {
         });
       }
     }
-    
+
     if (this.health < 10) {
       dangers.push({
         type: 'low_health',
         value: this.health
       });
     }
-    
+
     if (this.food < 10) {
       dangers.push({
         type: 'low_food',
         value: this.food
       });
     }
-    
+
     return dangers;
   }
 
   getResourceOpportunities() {
     const opportunities = [];
-    
+
     // Check for valuable blocks
     const valuableBlocks = ['coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore'];
     for (const blockType of valuableBlocks) {
@@ -430,7 +426,7 @@ class EnvironmentObserver {
         });
       }
     }
-    
+
     // Check for food sources
     const animals = ['cow', 'pig', 'chicken', 'sheep'];
     for (const animalType of animals) {
@@ -443,7 +439,7 @@ class EnvironmentObserver {
         });
       }
     }
-    
+
     return opportunities;
   }
 
@@ -463,40 +459,40 @@ class EnvironmentObserver {
       terrainAnalysis: this.getTerrainAnalysis()
     };
   }
-  
+
   // Enhanced water detection system
   getWaterStatus() {
     try {
       if (!this.bot?.entity?.position) {
         return { inWater: false, inLava: false, canEscape: false };
       }
-      
+
       const pos = this.bot.entity.position;
       const currentBlock = this.bot.blockAt(pos);
       const blockAbove = this.bot.blockAt(pos.offset(0, 1, 0));
-      const blockBelow = this.bot.blockAt(pos.offset(0, -1, 0));
-      
+      // Check block below for hazard detection
+
       // Check current liquid state
       const inWater = currentBlock && (currentBlock.name === 'water' || currentBlock.name === 'flowing_water');
       const inLava = currentBlock && (currentBlock.name === 'lava' || currentBlock.name === 'flowing_lava');
       const headInWater = blockAbove && (blockAbove.name === 'water' || blockAbove.name === 'flowing_water');
       const headInLava = blockAbove && (blockAbove.name === 'lava' || blockAbove.name === 'flowing_lava');
-      
+
       // Analyze escape routes if in liquid
       let canEscape = false;
-      let escapeDirections = [];
-      
+      const escapeDirections = [];
+
       if (inWater || inLava || headInWater || headInLava) {
         // Check 8 horizontal directions for escape
         const directions = [
           { x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 },
           { x: 1, z: 1 }, { x: -1, z: 1 }, { x: 1, z: -1 }, { x: -1, z: -1 }
         ];
-        
+
         for (const dir of directions) {
           const escapePos = pos.offset(dir.x, 0, dir.z);
           const escapeBlock = this.bot.blockAt(escapePos);
-          
+
           if (escapeBlock && escapeBlock.name !== 'water' && escapeBlock.name !== 'flowing_water' &&
               escapeBlock.name !== 'lava' && escapeBlock.name !== 'flowing_lava' &&
               escapeBlock.name !== 'air') {
@@ -505,7 +501,7 @@ class EnvironmentObserver {
           }
         }
       }
-      
+
       return {
         inWater: inWater || headInWater,
         inLava: inLava || headInLava,
@@ -514,70 +510,67 @@ class EnvironmentObserver {
         waterDepth: this.calculateWaterDepth(pos),
         nearShore: this.isNearShore(pos)
       };
-      
     } catch (error) {
       console.log(`[EnvironmentObserver] Water status error: ${error.message}`);
       return { inWater: false, inLava: false, canEscape: false };
     }
   }
-  
+
   calculateWaterDepth(pos) {
     try {
       let depth = 0;
-      
+
       // Check downward to find bottom
       for (let y = Math.floor(pos.y); y >= Math.floor(pos.y) - 10; y--) {
-        const checkBlock = this.bot.blockAt({ x: Math.floor(pos.x), y: y, z: Math.floor(pos.z) });
-        
+        const checkBlock = this.bot.blockAt({ x: Math.floor(pos.x), y, z: Math.floor(pos.z) });
+
         if (checkBlock && (checkBlock.name === 'water' || checkBlock.name === 'flowing_water')) {
           depth++;
         } else {
           break;
         }
       }
-      
+
       return depth;
-      
     } catch (error) {
       return 0;
     }
   }
-  
+
   isNearShore(pos) {
     try {
       const radius = 3;
-      
+
       for (let x = -radius; x <= radius; x++) {
         for (let z = -radius; z <= radius; z++) {
           const checkPos = { x: Math.floor(pos.x) + x, y: Math.floor(pos.y), z: Math.floor(pos.z) + z };
           const checkBlock = this.bot.blockAt(checkPos);
-          
+
           if (checkBlock && checkBlock.name !== 'water' && checkBlock.name !== 'flowing_water' &&
               checkBlock.name !== 'air') {
             return true;
           }
         }
       }
-      
+
       return false;
-      
     } catch (error) {
       return false;
     }
   }
-  
+
   // Enhanced terrain analysis
   getTerrainAnalysis() {
     try {
       if (!this.bot?.entity?.position) {
         return { terrain: 'unknown', obstacles: [], jumpableObstacles: [] };
       }
-      
+
       const pos = this.bot.entity.position;
       const obstacles = [];
       const jumpableObstacles = [];
       const paths = [];
-      
+
       // Analyze terrain in 8 directions
       const directions = [
         { name: 'north', x: 0, z: -1 },
@@ -589,10 +582,10 @@ class EnvironmentObserver {
         { name: 'west', x: -1, z: 0 },
         { name: 'northwest', x: -1, z: -1 }
       ];
-      
+
       for (const dir of directions) {
         const analysis = this.analyzeDirection(pos, dir.x, dir.z, 3);
-        
+
         if (analysis.hasObstacle) {
           if (analysis.canJump) {
             jumpableObstacles.push({ direction: dir.name, ...analysis });
@@ -603,7 +596,7 @@ class EnvironmentObserver {
           paths.push({ direction: dir.name, clear: true, distance: analysis.clearDistance });
         }
       }
-      
+
       // Determine terrain type
       let terrainType = 'flat';
       if (obstacles.length > 4) {
@@ -613,7 +606,7 @@ class EnvironmentObserver {
       } else if (obstacles.length > 0) {
         terrainType = 'mixed';
       }
-      
+
       return {
         terrain: terrainType,
         obstacles,
@@ -622,31 +615,29 @@ class EnvironmentObserver {
         heightVariation: this.analyzeHeightVariation(pos),
         navigationDifficulty: this.calculateNavigationDifficulty(obstacles, jumpableObstacles)
       };
-      
     } catch (error) {
       console.log(`[EnvironmentObserver] Terrain analysis error: ${error.message}`);
       return { terrain: 'unknown', obstacles: [], jumpableObstacles: [] };
     }
   }
-  
+
   analyzeDirection(startPos, dirX, dirZ, maxDistance) {
     try {
       for (let distance = 1; distance <= maxDistance; distance++) {
         const checkX = Math.floor(startPos.x + dirX * distance);
         const checkY = Math.floor(startPos.y);
         const checkZ = Math.floor(startPos.z + dirZ * distance);
-        
+
         const blockAhead = this.bot.blockAt({ x: checkX, y: checkY, z: checkZ });
         const blockAbove = this.bot.blockAt({ x: checkX, y: checkY + 1, z: checkZ });
         const blockAbove2 = this.bot.blockAt({ x: checkX, y: checkY + 2, z: checkZ });
-        
+
         if (blockAhead && blockAhead.name !== 'air' &&
             !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(blockAhead.name)) {
-          
           // Check if jumpable (1 block high, 2 blocks clearance above)
           const canJump = blockAbove && blockAbove.name === 'air' &&
                          blockAbove2 && blockAbove2.name === 'air';
-          
+
           return {
             hasObstacle: true,
             canJump,
@@ -656,27 +647,26 @@ class EnvironmentObserver {
           };
         }
       }
-      
+
       return { hasObstacle: false, clearDistance: maxDistance };
-      
     } catch (error) {
       return { hasObstacle: false, clearDistance: 0 };
     }
   }
-  
+
   analyzeHeightVariation(pos) {
     try {
       const radius = 5;
       const heights = [];
-      
+
       for (let x = -radius; x <= radius; x += 2) {
         for (let z = -radius; z <= radius; z += 2) {
           const checkX = Math.floor(pos.x) + x;
           const checkZ = Math.floor(pos.z) + z;
-          
+
           // Find ground level
           for (let y = Math.floor(pos.y) + 3; y >= Math.floor(pos.y) - 5; y--) {
-            const checkBlock = this.bot.blockAt({ x: checkX, y: y, z: checkZ });
+            const checkBlock = this.bot.blockAt({ x: checkX, y, z: checkZ });
             if (checkBlock && checkBlock.name !== 'air') {
               heights.push(y + 1);
               break;
@@ -684,22 +674,21 @@ class EnvironmentObserver {
           }
         }
       }
-      
+
       if (heights.length === 0) return 0;
-      
+
       const minHeight = Math.min(...heights);
       const maxHeight = Math.max(...heights);
-      
+
       return maxHeight - minHeight;
-      
     } catch (error) {
       return 0;
     }
   }
-  
+
   calculateNavigationDifficulty(obstacles, jumpableObstacles) {
     const baseScore = obstacles.length * 2 + jumpableObstacles.length;
-    
+
     if (baseScore === 0) return 'easy';
     if (baseScore <= 3) return 'moderate';
     if (baseScore <= 6) return 'difficult';

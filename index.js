@@ -16,7 +16,7 @@ function generateRandomUsername() {
 const botConfig = {
   host: process.env.MINECRAFT_HOST || 'localhost',
   port: parseInt(process.env.MINECRAFT_PORT) || 25565,
-  username: process.env.MINECRAFT_USERNAME || 
+  username: process.env.MINECRAFT_USERNAME ||
            (process.env.MINECRAFT_AUTH === 'offline' ? generateRandomUsername() : 'AIPlayer'),
   auth: process.env.MINECRAFT_AUTH || 'offline'
 };

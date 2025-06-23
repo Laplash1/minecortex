@@ -11,7 +11,7 @@ class ControlPrimitives {
     this.craftItemFailCount = 0;
     this.maxFailCount = 10;
     this.environmentObserver = null; // Will be set from MinecraftAI
-    
+
     // Initialize pathfinder
     this.initializePathfinder();
   }
@@ -21,25 +21,25 @@ class ControlPrimitives {
       if (this.bot.loadPlugin && !this.bot.pathfinder) {
         this.bot.loadPlugin(pathfinder);
         const movements = new Movements(this.bot, this.mcData);
-        
+
         // Enhanced movement capabilities for complex terrain navigation
-        movements.canDig = false;                   // Disable digging for safer navigation
-        movements.allow1by1towers = false;         // Disable tower building
-        movements.allowFreeMotion = true;          // Allow free motion
-        movements.allowParkour = true;             // Enable parkour movements
-        movements.allowSprinting = true;           // Enable sprinting
-        movements.canOpenDoors = true;             // Allow opening doors
-        movements.allowEntityDetection = true;     // Detect entities as obstacles
-        
+        movements.canDig = false; // Disable digging for safer navigation
+        movements.allow1by1towers = false; // Disable tower building
+        movements.allowFreeMotion = true; // Allow free motion
+        movements.allowParkour = true; // Enable parkour movements
+        movements.allowSprinting = true; // Enable sprinting
+        movements.canOpenDoors = true; // Allow opening doors
+        movements.allowEntityDetection = true; // Detect entities as obstacles
+
         // Liquid handling - treat as passable but with caution
         movements.liquids = new Set();
         movements.infiniteLiquidDropdownDistance = false; // Safer liquid handling
-        
+
         // Enhanced jumping settings for obstacle navigation
-        movements.maxJumpDistance = 4;             // Increased jump distance
-        movements.maxDropDistance = 4;             // Allow controlled drops
-        movements.maxClimbDistance = 2;            // Allow climbing
-        
+        movements.maxJumpDistance = 4; // Increased jump distance
+        movements.maxDropDistance = 4; // Allow controlled drops
+        movements.maxClimbDistance = 2; // Allow climbing
+
         // Block breaking restrictions for safety
         movements.blocksCantBreak = new Set([
           this.mcData.blocksByName.bedrock?.id,
@@ -47,22 +47,22 @@ class ControlPrimitives {
           this.mcData.blocksByName.lava?.id,
           this.mcData.blocksByName.flowing_lava?.id
         ].filter(Boolean));
-        
+
         // Scaffolding blocks (items that can be placed for building paths)
         movements.scafoldingBlocks = [
           this.mcData.itemsByName.dirt?.id,
           this.mcData.itemsByName.cobblestone?.id,
           this.mcData.itemsByName.stone?.id
         ].filter(Boolean);
-        
+
         // Safety settings
         movements.dontMineUnderFallingBlock = true;
-        movements.dontCreateFlow = true;           // Don't create water/lava flows
+        movements.dontCreateFlow = true; // Don't create water/lava flows
         movements.allowWaterBucket = false;
         movements.allowLavaBucket = false;
-        movements.placeCost = 2;                   // Cost for placing blocks
-        movements.breakCost = 1;                   // Cost for breaking blocks
-        
+        movements.placeCost = 2; // Cost for placing blocks
+        movements.breakCost = 1; // Cost for breaking blocks
+
         this.bot.pathfinder.setMovements(movements);
         console.log('[ControlPrimitives] Enhanced pathfinder initialized with parkour and jumping');
       }
@@ -72,11 +72,11 @@ class ControlPrimitives {
   }
 
   async mineBlock(name, count = 1) {
-    if (typeof name !== "string") {
-      throw new Error(`name for mineBlock must be a string`);
+    if (typeof name !== 'string') {
+      throw new Error('name for mineBlock must be a string');
     }
-    if (typeof count !== "number") {
-      throw new Error(`count for mineBlock must be a number`);
+    if (typeof count !== 'number') {
+      throw new Error('count for mineBlock must be a number');
     }
 
     const blockByName = this.mcData.blocksByName[name];
@@ -98,7 +98,7 @@ class ControlPrimitives {
       this.mineBlockFailCount++;
       if (this.mineBlockFailCount > this.maxFailCount) {
         throw new Error(
-          "mineBlock failed too many times, make sure you explore before calling mineBlock"
+          'mineBlock failed too many times, make sure you explore before calling mineBlock'
         );
       }
       return false;
@@ -149,13 +149,13 @@ class ControlPrimitives {
       cobblestone: ['diamond_pickaxe', 'iron_pickaxe', 'stone_pickaxe', 'wooden_pickaxe'],
       coal_ore: ['diamond_pickaxe', 'iron_pickaxe', 'stone_pickaxe', 'wooden_pickaxe'],
       iron_ore: ['diamond_pickaxe', 'iron_pickaxe', 'stone_pickaxe'],
-      
+
       // Axe blocks
       oak_log: ['diamond_axe', 'iron_axe', 'stone_axe', 'wooden_axe'],
       birch_log: ['diamond_axe', 'iron_axe', 'stone_axe', 'wooden_axe'],
       spruce_log: ['diamond_axe', 'iron_axe', 'stone_axe', 'wooden_axe'],
       jungle_log: ['diamond_axe', 'iron_axe', 'stone_axe', 'wooden_axe'],
-      
+
       // Shovel blocks
       dirt: ['diamond_shovel', 'iron_shovel', 'stone_shovel', 'wooden_shovel'],
       sand: ['diamond_shovel', 'iron_shovel', 'stone_shovel', 'wooden_shovel'],
@@ -163,7 +163,7 @@ class ControlPrimitives {
     };
 
     const tools = toolPriorities[blockData.name] || [];
-    
+
     for (const toolName of tools) {
       const tool = this.bot.inventory.items().find(item => item && item.name === toolName);
       if (tool) {
@@ -175,11 +175,11 @@ class ControlPrimitives {
   }
 
   async craftItem(name, count = 1) {
-    if (typeof name !== "string") {
-      throw new Error("name for craftItem must be a string");
+    if (typeof name !== 'string') {
+      throw new Error('name for craftItem must be a string');
     }
-    if (typeof count !== "number") {
-      throw new Error("count for craftItem must be a number");
+    if (typeof count !== 'number') {
+      throw new Error('count for craftItem must be a number');
     }
 
     const itemByName = this.mcData.itemsByName[name];
@@ -196,7 +196,7 @@ class ControlPrimitives {
     });
 
     if (!craftingTable) {
-      console.log(`[ControlPrimitives] No crafting table found, crafting in inventory`);
+      console.log('[ControlPrimitives] No crafting table found, crafting in inventory');
     } else {
       // Move to crafting table
       await this.bot.pathfinder.goto(
@@ -213,7 +213,7 @@ class ControlPrimitives {
       this.craftItemFailCount++;
       if (this.craftItemFailCount > this.maxFailCount) {
         throw new Error(
-          "craftItem failed too many times, check chat log to see what happened"
+          'craftItem failed too many times, check chat log to see what happened'
         );
       }
       return false;
@@ -249,7 +249,7 @@ class ControlPrimitives {
         console.log(`[ControlPrimitives] Invalid ingredient ID type: ${typeof ingredient.id}, value: ${ingredient.id}`);
         continue;
       }
-      
+
       try {
         const available = this.bot.inventory.count(ingredient.id);
         if (available < needed) {
@@ -276,7 +276,7 @@ class ControlPrimitives {
 
     try {
       await this.bot.equip(item, 'hand');
-      
+
       // Find reference block (ground)
       const referenceBlock = this.bot.blockAt(position.offset(0, -1, 0));
       if (!referenceBlock) {
@@ -293,16 +293,16 @@ class ControlPrimitives {
   }
 
   async exploreUntil(direction, maxTime, condition) {
-    console.log(`[ControlPrimitives] Starting exploration...`);
-    
+    console.log('[ControlPrimitives] Starting exploration...');
+
     const startTime = Date.now();
     const maxTimeMs = maxTime * 1000;
-    
+
     while (Date.now() - startTime < maxTimeMs) {
       // Check condition
       const result = condition();
       if (result) {
-        console.log(`[ControlPrimitives] Exploration successful!`);
+        console.log('[ControlPrimitives] Exploration successful!');
         return result;
       }
 
@@ -325,11 +325,11 @@ class ControlPrimitives {
           0,
           Math.sin(angle) * 15
         );
-        
+
         try {
           await this.bot.pathfinder.goto(new GoalBlock(randomTarget.x, randomTarget.y, randomTarget.z));
         } catch (e) {
-          console.log(`[ControlPrimitives] Movement failed, continuing exploration...`);
+          console.log('[ControlPrimitives] Movement failed, continuing exploration...');
         }
       }
     }
@@ -340,10 +340,10 @@ class ControlPrimitives {
 
   async moveToPosition(x, y, z) {
     console.log(`[ControlPrimitives] Moving to position (${x}, ${y}, ${z})`);
-    
+
     try {
       await this.bot.pathfinder.goto(new GoalBlock(x, y, z));
-      console.log(`[ControlPrimitives] Successfully reached target position`);
+      console.log('[ControlPrimitives] Successfully reached target position');
       return true;
     } catch (error) {
       console.log(`[ControlPrimitives] Failed to reach position: ${error.message}`);

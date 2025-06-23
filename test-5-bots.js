@@ -19,7 +19,7 @@ console.log('Starting 5 MineCortex bots for testing...');
 botConfigs.forEach((config, index) => {
   setTimeout(() => {
     console.log(`Creating bot ${index + 1}: ${config.username}`);
-    
+
     const bot = mineflayer.createBot({
       host: 'localhost',
       port: 25565,
@@ -28,7 +28,7 @@ botConfigs.forEach((config, index) => {
     });
 
     const ai = new MinecraftAI(bot);
-    
+
     bot.on('login', () => {
       console.log(`✅ ${config.username} logged in successfully`);
       ai.initialize();
@@ -63,7 +63,6 @@ botConfigs.forEach((config, index) => {
 
     bots.push(bot);
     ais.push(ai);
-    
   }, index * 1000); // Stagger connections by 1 second
 });
 
@@ -75,8 +74,8 @@ setInterval(() => {
     const pos = bot.entity ? `(${Math.round(bot.entity.position.x)}, ${Math.round(bot.entity.position.y)}, ${Math.round(bot.entity.position.z)})` : 'N/A';
     const health = bot.health !== undefined ? `HP:${bot.health}/20` : 'N/A';
     const food = bot.food !== undefined ? `Food:${bot.food}/20` : 'N/A';
-    
-    console.log(`Bot ${i+1} (${botConfigs[i].username}): ${status} ${pos} ${health} ${food}`);
+
+    console.log(`Bot ${i + 1} (${botConfigs[i].username}): ${status} ${pos} ${health} ${food}`);
   });
   console.log('========================\n');
 }, 15000);
