@@ -42,6 +42,19 @@ class MinecraftAI {
       handleDisconnect('error');
     });
     
+    // Death and respawn handling
+    this.deathCount = 0;
+    this.lastDeathTime = 0;
+    this.isRespawning = false;
+    
+    this.bot.on('death', () => {
+      this.handleDeath();
+    });
+    
+    this.bot.on('respawn', () => {
+      this.handleRespawn();
+    });
+    
     // Additional socket-level error handling for EPIPE prevention
     if (this.bot._client && this.bot._client.socket) {
       this.bot._client.socket.on('error', (err) => {
@@ -1464,6 +1477,138 @@ class MinecraftAI {
       this.log(`アイドル処理エラー: ${error.message}`);
       // Fallback to short rest
       await this.sleep(3000);
+    }
+  }
+  
+  handleDeath() {
+    try {
+      const currentTime = Date.now();
+      this.deathCount++;
+      this.lastDeathTime = currentTime;
+      this.isRespawning = true;
+      
+      this.log(`⚰️ プレイヤーが死亡しました (${this.deathCount}回目)`, 'warn');
+      
+      // Clear current tasks to prevent confusion after respawn
+      this.stateManager.setState('currentTask', null);
+      this.goals = [];
+      
+      // Check for death loop (3 deaths within 60 seconds)
+      if (this.deathCount >= 3 && (currentTime - this.lastDeathTime) < 60000) {
+        this.log('死亡ループを検出、安全モードに移行', 'error');
+        this.enterSafeMode();
+      }
+      
+      // Chat death message if possible
+      try {
+        if (this.bot.chat && typeof this.bot.chat === 'function') {
+          this.bot.chat(`死亡しました... (${this.deathCount}回目) 💀`);
+        }
+      } catch (chatError) {
+        this.log(`死亡時チャットエラー: ${chatError.message}`);
+      }
+      
+    } catch (error) {
+      this.log(`死亡処理エラー: ${error.message}`, 'error');
+    }
+  }
+  
+  handleRespawn() {
+    try {
+      this.log('🚀 リスポーンしました', 'info');
+      this.isRespawning = false;
+      
+      // Reset state after respawn
+      this.stateManager.setState('currentTask', null);
+      this.goals = [];
+      
+      // Add safe initial goals after respawn
+      this.goals.push({
+        type: 'gather_wood',
+        priority: 1,
+        description: 'リスポーン後の基本リソース確保'
+      });
+      
+      this.goals.push({
+        type: 'find_food',
+        priority: 2,
+        description: 'リスポーン後の食料確保'
+      });
+      
+      // Chat respawn message if possible
+      try {
+        if (this.bot.chat && typeof this.bot.chat === 'function') {
+          this.bot.chat('リスポーンしました！再び冒険を開始します 🌟');
+        }
+      } catch (chatError) {
+        this.log(`リスポーン時チャットエラー: ${chatError.message}`);
+      }
+      
+      // Resume AI operations after a short delay
+      setTimeout(() => {
+        if (!this.isRespawning && this.bot && this.bot.entity) {
+          this.log('AIオペレーション再開');
+        }
+      }, 2000);
+      
+    } catch (error) {
+      this.log(`リスポーン処理エラー: ${error.message}`, 'error');
+    }
+  }
+  
+  enterSafeMode() {
+    try {
+      this.log('🛡️ 安全モードに移行', 'warn');
+      
+      // Clear all goals
+      this.goals = [];
+      
+      // Add only very safe goals
+      this.goals.push({
+        type: 'build_shelter',
+        priority: 1,
+        description: '安全モード: 避難所建設'
+      });
+      
+      // Reset death counter after entering safe mode
+      setTimeout(() => {
+        this.deathCount = Math.max(0, this.deathCount - 1);
+        this.log('安全モード終了、通常動作に復帰');
+      }, 120000); // 2 minutes safe mode
+      
+    } catch (error) {
+      this.log(`安全モード移行エラー: ${error.message}`, 'error');
+    }
+  }
+  
+  // Enhanced sleep method to handle respawn state
+  async sleep(ms) {
+    if (this.isRespawning) {
+      // Don't sleep during respawn process
+      return;
+    }
+    
+    return new Promise(resolve => {
+      this.sleepTimeout = setTimeout(() => {
+        this.sleepTimeout = null;
+        resolve();
+      }, ms);
+    });
+  }
+  
+  // Override shutdown to handle respawn state
+  shutdown(reason = 'unknown') {
+    this.log(`AI shutting down: ${reason}`, 'info');
+    this.running = false;
+    this.isRespawning = false;
+    
+    if (this.sleepTimeout) {
+      clearTimeout(this.sleepTimeout);
+      this.sleepTimeout = null;
+    }
+    
+    if (this.coordinator) {
+      this.coordinator.unregisterPlayer(this.playerId);
     }
   }
 }

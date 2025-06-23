@@ -246,18 +246,23 @@ class MoveToSkill extends Skill {
         };
         
         try {
-          if (bot.pathfinder && typeof bot.pathfinder.on === 'function') {
+          if (bot.pathfinder && typeof bot.pathfinder.on === 'function' && typeof bot.pathfinder.setGoal === 'function') {
             bot.pathfinder.on('goal_reached', onGoalReached);
             bot.pathfinder.on('path_update', onPathUpdate);
+            
+            // Actually set the goal to start pathfinding
+            console.log(`[移動スキル] パスファインディング目標設定: (${x}, ${y}, ${z})`);
+            bot.pathfinder.setGoal(goal);
           } else {
             resolved = true;
             cleanup();
-            resolve({ success: false, error: 'Pathfinderイベントハンドラーが利用できません' });
+            resolve({ success: false, error: 'PathfinderイベントハンドラーまたはsetGoalが利用できません' });
           }
         } catch (eventError) {
+          console.log(`[移動スキル] パスファインディング設定エラー: ${eventError.message}`);
           resolved = true;
           cleanup();
-          resolve({ success: false, error: `イベントハンドラー設定エラー: ${eventError.message}` });
+          resolve({ success: false, error: `パスファインディング設定エラー: ${eventError.message}` });
         }
       });
       
@@ -377,58 +382,279 @@ class MoveToSkill extends Skill {
     }
   }
   
-  // Water detection and escape system
+  // Enhanced water detection and escape system
   async checkAndEscapeWater(bot) {
     try {
       const pos = bot.entity.position;
       const currentBlock = bot.blockAt(pos);
       const blockAbove = bot.blockAt(pos.offset(0, 1, 0));
       
-      // Check if we're in water or lava
-      const inWater = currentBlock && (currentBlock.name === 'water' || currentBlock.name === 'flowing_water');
-      const inLava = currentBlock && (currentBlock.name === 'lava' || currentBlock.name === 'flowing_lava');
-      const headInWater = blockAbove && (blockAbove.name === 'water' || blockAbove.name === 'flowing_water');
+      // Enhanced liquid detection
+      const waterBlocks = ['water', 'flowing_water'];
+      const lavaBlocks = ['lava', 'flowing_lava'];
       
-      if (!inWater && !inLava && !headInWater) {
+      const inWater = currentBlock && waterBlocks.includes(currentBlock.name);
+      const inLava = currentBlock && lavaBlocks.includes(currentBlock.name);
+      const headInWater = blockAbove && waterBlocks.includes(blockAbove.name);
+      const headInLava = blockAbove && lavaBlocks.includes(blockAbove.name);
+      
+      if (!inWater && !inLava && !headInWater && !headInLava) {
         return { success: true, inWater: false };
       }
       
-      console.log(`[移動スキル] ${inLava ? 'マグマ' : '水'}中検出、脱出を試行`);
+      const fluidType = inLava || headInLava ? 'マグマ' : '水';
+      console.log(`[移動スキル] ${fluidType}中検出、強化脱出システム開始`);
       
-      // Emergency escape maneuvers
+      // Priority 1: Find nearby land blocks
+      const landResult = await this.findNearestLand(bot, pos);
+      if (landResult.found) {
+        console.log(`[移動スキル] 陸地を発見: ${landResult.direction}方向`);
+        const escapeResult = await this.escapeToLand(bot, landResult);
+        if (escapeResult.success) {
+          return { success: true, inWater: false };
+        }
+      }
+      
+      // Priority 2: Enhanced directional escape
+      const escapeResult = await this.performEnhancedEscape(bot, pos, fluidType);
+      if (escapeResult.success) {
+        return { success: true, inWater: false };
+      }
+      
+      // Priority 3: Vertical escape (swim up)
+      const verticalResult = await this.performVerticalEscape(bot, pos, fluidType);
+      if (verticalResult.success) {
+        return { success: true, inWater: false };
+      }
+      
+      console.log(`[移動スキル] 全ての脱出方法が失敗`);
+      return { success: false, inWater: true, error: `${fluidType}中脱出に失敗` };
+      
+    } catch (error) {
+      console.log(`[移動スキル] 水中脱出エラー: ${error.message}`);
+      return { success: false, inWater: true, error: error.message };
+    }
+  }
+  
+  async findNearestLand(bot, currentPos) {
+    try {
+      console.log(`[移動スキル] 周辺の陸地検索中...`);
+      
+      // Check 8 directions for land within 16 blocks
+      const directions = [
+        { x: 1, z: 0, name: '東' },
+        { x: -1, z: 0, name: '西' },
+        { x: 0, z: 1, name: '南' },
+        { x: 0, z: -1, name: '北' },
+        { x: 1, z: 1, name: '南東' },
+        { x: 1, z: -1, name: '北東' },
+        { x: -1, z: 1, name: '南西' },
+        { x: -1, z: -1, name: '北西' }
+      ];
+      
+      for (const dir of directions) {
+        for (let distance = 2; distance <= 16; distance += 2) {
+          const checkX = currentPos.x + (dir.x * distance);
+          const checkZ = currentPos.z + (dir.z * distance);
+          const checkY = currentPos.y;
+          
+          const landBlock = bot.blockAt({ x: checkX, y: checkY, z: checkZ });
+          const blockAbove = bot.blockAt({ x: checkX, y: checkY + 1, z: checkZ });
+          
+          // Check if this is solid land with air above
+          if (landBlock && landBlock.name !== 'air' && 
+              !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(landBlock.name) &&
+              blockAbove && blockAbove.name === 'air') {
+            
+            console.log(`[移動スキル] 陸地発見: ${dir.name}方向 ${distance}ブロック先`);
+            return {
+              found: true,
+              direction: dir.name,
+              position: { x: checkX, y: checkY + 1, z: checkZ },
+              distance: distance
+            };
+          }
+        }
+      }
+      
+      return { found: false };
+      
+    } catch (error) {
+      console.log(`[移動スキル] 陸地検索エラー: ${error.message}`);
+      return { found: false };
+    }
+  }
+  
+  async escapeToLand(bot, landInfo) {
+    try {
+      console.log(`[移動スキル] ${landInfo.direction}の陸地へ脱出中...`);
+      
+      const currentPos = bot.entity.position;
+      const targetPos = landInfo.position;
+      
+      // Calculate direction to land
+      const dirX = targetPos.x - currentPos.x;
+      const dirZ = targetPos.z - currentPos.z;
+      const distance = Math.sqrt(dirX * dirX + dirZ * dirZ);
+      
+      if (distance === 0) return { success: false };
+      
+      const normalX = dirX / distance;
+      const normalZ = dirZ / distance;
+      
+      // Escape toward land
       for (let i = 0; i < 10; i++) {
-        // Swim up
+        // Swim up and toward land
         bot.setControlState('jump', true);
         
-        // Try to move in different directions to find shore
-        const escapeAngle = (i * Math.PI * 2) / 8; // 8 directions
-        const escapeX = Math.cos(escapeAngle);
-        const escapeZ = Math.sin(escapeAngle);
-        
-        await bot.lookAt(new Vec3(pos.x + escapeX, pos.y + 1, pos.z + escapeZ));
+        try {
+          const lookX = currentPos.x + normalX * 5;
+          const lookZ = currentPos.z + normalZ * 5;
+          await bot.lookAt({ x: lookX, y: currentPos.y + 1, z: lookZ });
+        } catch (lookError) {
+          // Continue without lookAt if it fails
+        }
         
         bot.setControlState('forward', true);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 800)); // Longer movement time
         bot.setControlState('forward', false);
         
-        // Check if we escaped
+        // Check escape success
         const newPos = bot.entity.position;
         const newBlock = bot.blockAt(newPos);
         
         if (newBlock && newBlock.name !== 'water' && newBlock.name !== 'flowing_water' && 
             newBlock.name !== 'lava' && newBlock.name !== 'flowing_lava') {
           bot.setControlState('jump', false);
-          console.log('[移動スキル] 水中から脱出成功');
-          return { success: true, inWater: false };
+          console.log(`[移動スキル] ${landInfo.direction}陸地への脱出成功`);
+          return { success: true };
+        }
+        
+        // Adjust direction slightly if stuck
+        if (i % 3 === 2) {
+          const adjustAngle = (Math.random() - 0.5) * 0.5; // Small random adjustment
+          const adjustedX = normalX * Math.cos(adjustAngle) - normalZ * Math.sin(adjustAngle);
+          const adjustedZ = normalX * Math.sin(adjustAngle) + normalZ * Math.cos(adjustAngle);
+          try {
+            await bot.lookAt({ 
+              x: currentPos.x + adjustedX * 5, 
+              y: currentPos.y + 1, 
+              z: currentPos.z + adjustedZ * 5 
+            });
+          } catch (lookError) {
+            // Continue without lookAt
+          }
         }
       }
       
       bot.setControlState('jump', false);
-      return { success: false, inWater: true, error: '水中脱出に失敗' };
+      return { success: false };
       
     } catch (error) {
-      console.log(`[移動スキル] 水中脱出エラー: ${error.message}`);
-      return { success: false, inWater: true, error: error.message };
+      bot.setControlState('jump', false);
+      console.log(`[移動スキル] 陸地脱出エラー: ${error.message}`);
+      return { success: false };
+    }
+  }
+  
+  async performEnhancedEscape(bot, pos, fluidType) {
+    try {
+      console.log(`[移動スキル] 強化方向脱出を実行中...`);
+      
+      // Try 12 directions (more granular than before)
+      for (let i = 0; i < 12; i++) {
+        const escapeAngle = (i * Math.PI * 2) / 12;
+        const escapeX = Math.cos(escapeAngle);
+        const escapeZ = Math.sin(escapeAngle);
+        
+        console.log(`[移動スキル] 方向 ${i + 1}/12 での脱出試行`);
+        
+        bot.setControlState('jump', true);
+        
+        try {
+          await bot.lookAt({ 
+            x: pos.x + escapeX * 3, 
+            y: pos.y + 1, 
+            z: pos.z + escapeZ * 3 
+          });
+        } catch (lookError) {
+          // Continue without lookAt
+        }
+        
+        // More aggressive movement
+        bot.setControlState('forward', true);
+        bot.setControlState('sprint', true);
+        await new Promise(resolve => setTimeout(resolve, 700));
+        bot.setControlState('forward', false);
+        bot.setControlState('sprint', false);
+        
+        // Check escape
+        const newPos = bot.entity.position;
+        const newBlock = bot.blockAt(newPos);
+        
+        if (newBlock && !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(newBlock.name)) {
+          bot.setControlState('jump', false);
+          console.log(`[移動スキル] 方向脱出成功 (方向 ${i + 1})`);
+          return { success: true };
+        }
+        
+        // Brief pause between attempts
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      bot.setControlState('jump', false);
+      return { success: false };
+      
+    } catch (error) {
+      bot.setControlState('jump', false);
+      console.log(`[移動スキル] 強化脱出エラー: ${error.message}`);
+      return { success: false };
+    }
+  }
+  
+  async performVerticalEscape(bot, pos, fluidType) {
+    try {
+      console.log(`[移動スキル] 垂直脱出を実行中...`);
+      
+      // Pure vertical escape - swim straight up
+      for (let i = 0; i < 15; i++) {
+        bot.setControlState('jump', true);
+        
+        // Look straight up
+        try {
+          await bot.lookAt({ x: pos.x, y: pos.y + 10, z: pos.z });
+        } catch (lookError) {
+          // Continue without lookAt
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 600));
+        
+        // Check if we've reached surface
+        const newPos = bot.entity.position;
+        const blockAtPos = bot.blockAt(newPos);
+        const blockAbove = bot.blockAt(newPos.offset(0, 1, 0));
+        
+        if (blockAtPos && blockAtPos.name === 'air' &&
+            blockAbove && blockAbove.name === 'air') {
+          bot.setControlState('jump', false);
+          console.log(`[移動スキル] 垂直脱出成功 (${i + 1}回試行)`);
+          return { success: true };
+        }
+        
+        // Check if we're making progress upward
+        if (newPos.y > pos.y + 2) {
+          console.log(`[移動スキル] 上昇中... Y: ${pos.y.toFixed(1)} → ${newPos.y.toFixed(1)}`);
+          pos = newPos; // Update position reference
+        }
+      }
+      
+      bot.setControlState('jump', false);
+      return { success: false };
+      
+    } catch (error) {
+      bot.setControlState('jump', false);
+      console.log(`[移動スキル] 垂直脱出エラー: ${error.message}`);
+      return { success: false };
     }
   }
   
@@ -451,8 +677,8 @@ class MoveToSkill extends Skill {
         const checkY = Math.floor(pos.y);
         const checkZ = Math.floor(pos.z + normalZ * d);
         
-        const blockAhead = bot.blockAt(new Vec3(checkX, checkY, checkZ));
-        const blockAbove = bot.blockAt(new Vec3(checkX, checkY + 1, checkZ));
+        const blockAhead = bot.blockAt(bot.entity.position.offset(checkX - Math.floor(pos.x), checkY - Math.floor(pos.y), checkZ - Math.floor(pos.z)));
+        const blockAbove = bot.blockAt(bot.entity.position.offset(checkX - Math.floor(pos.x), checkY + 1 - Math.floor(pos.y), checkZ - Math.floor(pos.z)));
         
         if (blockAhead && blockAhead.name !== 'air' && 
             !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(blockAhead.name)) {
@@ -587,60 +813,6 @@ class FollowSkill extends Skill {
   }
 }
 
-class ExploreSkill extends Skill {
-  constructor() {
-    super('explore', 'Explore the surrounding area');
-  }
-
-  async execute(bot, params) {
-    try {
-      const { radius = 30, timeout = 8000 } = params; // Reduced default radius and added timeout
-      
-      if (!bot.entity || !bot.entity.position) {
-        return { success: false, error: 'ボットの位置情報が取得できません' };
-      }
-      
-      const pos = bot.entity.position;
-      
-      // Generate random exploration target with safer bounds
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * radius;
-      
-      const targetX = Math.floor(pos.x + Math.cos(angle) * distance);
-      const targetZ = Math.floor(pos.z + Math.sin(angle) * distance);
-      const targetY = pos.y;
-      
-      console.log(`[探索スキル] (${targetX}, ${targetY}, ${targetZ})を探索中...`);
-      
-      const moveSkill = new MoveToSkill();
-      
-      // Execute with extended timeout protection
-      const movePromise = moveSkill.execute(bot, { x: targetX, y: targetY, z: targetZ });
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('探索タイムアウト')), timeout * 2) // Double timeout for exploration
-      );
-      
-      const result = await Promise.race([movePromise, timeoutPromise]);
-      
-      if (result.success) {
-        // Safe chat with EPIPE protection
-        try {
-          if (bot.chat && typeof bot.chat === 'function') {
-            bot.chat(`新しいエリアを探索しました！ 🗺️`);
-          }
-        } catch (chatError) {
-          console.log(`[探索スキル] チャットエラー: ${chatError.message}`);
-        }
-      }
-      
-      return result;
-      
-    } catch (error) {
-      console.log(`[探索スキル] エラー: ${error.message}`);
-      return { success: false, error: error.message };
-    }
-  }
-}
 
 // Interaction Skills
 class MineBlockSkill extends Skill {
@@ -745,8 +917,35 @@ class MineBlockSkill extends Skill {
       
       const block = bot.findBlock({
         matching: (candidate) => {
+          if (!candidate || !candidate.name) return false;
+          
           if (typeof blockType === 'string') {
-            return candidate.name === blockType || candidate.name.includes(blockType);
+            // Enhanced string matching for better block detection
+            const candidateName = candidate.name.toLowerCase();
+            const targetName = blockType.toLowerCase();
+            
+            // Direct match
+            if (candidateName === targetName) return true;
+            
+            // Contains match
+            if (candidateName.includes(targetName)) return true;
+            
+            // Special cases for common blocks
+            if (targetName === 'stone' && 
+                (candidateName.includes('stone') || candidateName === 'cobblestone')) {
+              return true;
+            }
+            
+            if (targetName === 'wood' && 
+                (candidateName.includes('log') || candidateName.includes('wood'))) {
+              return true;
+            }
+            
+            if (targetName === 'ore' && candidateName.includes('ore')) {
+              return true;
+            }
+            
+            return false;
           } else if (typeof blockType === 'number') {
             return candidate.type === blockType;
           } else if (typeof blockType === 'function') {
@@ -758,12 +957,73 @@ class MineBlockSkill extends Skill {
       });
       
       if (block) {
-        console.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name}`);
+        console.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name} at ${block.position}`);
         return block;
       }
     }
     
-    console.log(`[マイニング] 段階的探索でも${blockType}が見つかりません`);
+    // Enhanced fallback search for specific block types
+    console.log(`[マイニング] 標準探索失敗、特殊検索開始...`);
+    
+    if (typeof blockType === 'string') {
+      const fallbackBlock = this.findSimilarBlocks(bot, blockType);
+      if (fallbackBlock) {
+        console.log(`[マイニング] 代替ブロック発見: ${fallbackBlock.name}`);
+        return fallbackBlock;
+      }
+    }
+    
+    console.log(`[マイニング] 全ての探索方法で${blockType}が見つかりませんでした`);
+    return null;
+  }
+  
+  findSimilarBlocks(bot, blockType) {
+    const blockTypeLower = blockType.toLowerCase();
+    
+    // Define similar block groups
+    const blockGroups = {
+      stone: ['stone', 'cobblestone', 'granite', 'diorite', 'andesite', 'deepslate'],
+      wood: ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 
+             'oak_wood', 'birch_wood', 'spruce_wood', 'jungle_wood', 'acacia_wood', 'dark_oak_wood'],
+      ore: ['iron_ore', 'coal_ore', 'gold_ore', 'diamond_ore', 'redstone_ore', 'lapis_ore'],
+      dirt: ['dirt', 'grass_block', 'podzol', 'mycelium', 'coarse_dirt'],
+      sand: ['sand', 'red_sand', 'gravel']
+    };
+    
+    // Find which group the target belongs to
+    let targetGroup = null;
+    for (const [groupName, blocks] of Object.entries(blockGroups)) {
+      if (blocks.some(block => block.includes(blockTypeLower) || blockTypeLower.includes(block))) {
+        targetGroup = blocks;
+        break;
+      }
+    }
+    
+    if (!targetGroup) {
+      return null;
+    }
+    
+    console.log(`[マイニング] ${blockType}の代替ブロックを検索中: ${targetGroup.join(', ')}`);
+    
+    // Search for any block in the same group
+    for (const radius of [32, 64, 96]) {
+      const block = bot.findBlock({
+        matching: (candidate) => {
+          if (!candidate || !candidate.name) return false;
+          const candidateName = candidate.name.toLowerCase();
+          return targetGroup.some(groupBlock => 
+            candidateName === groupBlock || candidateName.includes(groupBlock)
+          );
+        },
+        maxDistance: radius
+      });
+      
+      if (block) {
+        console.log(`[マイニング] ${radius}ブロック範囲で代替発見: ${block.name}`);
+        return block;
+      }
+    }
+    
     return null;
   }
 }
@@ -844,20 +1104,51 @@ class SimpleGatherWoodSkill extends Skill {
     }
 
     // Stage 2: If no wood found, try to explore and search again
-    console.log(`[木材収集] 近くに木が見つかりません。探索して木を探します...`);
+    console.log(`[木材収集] 近くに木が見つかりません。ワールド生成木を探します...`);
+    
+    // Check if this is a generated world without trees - try placing wood blocks as emergency fallback
+    const hasAnyBlocks = bot.findBlocks({
+      matching: (block) => {
+        if (!block || !block.name) return false;
+        return block.name !== 'air' && block.name !== 'water' && block.name !== 'lava';
+      },
+      maxDistance: 16,
+      count: 10
+    });
+    
+    if (hasAnyBlocks.length === 0) {
+      console.log(`[木材収集] 空のワールドを検出、基本リソース確保を試みます`);
+      // Try to get starter items from server or other means
+      try {
+        bot.chat('/give @p oak_log 10');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const woodAfterGive = bot.inventory.items().find(item => 
+          item && item.name && (item.name.includes('log') || item.name.includes('wood'))
+        );
+        
+        if (woodAfterGive) {
+          console.log(`[木材収集] サーバーコマンドで木材を取得しました: ${woodAfterGive.name}`);
+          bot.chat('サーバーから木材を取得しました！ 🌳');
+          return { success: true, gathered: woodAfterGive.count };
+        }
+      } catch (giveError) {
+        console.log(`[木材収集] サーバーコマンド失敗: ${giveError.message}`);
+      }
+    }
     
     // Generate random exploration target with expanded range
     const currentPos = bot.entity.position;
     const searchDirections = [
-      { x: currentPos.x + 80, y: currentPos.y, z: currentPos.z },
-      { x: currentPos.x - 80, y: currentPos.y, z: currentPos.z },
-      { x: currentPos.x, y: currentPos.y, z: currentPos.z + 80 },
-      { x: currentPos.x, y: currentPos.y, z: currentPos.z - 80 },
+      { x: currentPos.x + 120, y: currentPos.y, z: currentPos.z },
+      { x: currentPos.x - 120, y: currentPos.y, z: currentPos.z },
+      { x: currentPos.x, y: currentPos.y, z: currentPos.z + 120 },
+      { x: currentPos.x, y: currentPos.y, z: currentPos.z - 120 },
       // Add diagonal directions for better coverage
-      { x: currentPos.x + 60, y: currentPos.y, z: currentPos.z + 60 },
-      { x: currentPos.x - 60, y: currentPos.y, z: currentPos.z - 60 },
-      { x: currentPos.x + 60, y: currentPos.y, z: currentPos.z - 60 },
-      { x: currentPos.x - 60, y: currentPos.y, z: currentPos.z + 60 }
+      { x: currentPos.x + 100, y: currentPos.y, z: currentPos.z + 100 },
+      { x: currentPos.x - 100, y: currentPos.y, z: currentPos.z - 100 },
+      { x: currentPos.x + 100, y: currentPos.y, z: currentPos.z - 100 },
+      { x: currentPos.x - 100, y: currentPos.y, z: currentPos.z + 100 }
     ];
     
     for (const target of searchDirections) {
@@ -956,8 +1247,10 @@ class SimpleGatherWoodSkill extends Skill {
 
       try {
         if (bot.pathfinder && typeof bot.pathfinder.on === 'function') {
-          bot.pathfinder.on('goal_reached', onGoalReached);
-          bot.pathfinder.on('path_update', onPathUpdate);
+          if (typeof bot.pathfinder.on === 'function') {
+            bot.pathfinder.on('goal_reached', onGoalReached);
+            bot.pathfinder.on('path_update', onPathUpdate);
+          }
           bot.pathfinder.setGoal(goal);
         } else {
           resolved = true;
@@ -1026,23 +1319,65 @@ class SimpleGatherWoodSkill extends Skill {
     for (const radius of searchRadii) {
       console.log(`[木材収集] ${radius}ブロック範囲で探索中...`);
       
+      // Enhanced wood block matching with comprehensive patterns
       const woodBlock = bot.findBlock({
         matching: (block) => {
-          return block.name && (
-            block.name.includes('_log') ||
-            block.name === 'log'
-          );
+          if (!block || !block.name) return false;
+          
+          const blockName = block.name.toLowerCase();
+          const woodPatterns = [
+            'oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log',
+            'oak_wood', 'birch_wood', 'spruce_wood', 'jungle_wood', 'acacia_wood', 'dark_oak_wood',
+            'log', 'wood', 'stem'
+          ];
+          
+          return woodPatterns.some(pattern => blockName.includes(pattern));
         },
         maxDistance: radius
       });
       
       if (woodBlock) {
-        console.log(`[木材収集] ${radius}ブロック範囲で発見: ${woodBlock.name}`);
+        console.log(`[木材収集] ${radius}ブロック範囲で発見: ${woodBlock.name} at ${woodBlock.position}`);
         return woodBlock;
       }
     }
     
-    console.log(`[木材収集] 段階的探索でも木が見つかりません`);
+    // Emergency fallback: comprehensive block scan
+    console.log(`[木材収集] 段階的探索失敗、緊急フォールバック開始...`);
+    
+    // Try to find any wooden structure or tree-like blocks
+    const fallbackBlock = bot.findBlock({
+      matching: (block) => {
+        if (!block || !block.name) return false;
+        const blockName = block.name.toLowerCase();
+        return blockName.includes('leaves') || blockName.includes('sapling') || 
+               blockName.includes('bark') || blockName.includes('planks') ||
+               blockName.includes('fence') || blockName.includes('door');
+      },
+      maxDistance: 64
+    });
+    
+    if (fallbackBlock) {
+      console.log(`[木材収集] 木材関連ブロック発見: ${fallbackBlock.name}, 周辺を詳細検索...`);
+      
+      // Look for actual wood near tree-related blocks
+      const nearbyWood = bot.findBlock({
+        matching: (block) => {
+          if (!block || !block.name) return false;
+          const blockName = block.name.toLowerCase();
+          return blockName.includes('log') || blockName.includes('wood') || blockName.includes('stem');
+        },
+        maxDistance: 32,
+        point: fallbackBlock.position
+      });
+      
+      if (nearbyWood) {
+        console.log(`[木材収集] 関連ブロック周辺で木材発見: ${nearbyWood.name}`);
+        return nearbyWood;
+      }
+    }
+    
+    console.log(`[木材収集] 全ての検索方法で木材が見つかりませんでした`);
     return null;
   }
 }
@@ -1124,56 +1459,194 @@ class CraftToolsSkill extends Skill {
   }
 
   async craftSingleTool(bot, toolName) {
-    // Check if we have a crafting table
-    const craftingTable = bot.findBlock({
-      matching: (block) => block.name === 'crafting_table',
-      maxDistance: 32
-    });
-
     try {
-      // Find the recipe
+      console.log(`[クラフトスキル] ${toolName}の作成開始`);
+      
+      // Find the recipe first
       const mcData = require('minecraft-data')(bot.version);
       const itemByName = mcData.itemsByName[toolName];
       
       if (!itemByName) {
-        return { success: false, error: `Unknown tool: ${toolName}` };
+        console.log(`[クラフトスキル] 不明なアイテム: ${toolName}`);
+        return { success: false, error: `不明なアイテム: ${toolName}` };
       }
 
+      // Check if we have a crafting table
+      const craftingTable = bot.findBlock({
+        matching: (block) => block.name === 'crafting_table',
+        maxDistance: 32
+      });
+
       const recipes = bot.recipesFor(itemByName.id, null, 1, craftingTable);
-      console.log(`[CraftSkill] Searching recipes for ${toolName} (ID: ${itemByName.id})`);
-      console.log(`[CraftSkill] Found ${recipes.length} recipes`);
-      console.log(`[CraftSkill] Has crafting table: ${!!craftingTable}`);
+      console.log(`[クラフトスキル] ${toolName}のレシピ検索: ${recipes.length}個発見`);
       
       if (recipes.length === 0) {
         // Try without crafting table requirement
         const recipesWithoutTable = bot.recipesFor(itemByName.id, null, 1, null);
-        console.log(`[CraftSkill] Without crafting table: ${recipesWithoutTable.length} recipes`);
-        return { success: false, error: `No recipe for ${toolName} (checked ${recipes.length} with table, ${recipesWithoutTable.length} without)` };
+        console.log(`[クラフトスキル] 作業台なしレシピ: ${recipesWithoutTable.length}個`);
+        
+        if (recipesWithoutTable.length === 0) {
+          return { success: false, error: `${toolName}のレシピが見つかりません` };
+        }
+        
+        // Use recipe without table if available
+        const recipe = recipesWithoutTable[0];
+        const materialCheck = await this.checkRecipeMaterials(bot, recipe, toolName);
+        if (!materialCheck.canCraft) {
+          return { success: false, error: materialCheck.missingItems };
+        }
+        
+        console.log(`[クラフトスキル] 作業台なしで${toolName}をクラフト中...`);
+        await bot.craft(recipe, 1, null);
+        return { success: true };
       }
       
       const recipe = recipes[0];
+      
+      // Check if we have required materials
+      const materialCheck = await this.checkRecipeMaterials(bot, recipe, toolName);
+      if (!materialCheck.canCraft) {
+        return { success: false, error: materialCheck.missingItems };
+      }
 
-      // Move to crafting table if needed
+      // Move to crafting table if needed and available
       if (craftingTable) {
         const distance = bot.entity.position.distanceTo(craftingTable.position);
         if (distance > 4) {
-          if (bot.pathfinder) {
-            const { goals } = require('mineflayer-pathfinder');
-            await bot.pathfinder.setGoal(new goals.GoalBlock(
-              craftingTable.position.x, 
-              craftingTable.position.y, 
-              craftingTable.position.z
-            ));
+          console.log(`[クラフトスキル] 作業台に移動中... (距離: ${distance.toFixed(1)})`);
+          try {
+            if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
+              const { goals } = require('mineflayer-pathfinder');
+              await bot.pathfinder.setGoal(new goals.GoalBlock(
+                craftingTable.position.x, 
+                craftingTable.position.y, 
+                craftingTable.position.z
+              ));
+            } else {
+              // Basic movement fallback
+              await this.basicMoveToTable(bot, craftingTable);
+            }
+          } catch (moveError) {
+            console.log(`[クラフトスキル] 作業台への移動に失敗: ${moveError.message}`);
+            return { success: false, error: `作業台への移動失敗: ${moveError.message}` };
           }
         }
+      } else if (recipe.requiresTable) {
+        return { success: false, error: `${toolName}の作成には作業台が必要ですが見つかりません` };
       }
 
       // Craft the item
+      console.log(`[クラフトスキル] ${toolName}をクラフト中...`);
       await bot.craft(recipe, 1, craftingTable);
+      console.log(`[クラフトスキル] ${toolName}の作成完了`);
       return { success: true };
 
     } catch (error) {
+      console.log(`[クラフトスキル] ${toolName}作成エラー: ${error.message}`);
       return { success: false, error: error.message };
+    }
+  }
+  
+  async checkRecipeMaterials(bot, recipe, toolName) {
+    try {
+      const inventory = bot.inventory.items();
+      const missingMaterials = [];
+      const requiredMaterials = [];
+      
+      console.log(`[クラフトスキル] ${toolName}の材料チェック開始`);
+      
+      // Check each ingredient in the recipe
+      if (recipe.ingredients) {
+        for (let i = 0; i < recipe.ingredients.length; i++) {
+          const ingredient = recipe.ingredients[i];
+          if (!ingredient) continue;
+          
+          const itemName = this.getItemNameFromId(bot, ingredient.id);
+          const requiredCount = ingredient.count || 1;
+          
+          requiredMaterials.push(`${itemName}×${requiredCount}`);
+          
+          const availableCount = inventory.reduce((total, item) => {
+            if (item && item.type === ingredient.id) {
+              return total + item.count;
+            }
+            return total;
+          }, 0);
+          
+          console.log(`[クラフトスキル] ${itemName}: 必要${requiredCount}個, 所持${availableCount}個`);
+          
+          if (availableCount < requiredCount) {
+            missingMaterials.push(`${itemName}×${requiredCount - availableCount}`);
+          }
+        }
+      }
+      
+      const canCraft = missingMaterials.length === 0;
+      
+      if (canCraft) {
+        console.log(`[クラフトスキル] ${toolName}の材料は十分です: ${requiredMaterials.join(', ')}`);
+      } else {
+        console.log(`[クラフトスキル] ${toolName}の材料不足: ${missingMaterials.join(', ')}`);
+      }
+      
+      return {
+        canCraft,
+        missingItems: canCraft ? '' : `材料不足: ${missingMaterials.join(', ')}`,
+        required: requiredMaterials
+      };
+      
+    } catch (error) {
+      console.log(`[クラフトスキル] 材料チェックエラー: ${error.message}`);
+      return {
+        canCraft: false,
+        missingItems: `材料チェック失敗: ${error.message}`,
+        required: []
+      };
+    }
+  }
+  
+  getItemNameFromId(bot, itemId) {
+    try {
+      const mcData = require('minecraft-data')(bot.version);
+      const item = mcData.items[itemId];
+      return item ? item.name : `unknown_item_${itemId}`;
+    } catch (error) {
+      return `item_${itemId}`;
+    }
+  }
+  
+  async basicMoveToTable(bot, craftingTable) {
+    const targetPos = craftingTable.position;
+    const currentPos = bot.entity.position;
+    
+    const distance = Math.sqrt(
+      Math.pow(targetPos.x - currentPos.x, 2) + 
+      Math.pow(targetPos.z - currentPos.z, 2)
+    );
+    
+    if (distance > 20) {
+      throw new Error('作業台が遠すぎます');
+    }
+    
+    // Simple movement towards table
+    const steps = Math.ceil(distance / 2);
+    const stepX = (targetPos.x - currentPos.x) / steps;
+    const stepZ = (targetPos.z - currentPos.z) / steps;
+    
+    for (let i = 0; i < steps; i++) {
+      try {
+        const targetX = currentPos.x + stepX * (i + 1);
+        const targetZ = currentPos.z + stepZ * (i + 1);
+        
+        await bot.lookAt({ x: targetX, y: targetPos.y, z: targetZ });
+        bot.setControlState('forward', true);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        bot.setControlState('forward', false);
+        
+      } catch (stepError) {
+        console.log(`[クラフトスキル] 移動ステップエラー: ${stepError.message}`);
+        continue;
+      }
     }
   }
 }
@@ -1369,7 +1842,7 @@ class BuildShelterSkill extends Skill {
         try {
           const referenceBlock = bot.blockAt({ x: wallPos.x, y: wallPos.y - 1, z: wallPos.z });
           if (referenceBlock) {
-            await bot.placeBlock(referenceBlock, new bot.Vec3(0, 1, 0));
+            await bot.placeBlock(referenceBlock, { x: 0, y: 1, z: 0 });
             placed++;
             await new Promise(resolve => setTimeout(resolve, 50)); // Optimized delay - reduced from 100ms to 50ms
           }
@@ -1412,7 +1885,7 @@ class PlaceBlocksSkill extends Skill {
         try {
           const referenceBlock = bot.blockAt({ x: pos.x, y: pos.y - 1, z: pos.z });
           if (referenceBlock && referenceBlock.name !== 'air') {
-            await bot.placeBlock(referenceBlock, new bot.Vec3(0, 1, 0));
+            await bot.placeBlock(referenceBlock, { x: 0, y: 1, z: 0 });
             placed++;
             await new Promise(resolve => setTimeout(resolve, 100)); // Optimized delay - reduced from 200ms to 100ms
           }
@@ -1748,9 +2221,9 @@ class NavigateTerrainSkill extends Skill {
         const checkY = Math.floor(pos.y);
         const checkZ = Math.floor(pos.z + dirZ * distance);
         
-        const blockAhead = bot.blockAt(new Vec3(checkX, checkY, checkZ));
-        const blockAbove = bot.blockAt(new Vec3(checkX, checkY + 1, checkZ));
-        const blockAbove2 = bot.blockAt(new Vec3(checkX, checkY + 2, checkZ));
+        const blockAhead = bot.blockAt(bot.entity.position.offset(checkX - Math.floor(pos.x), checkY - Math.floor(pos.y), checkZ - Math.floor(pos.z)));
+        const blockAbove = bot.blockAt(bot.entity.position.offset(checkX - Math.floor(pos.x), checkY + 1 - Math.floor(pos.y), checkZ - Math.floor(pos.z)));
+        const blockAbove2 = bot.blockAt(bot.entity.position.offset(checkX - Math.floor(pos.x), checkY + 2 - Math.floor(pos.y), checkZ - Math.floor(pos.z)));
         
         if (blockAhead && blockAhead.name !== 'air' && 
             !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(blockAhead.name)) {
@@ -1796,7 +2269,7 @@ class NavigateTerrainSkill extends Skill {
         
         if (altDistance < currentDistance) {
           // Check if path is clear
-          const checkBlock = bot.blockAt(new Vec3(Math.floor(altX), Math.floor(pos.y), Math.floor(altZ)));
+          const checkBlock = bot.blockAt(bot.entity.position.offset(Math.floor(altX) - Math.floor(pos.x), Math.floor(pos.y) - Math.floor(pos.y), Math.floor(altZ) - Math.floor(pos.z)));
           if (!checkBlock || checkBlock.name === 'air' || 
               ['water', 'flowing_water'].includes(checkBlock.name)) {
             return { found: true, x: altX, z: altZ };
@@ -1812,4 +2285,279 @@ class NavigateTerrainSkill extends Skill {
   }
 }
 
-module.exports = { SkillLibrary };
+// Exploration Skills
+class ExploreSkill extends Skill {
+  constructor() {
+    super('explore', 'Explore the world to discover resources and locations');
+  }
+
+  async execute(bot, params) {
+    const { direction = 'random', distance = 32, purpose = 'general' } = params;
+    
+    console.log(`[探索スキル] ${purpose}目的で${direction}方向に${distance}ブロック探索開始`);
+    
+    try {
+      // Generate exploration target
+      const target = this.generateExplorationTarget(bot, direction, distance);
+      console.log(`[探索スキル] (${target.x}, ${target.y}, ${target.z})を探索中...`);
+      
+      // Attempt to move to target
+      const moveResult = await this.moveToTarget(bot, target);
+      
+      if (moveResult.success) {
+        // Exploration successful, scan surroundings
+        const discoveries = await this.scanSurroundings(bot, purpose);
+        
+        if (discoveries.length > 0) {
+          const discoveryMsg = discoveries.map(d => d.name).join(', ');
+          bot.chat(`探索で発見: ${discoveryMsg} 🔍`);
+          console.log(`[探索スキル] 発見: ${discoveryMsg}`);
+        }
+        
+        return { success: true, discoveries, location: bot.entity.position };
+      } else {
+        console.log(`[探索スキル] 移動失敗、近場で探索続行`);
+        // Even if movement failed, still scan nearby
+        const discoveries = await this.scanSurroundings(bot, purpose);
+        return { success: true, discoveries, location: bot.entity.position, note: '移動制限あり' };
+      }
+      
+    } catch (error) {
+      console.log(`[探索スキル] エラー: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  generateExplorationTarget(bot, direction, distance) {
+    const pos = bot.entity.position;
+    
+    if (direction === 'random') {
+      // Generate random direction
+      const angle = Math.random() * Math.PI * 2;
+      return {
+        x: Math.floor(pos.x + Math.cos(angle) * distance),
+        y: pos.y,
+        z: Math.floor(pos.z + Math.sin(angle) * distance)
+      };
+    } else {
+      // Specific direction
+      const directions = {
+        north: { x: 0, z: -1 },
+        south: { x: 0, z: 1 },
+        east: { x: 1, z: 0 },
+        west: { x: -1, z: 0 },
+        northeast: { x: 1, z: -1 },
+        northwest: { x: -1, z: -1 },
+        southeast: { x: 1, z: 1 },
+        southwest: { x: -1, z: 1 }
+      };
+      
+      const dir = directions[direction] || directions.north;
+      return {
+        x: Math.floor(pos.x + dir.x * distance),
+        y: pos.y,
+        z: Math.floor(pos.z + dir.z * distance)
+      };
+    }
+  }
+  
+  async moveToTarget(bot, target) {
+    try {
+      // Use pathfinder if available
+      if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
+        const { goals } = require('mineflayer-pathfinder');
+        const goal = new goals.GoalNear(target.x, target.y, target.z, 8);
+        
+        console.log(`[探索スキル] パスファインディングで目標へ移動中...`);
+        
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            if (bot.pathfinder && bot.pathfinder.stop) {
+              bot.pathfinder.stop();
+            }
+            resolve({ success: false, error: 'Movement timeout' });
+          }, 15000); // 15 second timeout
+          
+          const onGoalReached = () => {
+            clearTimeout(timeout);
+            bot.pathfinder.removeListener('goal_reached', onGoalReached);
+            bot.pathfinder.removeListener('path_update', onPathUpdate);
+            resolve({ success: true });
+          };
+          
+          const onPathUpdate = (r) => {
+            if (r.status === 'noPath') {
+              clearTimeout(timeout);
+              bot.pathfinder.stop();
+              bot.pathfinder.removeListener('goal_reached', onGoalReached);
+              bot.pathfinder.removeListener('path_update', onPathUpdate);
+              resolve({ success: false, error: 'No path found' });
+            }
+          };
+          
+          if (typeof bot.pathfinder.on === 'function') {
+            bot.pathfinder.on('goal_reached', onGoalReached);
+            bot.pathfinder.on('path_update', onPathUpdate);
+          }
+          bot.pathfinder.setGoal(goal);
+        });
+      } else {
+        // Fallback to basic movement
+        return await this.basicExploreMovement(bot, target);
+      }
+    } catch (error) {
+      console.log(`[探索スキル] 移動エラー: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  async basicExploreMovement(bot, target) {
+    const currentPos = bot.entity.position;
+    const distance = Math.sqrt(
+      Math.pow(target.x - currentPos.x, 2) + 
+      Math.pow(target.z - currentPos.z, 2)
+    );
+    
+    console.log(`[探索スキル] 基本移動で探索: 距離${distance.toFixed(1)}`);
+    
+    if (distance > 50) {
+      return { success: false, error: 'Target too far for basic movement' };
+    }
+    
+    // Simple step-by-step movement
+    const steps = Math.min(Math.ceil(distance / 4), 8);
+    const stepX = (target.x - currentPos.x) / steps;
+    const stepZ = (target.z - currentPos.z) / steps;
+    
+    for (let i = 0; i < steps; i++) {
+      try {
+        const stepTargetX = currentPos.x + stepX * (i + 1);
+        const stepTargetZ = currentPos.z + stepZ * (i + 1);
+        
+        // Look towards target
+        try {
+          await bot.lookAt({ x: stepTargetX, y: currentPos.y, z: stepTargetZ });
+        } catch (lookError) {
+          // Continue without lookAt if it fails
+        }
+        
+        // Move forward
+        bot.setControlState('forward', true);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        bot.setControlState('forward', false);
+        
+        // Small pause between steps
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (stepError) {
+        console.log(`[探索スキル] ステップ${i+1}エラー: ${stepError.message}`);
+        continue;
+      }
+    }
+    
+    return { success: true };
+  }
+  
+  async scanSurroundings(bot, purpose) {
+    const discoveries = [];
+    
+    try {
+      // Scan for different types of resources based on purpose
+      if (purpose === 'wood' || purpose === 'general') {
+        // Look for trees
+        const trees = bot.findBlocks({
+          matching: (block) => {
+            if (!block || !block.name) return false;
+            const name = block.name.toLowerCase();
+            return name.includes('log') || name.includes('wood') || name.includes('leaves');
+          },
+          maxDistance: 32,
+          count: 5
+        });
+        
+        if (trees.length > 0) {
+          discoveries.push({ name: '木材', count: trees.length, type: 'resource' });
+        }
+      }
+      
+      if (purpose === 'stone' || purpose === 'general') {
+        // Look for stone
+        const stones = bot.findBlocks({
+          matching: (block) => {
+            if (!block || !block.name) return false;
+            const name = block.name.toLowerCase();
+            return name.includes('stone') || name.includes('cobblestone') || name.includes('granite') || name.includes('diorite') || name.includes('andesite');
+          },
+          maxDistance: 24,
+          count: 3
+        });
+        
+        if (stones.length > 0) {
+          discoveries.push({ name: '石材', count: stones.length, type: 'resource' });
+        }
+      }
+      
+      if (purpose === 'food' || purpose === 'general') {
+        // Look for animals
+        const animals = bot.nearestEntities((entity) => {
+          return entity && entity.name && 
+                 ['cow', 'pig', 'sheep', 'chicken'].includes(entity.name) &&
+                 entity.position.distanceTo(bot.entity.position) <= 24;
+        }).slice(0, 3);
+        
+        if (animals.length > 0) {
+          discoveries.push({ name: '動物', count: animals.length, type: 'food' });
+        }
+      }
+      
+      // Look for interesting structures
+      const structures = bot.findBlocks({
+        matching: (block) => {
+          if (!block || !block.name) return false;
+          const name = block.name.toLowerCase();
+          return name.includes('chest') || name.includes('furnace') || 
+                 name.includes('crafting_table') || name.includes('door');
+        },
+        maxDistance: 32,
+        count: 3
+      });
+      
+      if (structures.length > 0) {
+        discoveries.push({ name: '建造物', count: structures.length, type: 'structure' });
+      }
+      
+    } catch (scanError) {
+      console.log(`[探索スキル] スキャンエラー: ${scanError.message}`);
+    }
+    
+    return discoveries;
+  }
+}
+
+module.exports = { 
+  Skill,
+  SkillLibrary,
+  // Movement Skills
+  MoveToSkill,
+  FollowSkill,
+  // Basic Action Skills
+  MineBlockSkill,
+  PlaceBlockSkill,
+  AttackEntitySkill,
+  // Survival Skills
+  SimpleGatherWoodSkill,
+  SimpleFindFoodSkill,
+  // Crafting Skills
+  CraftToolsSkill,
+  CraftWorkbenchSkill,
+  CraftFurnaceSkill,
+  // Building Skills
+  BuildShelterSkill,
+  PlaceBlocksSkill,
+  // Advanced Movement Skills
+  SmartJumpSkill,
+  EscapeWaterSkill,
+  NavigateTerrainSkill,
+  // Exploration Skills
+  ExploreSkill
+};
