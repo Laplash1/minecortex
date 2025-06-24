@@ -89,10 +89,10 @@ class MinecraftAI {
     // マルチプレイヤー環境での同期開始チェック
     if (this.coordinator && this.coordinator.syncStartEnabled) {
       this.log('同期開始モードが有効です。他のプレイヤーを待機中...');
-      
+
       // 準備完了を報告
       const result = this.coordinator.reportPlayerReady(this.playerId);
-      
+
       if (!result.canStart) {
         this.log(`${result.reason}`, 'warn');
         // 全員準備完了まで待機
@@ -291,7 +291,8 @@ class MinecraftAI {
         this.log(`メインループでエラー: ${error.message}`);
 
         // Optimized exponential backoff with reduced maximum delay
-        const errorSleep = Math.min(10000, 500 * Math.pow(1.3, this.consecutiveErrors || 0)); // Reduced max from 30s to 10s, base from 1000ms to 500ms
+        // Reduced max from 30s to 10s, base from 1000ms to 500ms
+        const errorSleep = Math.min(10000, 500 * Math.pow(1.3, this.consecutiveErrors || 0));
         await this.sleep(errorSleep);
 
         this.consecutiveErrors = (this.consecutiveErrors || 0) + 1;
@@ -423,7 +424,10 @@ class MinecraftAI {
     if (!this.performanceMetrics || !this.debugMode) return;
 
     const metrics = this.performanceMetrics;
-    this.log(`パフォーマンス: 平均ループ時間 ${Math.round(metrics.averageLoopTime)}ms, 最大 ${metrics.maxLoopTime}ms, 総ループ ${metrics.totalLoops}`);
+    const avgTime = Math.round(metrics.averageLoopTime);
+    const maxTime = metrics.maxLoopTime;
+    const totalLoops = metrics.totalLoops;
+    this.log(`パフォーマンス: 平均ループ時間 ${avgTime}ms, 最大 ${maxTime}ms, 総ループ ${totalLoops}`);
 
     // Report state manager stats if available
     if (this.stateManager) {
@@ -1489,14 +1493,14 @@ class MinecraftAI {
       this.log('自動ツール作成チェック開始');
 
       const inventorySummary = InventoryUtils.getInventorySummary(this.bot);
-      const { 
-        wood: woodCount, 
-        availablePlanks, 
-        hasPickaxe, 
-        hasAxe, 
+      const {
+        wood: woodCount,
+        availablePlanks,
+        hasPickaxe,
+        hasAxe,
         hasCraftingTable,
         canCraftWorkbench,
-        canCraftBasicTools 
+        canCraftBasicTools
       } = inventorySummary;
 
       this.log(`素材状況: 木材${woodCount}個, 利用可能板材${availablePlanks}個, 作業台${hasCraftingTable ? '有' : '無'}`);
@@ -1644,7 +1648,7 @@ class MinecraftAI {
   isResourceGatheringTask(taskName) {
     const resourceTasks = [
       'gather_wood',
-      'mine_block', 
+      'mine_block',
       'collect_item',
       'find_food',
       'harvest',
@@ -1653,7 +1657,7 @@ class MinecraftAI {
       'mine_coal',
       'mine_iron'
     ];
-    
+
     return resourceTasks.includes(taskName);
   }
 
@@ -1778,7 +1782,7 @@ class MinecraftAI {
 
     while (Date.now() - startTime < maxWaitTime) {
       const canStart = this.coordinator.canStartTasks(this.playerId);
-      
+
       if (canStart.canStart) {
         this.log(`✅ ${canStart.reason} - タスクを開始します！`);
         return;

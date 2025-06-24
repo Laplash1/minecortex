@@ -79,21 +79,61 @@ class InventoryUtils {
   }
 
   /**
-   * Check if bot has a specific item (exact name match)
+   * Check if bot has a specific item (exact name match or flexible matching)
    * @param {Bot} bot - Mineflayer bot instance
-   * @param {string} itemName - Exact item name
+   * @param {string} itemName - Item name (exact or partial match)
    * @param {number} minCount - Minimum count required (default: 1)
+   * @param {boolean} flexible - Enable flexible matching (default: false)
    * @returns {boolean} True if item is found with sufficient count
    */
-  static hasItem(bot, itemName, minCount = 1) {
+  static hasItem(bot, itemName, minCount = 1, flexible = false) {
     if (!bot || !bot.inventory) return false;
     try {
       // Use bot.inventory.items() for safer access
       const items = bot.inventory.items();
-      const item = items.find(item =>
-        item && item.name && typeof item.name === 'string' && item.name === itemName
-      );
-      return item && item.count >= minCount;
+
+      let matchingItem = null;
+
+      if (flexible) {
+        // Flexible matching for common variations
+        matchingItem = items.find(item => {
+          if (!item || !item.name || typeof item.name !== 'string') return false;
+
+          const itemNameLower = item.name.toLowerCase();
+          const targetNameLower = itemName.toLowerCase();
+
+          // Exact match first
+          if (itemNameLower === targetNameLower) return true;
+
+          // Special cases for crafting table
+          if (targetNameLower === 'crafting_table') {
+            return itemNameLower === 'crafting_table' ||
+                   itemNameLower === 'workbench' ||
+                   itemNameLower.includes('crafting');
+          }
+
+          // Special cases for planks
+          if (targetNameLower.includes('planks')) {
+            return itemNameLower.includes('planks');
+          }
+
+          // Special cases for logs
+          if (targetNameLower.includes('log')) {
+            return itemNameLower.includes('log');
+          }
+
+          // General partial matching
+          return itemNameLower.includes(targetNameLower) ||
+                 targetNameLower.includes(itemNameLower);
+        });
+      } else {
+        // Exact match only
+        matchingItem = items.find(item =>
+          item && item.name && typeof item.name === 'string' && item.name === itemName
+        );
+      }
+
+      return matchingItem && matchingItem.count >= minCount;
     } catch (error) {
       console.error(`[InventoryUtils] hasItem error for itemName "${itemName}":`, error.message);
       return false;
@@ -146,7 +186,15 @@ class InventoryUtils {
     const stone = this.getStoneCount(bot);
     const planks = this.getPlanksCount(bot);
     const availablePlanks = this.getAvailablePlanks(bot);
-    const hasCraftingTable = this.hasItem(bot, 'crafting_table');
+    const hasCraftingTable = this.hasItem(bot, 'crafting_table', 1, true); // Enable flexible matching
+
+    // Get detailed inventory information for debugging
+    const allItems = bot.inventory.items();
+    const inventoryDetails = allItems.map(item => ({
+      name: item.name,
+      count: item.count,
+      type: item.type
+    }));
 
     return {
       wood,
@@ -160,7 +208,9 @@ class InventoryUtils {
       // 作業台作成可能判定: 板材4個が利用可能で作業台未所持
       canCraftWorkbench: availablePlanks >= 4 && !hasCraftingTable,
       // 基本ツール作成可能判定: 板材8個が利用可能（作業台4個+ツール4個）
-      canCraftBasicTools: availablePlanks >= 8
+      canCraftBasicTools: availablePlanks >= 8,
+      totalItems: allItems.length,
+      inventoryDetails
     };
   }
 
@@ -513,6 +563,61 @@ class InventoryUtils {
       };
     } catch (error) {
       return { canUpgrade: false, error: error.message };
+    }
+  }
+
+  /**
+   * Print detailed inventory information for debugging
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {string} context - Context description for logging
+   */
+  static logInventoryDetails(bot, context = '') {
+    if (!bot || !bot.inventory) {
+      console.log(`[InventoryUtils${context ? ' - ' + context : ''}] Bot or inventory not available`);
+      return;
+    }
+
+    const summary = this.getInventorySummary(bot);
+    console.log(`[InventoryUtils${context ? ' - ' + context : ''}] インベントリ詳細:`);
+    console.log(`  総アイテム数: ${summary.totalItems}`);
+    console.log(`  木材: ${summary.wood}個, 石材: ${summary.stone}個`);
+    console.log(`  板材: ${summary.planks}個, 利用可能板材: ${summary.availablePlanks}個`);
+    console.log(`  作業台所持: ${summary.hasCraftingTable ? 'あり' : 'なし'}`);
+    const pickaxeStatus = summary.hasPickaxe ? 'あり' : 'なし';
+    const axeStatus = summary.hasAxe ? 'あり' : 'なし';
+    const swordStatus = summary.hasSword ? 'あり' : 'なし';
+    console.log(`  ツール: つるはし${pickaxeStatus}, 斧${axeStatus}, 剣${swordStatus}`);
+
+    if (summary.inventoryDetails.length > 0) {
+      console.log('  詳細アイテムリスト:');
+      summary.inventoryDetails.forEach(item => {
+        console.log(`    - ${item.name}: ${item.count}個 (ID: ${item.type})`);
+      });
+    } else {
+      console.log('  インベントリは空です');
+    }
+  }
+
+  /**
+   * Find all items matching a pattern (flexible search)
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {string} pattern - Search pattern
+   * @returns {Array} Array of matching items
+   */
+  static findItemsByPattern(bot, pattern) {
+    if (!bot || !bot.inventory) return [];
+
+    try {
+      const items = bot.inventory.items();
+      const patternLower = pattern.toLowerCase();
+
+      return items.filter(item => {
+        if (!item || !item.name || typeof item.name !== 'string') return false;
+        return item.name.toLowerCase().includes(patternLower);
+      });
+    } catch (error) {
+      console.error(`[InventoryUtils] findItemsByPattern error for pattern "${pattern}":`, error.message);
+      return [];
     }
   }
 }

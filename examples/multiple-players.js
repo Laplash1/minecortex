@@ -77,12 +77,12 @@ class MultiplePlayersManager {
         const { MultiPlayerCoordinator } = require('../src/MultiPlayerCoordinator');
         coordinator = new MultiPlayerCoordinator();
         this.coordinator = coordinator;
-        
+
         // マルチプレイヤー環境なので同期開始を設定
-        const expectedPlayersCount = useConfigFile ? 
-          this.getExpectedPlayersCount(configFile) : 
-          (parseInt(process.env.MULTIPLE_PLAYERS_COUNT) || 3);
-        
+        const expectedPlayersCount = useConfigFile
+          ? this.getExpectedPlayersCount(configFile)
+          : (parseInt(process.env.MULTIPLE_PLAYERS_COUNT) || 3);
+
         coordinator.configureSyncStart(expectedPlayersCount, true);
       }
 

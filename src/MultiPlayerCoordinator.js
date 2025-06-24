@@ -8,7 +8,7 @@ class MultiPlayerCoordinator {
 
     this.maxResourceDistance = 32; // Distance for resource conflict detection
     this.claimTimeout = 300000; // 5 minutes claim timeout
-    
+
     // 同期開始機能
     this.expectedPlayersCount = 0; // 期待するプレイヤー数
     this.readyPlayers = new Set(); // 準備完了プレイヤー
@@ -112,7 +112,8 @@ class MultiPlayerCoordinator {
       player.resourceClaims.add(resourceKey);
     }
 
-    console.log(`[Coordinator] Resource access granted to ${playerId} for ${resourceType} at ${JSON.stringify(resourceLocation)}`);
+    const locationStr = JSON.stringify(resourceLocation);
+    console.log(`[Coordinator] Resource access granted to ${playerId} for ${resourceType} at ${locationStr}`);
     return { granted: true, waitTime: 0 };
   }
 
@@ -390,7 +391,7 @@ class MultiPlayerCoordinator {
     this.syncStartEnabled = enabled;
     this.readyPlayers.clear();
     this.isAllPlayersReady = false;
-    
+
     console.log(`[Coordinator] 同期開始設定: 期待プレイヤー数=${expectedPlayersCount}, 有効=${enabled}`);
   }
 
@@ -402,29 +403,29 @@ class MultiPlayerCoordinator {
 
     this.readyPlayers.add(playerId);
     const readyCount = this.readyPlayers.size;
-    
+
     console.log(`[Coordinator] ${playerId} 準備完了 (${readyCount}/${this.expectedPlayersCount})`);
 
     // 全員準備完了チェック
     if (readyCount >= this.expectedPlayersCount && !this.isAllPlayersReady) {
       this.isAllPlayersReady = true;
       console.log(`[Coordinator] 🎉 全${this.expectedPlayersCount}人の準備完了！タスク開始を許可`);
-      
+
       // 全プレイヤーに開始通知
       this.notifyAllPlayers('全員の準備が完了しました！AIタスクを開始します');
-      
+
       return { canStart: true, reason: '全員準備完了' };
     }
 
-    return { 
-      canStart: false, 
+    return {
+      canStart: false,
       reason: `他のプレイヤーを待機中 (${readyCount}/${this.expectedPlayersCount})`,
       waitingFor: this.expectedPlayersCount - readyCount
     };
   }
 
   // 全員準備完了かチェック
-  canStartTasks(playerId) {
+  canStartTasks(_playerId) {
     if (!this.syncStartEnabled) {
       return { canStart: true, reason: '同期開始が無効' };
     }
@@ -434,8 +435,8 @@ class MultiPlayerCoordinator {
     }
 
     const readyCount = this.readyPlayers.size;
-    return { 
-      canStart: false, 
+    return {
+      canStart: false,
       reason: `他のプレイヤーを待機中 (${readyCount}/${this.expectedPlayersCount})`,
       waitingFor: this.expectedPlayersCount - readyCount
     };
