@@ -868,8 +868,8 @@ class MinecraftAI {
         this.log('processTaskResult: currentTask lost before failure handling', 'warn');
         return;
       }
-      this.log(`タスクが失敗: ${taskName} - ${result?.error || '不明なエラー'}`);
-      this.handleTaskFailure(taskName, result?.error);
+      this.log(`タスクが失敗: ${taskName} - ${result?.error || result?.reason || '不明なエラー'}`);
+      this.handleTaskFailure(taskName, result);
 
       // Update state manager with failed task
       if (this.stateManager) {
@@ -949,30 +949,54 @@ class MinecraftAI {
     this.bot.chat(message);
   }
 
-  handleTaskFailure(taskName, error) {
-    this.log(`タスク ${taskName} が失敗: ${error}`);
+  handleTaskFailure(taskName, result) { // result is now the detailed failure object
+    const reason = result?.reason || 'UNKNOWN';
+    const details = result?.details || {};
+    this.log(`タスク ${taskName} が失敗: ${reason}`);
 
-    // Add recovery logic based on task type
-    const recoveryStrategies = {
-      gather_wood: () => {
-        this.log('木材収集が失敗しました。探索を試します');
-        this.goals.unshift({ type: 'explore', priority: 0, description: '木を探すための探索' });
-      },
-      find_stone: () => {
-        this.log('石探しが失敗しました。ツール要件を確認中');
-        if (!this.hasPickaxe()) {
-          this.goals.unshift({ type: 'craft_basic_tools', priority: 0, description: '採掘用ツールが必要' });
-        }
-      },
-      craft_basic_tools: () => {
-        this.log('ツール作成が失敗しました。木材がもっと必要です');
-        this.goals.unshift({ type: 'gather_wood', priority: 0, amount: 10, description: 'ツール用の木材が必要' });
-      }
-    };
+    const recoveryTask = this.generateRecoveryTask(reason, details);
+    if (recoveryTask) {
+      this.log(`回復タスクを生成: ${recoveryTask.type} - ${recoveryTask.description}`);
+      this.goals.unshift(recoveryTask);
+    }
+  }
 
-    const recovery = recoveryStrategies[taskName];
-    if (recovery) {
-      recovery();
+  generateRecoveryTask(reason, details) {
+    switch (reason) {
+      case 'NO_TOOL':
+        return {
+          type: 'craft_tools',
+          priority: 0,
+          description: `緊急: ${details.required}を作成`,
+          params: { tools: [details.required] }
+        };
+      case 'INSUFFICIENT_MATERIALS':
+        const material = details.missing[0];
+        return {
+          type: material.item.includes('log') || material.item.includes('planks') ? 'gather_wood' : 'mine_block',
+          priority: 0,
+          description: `緊急: ${material.item}を${material.needed}個集める`,
+          params: {
+            amount: material.needed,
+            blockType: material.item.includes('log') ? 'oak_log' : 'stone' // Simple mapping
+          }
+        };
+      case 'TARGET_NOT_FOUND':
+        return {
+          type: 'explore',
+          priority: 1,
+          description: `探索: ${details.type}を探す`,
+          params: { radius: 100 }
+        };
+      case 'CRAFTING_TABLE_MISSING':
+        return {
+          type: 'craft_workbench',
+          priority: 0,
+          description: '緊急: 作業台を作成'
+        };
+      default:
+        this.log(`不明な失敗理由(${reason})のため、回復タスクを生成できません`);
+        return null;
     }
   }
 

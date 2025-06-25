@@ -834,7 +834,7 @@ class MineBlockSkill extends Skill {
         block = bot.blockAt(position);
         if (!block || block.name !== blockType) {
           console.log(`[マイニング] 指定位置に${blockType}がありません: ${block ? block.name : 'null'}`);
-          break; // Exit loop and return results so far
+          return { success: false, reason: 'TARGET_NOT_FOUND', details: { type: blockType, position } };
         }
       } else {
         // Stage 1: Find block nearby with progressive search
@@ -842,21 +842,16 @@ class MineBlockSkill extends Skill {
       }
 
       if (!block) {
-        console.log(`[マイニング] ${blockType}が見つかりません。地下探索を試みます...`);
-
+        console.log(`[マイニング] ${blockType}が見つかりません。`);
         // Stage 2: Try mining downward to find stone/ore
         if (blockType === 'stone' || blockType === 'cobblestone' || blockType.includes('ore')) {
           const result = await this.digDownForStone(bot, blockType);
           if (result.success) {
             successfulMines++;
-            totalItemsCollected++;
             continue; // Continue to next iteration
           }
         }
-
-        // If no block found and no successful underground mining, break out of loop
-        console.log(`[マイニング] これ以上${blockType}が見つかりません。現在までの結果を返します`);
-        break;
+        return { success: false, reason: 'TARGET_NOT_FOUND', details: { type: blockType } };
       }
 
       // Check if block is reachable and within mining distance
@@ -882,8 +877,23 @@ class MineBlockSkill extends Skill {
       // Additional strict line of sight check before mining
       const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
       if (!finalLineOfSight.clear) {
-        console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}。次のブロックを探します`);
-        continue; // Skip this block and find another
+        console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}`);
+
+        // Try to handle out-of-sight block: approach and clear obstacles
+        const handleResult = await this.handleOutOfSightBlock(bot, block, finalLineOfSight);
+        if (!handleResult.success) {
+          console.log(`[マイニング] 視界外ブロック処理失敗: ${handleResult.error}。次のブロックを探します`);
+          continue; // Skip this block and find another
+        }
+
+        console.log('[マイニング] 視界外ブロック処理成功、採掘を継続します');
+
+        // Re-verify line of sight after handling
+        const verifyLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
+        if (!verifyLineOfSight.clear) {
+          console.log('[マイニング] 処理後も視界が確保されません。次のブロックを探します');
+          continue;
+        }
       }
 
       // Check inventory space before mining
@@ -909,7 +919,7 @@ class MineBlockSkill extends Skill {
         const toolCheck = await this.equipAppropriateToolForBlock(bot, block);
         if (!toolCheck.success) {
           console.log(`[マイニング] ツール装備失敗: ${toolCheck.error}`);
-          continue; // Try to continue without tool or find alternative
+          return { success: false, reason: toolCheck.reason || 'NO_TOOL', details: toolCheck.details };
         }
 
         const toolInfo = toolCheck.toolUsed ? ` - ツール: ${toolCheck.toolUsed}` : '';
@@ -1293,6 +1303,8 @@ class MineBlockSkill extends Skill {
       const direction = to.clone().subtract(from).normalize();
       const distance = from.distanceTo(to);
       const steps = Math.ceil(distance * 2); // Check every 0.5 blocks
+      let firstObstacle = null;
+      const obstacleBlocks = [];
 
       for (let i = 1; i < steps; i++) {
         const checkPos = from.clone().add(direction.clone().scale(i * 0.5));
@@ -1300,11 +1312,25 @@ class MineBlockSkill extends Skill {
 
         if (block && block.name !== 'air' && block.name !== 'water' &&
             !block.name.includes('grass') && !block.name.includes('flower')) {
-          return {
-            clear: false,
-            obstacle: block.name
-          };
+          if (!firstObstacle) {
+            firstObstacle = block;
+          }
+          // Collect obstacle blocks for potential removal
+          if (block.name !== 'bedrock' && !block.name.includes('_ore') &&
+              block.name !== 'obsidian') {
+            obstacleBlocks.push(block);
+          }
         }
+      }
+
+      if (firstObstacle) {
+        return {
+          clear: false,
+          obstacle: firstObstacle.name,
+          obstaclePosition: firstObstacle.position,
+          obstacleBlocks,
+          targetDistance: distance
+        };
       }
 
       return { clear: true };
@@ -1313,6 +1339,123 @@ class MineBlockSkill extends Skill {
         clear: false,
         obstacle: `チェックエラー: ${error.message}`
       };
+    }
+  }
+
+  // Handle out-of-sight blocks: approach and clear obstacles
+  async handleOutOfSightBlock(bot, targetBlock, _lineOfSightResult) {
+    try {
+      console.log(`[視界外対応] ${targetBlock.name}が視界外です。接近と障害物除去を試みます`);
+
+      // Step 1: Move closer to target (within 2 blocks)
+      const approachResult = await this.approachTarget(bot, targetBlock.position);
+      if (!approachResult.success) {
+        console.log(`[視界外対応] 接近に失敗: ${approachResult.error}`);
+        return { success: false, error: '接近失敗' };
+      }
+
+      // Step 2: Re-check line of sight after approaching
+      const newLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
+      if (newLineOfSight.clear) {
+        console.log('[視界外対応] 接近後に視界が確保されました');
+        return { success: true, approach: true };
+      }
+
+      // Step 3: Clear obstacles if still blocked
+      if (newLineOfSight.obstacleBlocks && newLineOfSight.obstacleBlocks.length > 0) {
+        console.log(`[視界外対応] ${newLineOfSight.obstacleBlocks.length}個の障害物を除去します`);
+
+        for (const obstacle of newLineOfSight.obstacleBlocks.slice(0, 3)) { // Limit to 3 blocks
+          const obstacleDistance = bot.entity.position.distanceTo(obstacle.position);
+
+          if (obstacleDistance <= 3.0) {
+            console.log(`[視界外対応] 障害物 ${obstacle.name} を除去中...`);
+
+            try {
+              // Equip appropriate tool for obstacle
+              await this.equipAppropriateToolForBlock(bot, obstacle.name);
+              await bot.dig(obstacle);
+
+              // Wait for obstacle removal
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log(`[視界外対応] 障害物 ${obstacle.name} を除去しました`);
+            } catch (digError) {
+              console.log(`[視界外対応] 障害物除去失敗: ${digError.message}`);
+              continue; // Try next obstacle
+            }
+          }
+        }
+
+        // Final check after obstacle removal
+        const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
+        if (finalLineOfSight.clear) {
+          console.log('[視界外対応] 障害物除去後に視界が確保されました');
+          return { success: true, obstaclesCleared: true };
+        }
+      }
+
+      return { success: false, error: '視界確保に失敗' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Approach target block within 2 blocks
+  async approachTarget(bot, targetPosition) {
+    try {
+      console.log(`[接近] 目標位置 ${targetPosition} に接近中...`);
+
+      // Use pathfinder if available
+      if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
+        const { goals } = require('mineflayer-pathfinder');
+        const goal = new goals.GoalNear(targetPosition.x, targetPosition.y, targetPosition.z, 2.0);
+
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log('[接近] 移動タイムアウト');
+            if (bot.pathfinder && typeof bot.pathfinder.stop === 'function') {
+              bot.pathfinder.stop();
+            }
+            resolve({ success: false, error: '移動タイムアウト' });
+          }, 8000);
+
+          const onGoalReached = () => {
+            clearTimeout(timeout);
+            console.log('[接近] 目標位置に到達しました');
+            cleanup();
+            resolve({ success: true });
+          };
+
+          const onPathUpdate = (result) => {
+            if (result.status === 'noPath') {
+              clearTimeout(timeout);
+              console.log('[接近] 経路が見つかりません');
+              cleanup();
+              resolve({ success: false, error: '経路なし' });
+            }
+          };
+
+          const cleanup = () => {
+            try {
+              if (bot.pathfinder && typeof bot.pathfinder.removeListener === 'function') {
+                bot.pathfinder.removeListener('goal_reached', onGoalReached);
+                bot.pathfinder.removeListener('path_update', onPathUpdate);
+              }
+            } catch (cleanupError) {
+              console.log(`[接近] イベントクリーンアップエラー: ${cleanupError.message}`);
+            }
+          };
+
+          bot.pathfinder.on('goal_reached', onGoalReached);
+          bot.pathfinder.on('path_update', onPathUpdate);
+          bot.pathfinder.setGoal(goal);
+        });
+      } else {
+        console.log('[接近] Pathfinder利用不可、基本移動を使用');
+        return { success: true };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   }
 
@@ -1660,6 +1803,8 @@ class MineBlockSkill extends Skill {
 
       return {
         success: false,
+        reason: 'NO_TOOL',
+        details: { required: requiredTools.join(', ') },
         error: `${blockName}に必要なツール (${requiredTools.join(', ')}) がありません`
       };
     }
@@ -1907,7 +2052,7 @@ class MineBlockSkill extends Skill {
     }
 
     // Step 2: Check if we have workbench in inventory
-    const workbenchItem = bot.inventory.items().find(item => 
+    const workbenchItem = bot.inventory.items().find(item =>
       item && item.name && (item.name === 'crafting_table' || item.name === 'workbench')
     );
 
@@ -1949,7 +2094,7 @@ class MineBlockSkill extends Skill {
       if (workbench) {
         const distance = bot.entity.position.distanceTo(workbench.position);
         console.log(`[作業台検索] ${radius}ブロック範囲で作業台を発見: ${workbench.name} (距離: ${distance.toFixed(2)})`);
-        
+
         // Move close to workbench if needed
         if (distance > 4.0) {
           console.log('[作業台検索] 作業台に接近中...');
@@ -2010,7 +2155,7 @@ class MineBlockSkill extends Skill {
     console.log('[作業台作成] 作業台のクラフトを開始...');
 
     const inventory = bot.inventory.items();
-    
+
     // Check for planks
     const planks = inventory.filter(item =>
       item && item.name && item.name.includes('_planks')
@@ -2027,15 +2172,15 @@ class MineBlockSkill extends Skill {
           if (recipes.length > 0) {
             await bot.craft(recipes[0], 1, null);
             console.log('[作業台作成] 作業台を作成しました');
-            
+
             // Place the crafted workbench
-            const craftedWorkbench = bot.inventory.items().find(item => 
+            const craftedWorkbench = bot.inventory.items().find(item =>
               item.name === 'crafting_table' || item.name === 'workbench'
             );
             if (craftedWorkbench) {
               await this.placeWorkbench(bot, craftedWorkbench);
             }
-            
+
             return { success: true };
           }
         }
@@ -2059,7 +2204,7 @@ class MineBlockSkill extends Skill {
   // Gather wood specifically for crafting purposes
   async gatherWoodForCrafting(bot) {
     console.log('[木材収集] クラフト用木材の収集を開始...');
-    
+
     try {
       // Use the wood gathering skill to get wood
       const woodSkill = new SimpleGatherWoodSkill();
@@ -2084,12 +2229,12 @@ class MineBlockSkill extends Skill {
     if (logs.length > 0) {
       const log = logs[0];
       console.log(`[板材作成] ${log.name}から板材を作成します`);
-      
+
       try {
         const mcData = require('minecraft-data')(bot.version);
         // Find appropriate plank type
         const plankTypes = ['oak_planks', 'birch_planks', 'spruce_planks', 'jungle_planks', 'acacia_planks', 'dark_oak_planks'];
-        
+
         for (const plankType of plankTypes) {
           const plankItem = mcData.itemsByName[plankType];
           if (plankItem) {
@@ -2161,7 +2306,7 @@ class MineBlockSkill extends Skill {
           }
         } catch (error) {
           console.log(`[ピッケル作成] ${tool}作成に失敗: ${error.message}`);
-          
+
           // If cobblestone crafting fails, try to get cobblestone
           if (material === 'cobblestone') {
             console.log('[ピッケル作成] 丸石不足、石の採掘を試みます...');
@@ -2169,7 +2314,7 @@ class MineBlockSkill extends Skill {
             if (stoneResult.success) {
               // Retry crafting after getting stone
               const updatedInventory = bot.inventory.items();
-              const cobblestone = updatedInventory.filter(item => 
+              const cobblestone = updatedInventory.filter(item =>
                 item && item.name === 'cobblestone'
               );
               if (cobblestone.length > 0) {
@@ -2194,11 +2339,11 @@ class MineBlockSkill extends Skill {
         if (stoneResult.success) {
           // Retry this material after gathering
           const updatedInventory = bot.inventory.items();
-          const cobblestone = updatedInventory.filter(item => 
+          const cobblestone = updatedInventory.filter(item =>
             item && item.name === 'cobblestone'
           );
           const totalCobblestone = cobblestone.reduce((sum, item) => sum + item.count, 0);
-          
+
           if (totalCobblestone >= needed) {
             try {
               const mcData = require('minecraft-data')(bot.version);
@@ -2225,7 +2370,7 @@ class MineBlockSkill extends Skill {
   // Gather stone specifically for crafting
   async gatherStoneForCrafting(bot) {
     console.log('[石材収集] クラフト用石材の収集を開始...');
-    
+
     try {
       // Use stone gathering with minimal tools requirement
       const result = await this.execute(bot, { blockType: 'stone', amount: 3 });
@@ -2303,16 +2448,31 @@ class SimpleGatherWoodSkill extends Skill {
       console.log(`[木材収集] 進捗: ${successfulGathers}/${targetAmount}個収集済み`);
 
       // Stage 1: Find wood blocks nearby (optimized progressive search)
-      let woodBlock = this.findWoodWithProgressiveSearch(bot);
+      const woodBlock = this.findWoodWithProgressiveSearch(bot);
 
       if (woodBlock) {
         console.log(`[木材収集] ${woodBlock.position}で${woodBlock.name}を発見しました`);
-        
+
         // Final line-of-sight check before mining
         const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, woodBlock.position);
         if (!finalLineOfSight.clear) {
-          console.log(`[木材収集] 視界外のため採集をスキップ: ${finalLineOfSight.obstacle}`);
-          continue; // Skip this block and find another
+          console.log(`[木材収集] 視界外のため採集処理を試みます: ${finalLineOfSight.obstacle}`);
+
+          // Try to handle out-of-sight block: approach and clear obstacles
+          const handleResult = await this.handleOutOfSightWoodBlock(bot, woodBlock, finalLineOfSight);
+          if (!handleResult.success) {
+            console.log(`[木材収集] 視界外ブロック処理失敗: ${handleResult.error}。次のブロックを探します`);
+            continue; // Skip this block and find another
+          }
+
+          console.log('[木材収集] 視界外ブロック処理成功、採集を継続します');
+
+          // Re-verify line of sight after handling
+          const verifyLineOfSight = this.checkLineOfSight(bot, bot.entity.position, woodBlock.position);
+          if (!verifyLineOfSight.clear) {
+            console.log('[木材収集] 処理後も視界が確保されません。次のブロックを探します');
+            continue;
+          }
         }
 
         // Check if we're within mining range
@@ -2327,20 +2487,20 @@ class SimpleGatherWoodSkill extends Skill {
 
         try {
           await bot.dig(woodBlock);
-          
+
           // Wait for item to be collected
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
+
           // Check if we actually got the wood
           const woodCountAfter = this.countWoodInInventory(bot);
           const woodObtained = woodCountAfter - woodCountBefore;
-          
+
           if (woodObtained > 0) {
             successfulGathers += woodObtained;
             bot.chat(`${woodBlock.name}を採取しました！ 🌳 (${successfulGathers}/${targetAmount})`);
             console.log(`[木材収集] 成功: ${woodObtained}個取得 (合計: ${successfulGathers}/${targetAmount})`);
           } else {
-            console.log(`[木材収集] 採集したが木材が取得できませんでした`);
+            console.log('[木材収集] 採集したが木材が取得できませんでした');
           }
         } catch (error) {
           console.log(`[木材収集] 採掘に失敗: ${error.message}`);
@@ -2646,6 +2806,124 @@ class SimpleGatherWoodSkill extends Skill {
     return woodItems.reduce((total, item) => total + item.count, 0);
   }
 
+  // Handle out-of-sight wood blocks: approach and clear obstacles
+  async handleOutOfSightWoodBlock(bot, targetBlock, _lineOfSightResult) {
+    try {
+      console.log(`[木材視界外対応] ${targetBlock.name}が視界外です。接近と障害物除去を試みます`);
+
+      // Step 1: Move closer to target (within 2 blocks)
+      const approachResult = await this.approachWoodTarget(bot, targetBlock.position);
+      if (!approachResult.success) {
+        console.log(`[木材視界外対応] 接近に失敗: ${approachResult.error}`);
+        return { success: false, error: '接近失敗' };
+      }
+
+      // Step 2: Re-check line of sight after approaching
+      const newLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
+      if (newLineOfSight.clear) {
+        console.log('[木材視界外対応] 接近後に視界が確保されました');
+        return { success: true, approach: true };
+      }
+
+      // Step 3: Clear obstacles if still blocked
+      if (newLineOfSight.obstacle) {
+        console.log(`[木材視界外対応] 障害物 ${newLineOfSight.obstacle} を除去します`);
+
+        // Try to find and remove the blocking block
+        const obstaclePos = targetBlock.position.clone().subtract(bot.entity.position).normalize().scale(1);
+        const obstacleBlock = bot.blockAt(bot.entity.position.clone().add(obstaclePos));
+
+        if (obstacleBlock && obstacleBlock.name !== 'air') {
+          const obstacleDistance = bot.entity.position.distanceTo(obstacleBlock.position);
+
+          if (obstacleDistance <= 3.0) {
+            console.log(`[木材視界外対応] 障害物 ${obstacleBlock.name} を除去中...`);
+
+            try {
+              await bot.dig(obstacleBlock);
+
+              // Wait for obstacle removal
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log(`[木材視界外対応] 障害物 ${obstacleBlock.name} を除去しました`);
+
+              // Final check after obstacle removal
+              const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
+              if (finalLineOfSight.clear) {
+                console.log('[木材視界外対応] 障害物除去後に視界が確保されました');
+                return { success: true, obstaclesCleared: true };
+              }
+            } catch (digError) {
+              console.log(`[木材視界外対応] 障害物除去失敗: ${digError.message}`);
+            }
+          }
+        }
+      }
+
+      return { success: false, error: '視界確保に失敗' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Approach wood target block within 2 blocks
+  async approachWoodTarget(bot, targetPosition) {
+    try {
+      console.log(`[木材接近] 目標位置 ${targetPosition} に接近中...`);
+
+      // Use pathfinder if available
+      if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
+        const { goals } = require('mineflayer-pathfinder');
+        const goal = new goals.GoalNear(targetPosition.x, targetPosition.y, targetPosition.z, 2.0);
+
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log('[木材接近] 移動タイムアウト');
+            if (bot.pathfinder && typeof bot.pathfinder.stop === 'function') {
+              bot.pathfinder.stop();
+            }
+            resolve({ success: false, error: '移動タイムアウト' });
+          }, 8000);
+
+          const onGoalReached = () => {
+            clearTimeout(timeout);
+            console.log('[木材接近] 目標位置に到達しました');
+            cleanup();
+            resolve({ success: true });
+          };
+
+          const onPathUpdate = (result) => {
+            if (result.status === 'noPath') {
+              clearTimeout(timeout);
+              console.log('[木材接近] 経路が見つかりません');
+              cleanup();
+              resolve({ success: false, error: '経路なし' });
+            }
+          };
+
+          const cleanup = () => {
+            try {
+              if (bot.pathfinder && typeof bot.pathfinder.removeListener === 'function') {
+                bot.pathfinder.removeListener('goal_reached', onGoalReached);
+                bot.pathfinder.removeListener('path_update', onPathUpdate);
+              }
+            } catch (cleanupError) {
+              console.log(`[木材接近] イベントクリーンアップエラー: ${cleanupError.message}`);
+            }
+          };
+
+          bot.pathfinder.on('goal_reached', onGoalReached);
+          bot.pathfinder.on('path_update', onPathUpdate);
+          bot.pathfinder.setGoal(goal);
+        });
+      } else {
+        console.log('[木材接近] Pathfinder利用不可、基本移動を使用');
+        return { success: true };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
   // Check if there's a clear line of sight to the block
   checkLineOfSight(bot, from, to) {
     try {
@@ -2718,226 +2996,78 @@ class SimpleFindFoodSkill extends Skill {
 // Crafting Skills
 class CraftToolsSkill extends Skill {
   constructor() {
-    super('craft_tools', 'Craft basic tools');
+    super('craft_tools', 'Craft a set of tools');
   }
 
   async execute(bot, params) {
-    const { tools = ['wooden_pickaxe', 'wooden_axe'] } = params;
-    console.log(`[クラフトスキル] ${tools.join(', ')}を作成します`);
+    const { tools } = params;
+    const mcData = require('minecraft-data')(bot.version);
+    let craftedCount = 0;
 
-    let crafted = 0;
-    const results = [];
-
-    for (const tool of tools) {
-      try {
-        const result = await this.craftSingleTool(bot, tool);
-        if (result.success) {
-          crafted++;
-          results.push(tool);
-          console.log(`[クラフトスキル] ${tool}の作成に成功`);
-        } else {
-          console.log(`[クラフトスキル] ${tool}の作成に失敗: ${result.error}`);
-        }
-      } catch (error) {
-        console.log(`[クラフトスキル] ${tool}作成中にエラー: ${error.message}`);
-      }
-    }
-
-    if (crafted > 0) {
-      bot.chat(`${results.join(', ')}を作成しました！ 🔨`);
-      return { success: true, crafted: results };
-    } else {
-      return { success: false, error: '何もクラフトできませんでした' };
-    }
-  }
-
-  async craftSingleTool(bot, toolName) {
-    try {
-      console.log(`[クラフトスキル] ${toolName}の作成開始`);
-
-      // Find the recipe first
-      const mcData = require('minecraft-data')(bot.version);
-      const itemByName = mcData.itemsByName[toolName];
-
-      if (!itemByName) {
-        console.log(`[クラフトスキル] 不明なアイテム: ${toolName}`);
-        return { success: false, error: `不明なアイテム: ${toolName}` };
-      }
-
-      // Check if we have a crafting table
-      const craftingTable = bot.findBlock({
-        matching: (block) => block.name === 'crafting_table',
-        maxDistance: 32
-      });
-
-      const recipes = bot.recipesFor(itemByName.id, null, 1, craftingTable);
-      console.log(`[クラフトスキル] ${toolName}のレシピ検索: ${recipes.length}個発見`);
-
-      if (recipes.length === 0) {
-        // Try without crafting table requirement
-        const recipesWithoutTable = bot.recipesFor(itemByName.id, null, 1, null);
-        console.log(`[クラフトスキル] 作業台なしレシピ: ${recipesWithoutTable.length}個`);
-
-        if (recipesWithoutTable.length === 0) {
-          return { success: false, error: `${toolName}のレシピが見つかりません` };
-        }
-
-        // Use recipe without table if available
-        const recipe = recipesWithoutTable[0];
-        const materialCheck = await this.checkRecipeMaterials(bot, recipe, toolName);
-        if (!materialCheck.canCraft) {
-          return { success: false, error: materialCheck.missingItems };
-        }
-
-        console.log(`[クラフトスキル] 作業台なしで${toolName}をクラフト中...`);
-        await bot.craft(recipe, 1, null);
-        return { success: true };
-      }
-
-      const recipe = recipes[0];
-
-      // Check if we have required materials
-      const materialCheck = await this.checkRecipeMaterials(bot, recipe, toolName);
-      if (!materialCheck.canCraft) {
-        return { success: false, error: materialCheck.missingItems };
-      }
-
-      // Move to crafting table if needed and available
-      if (craftingTable) {
-        const distance = bot.entity.position.distanceTo(craftingTable.position);
-        if (distance > 4) {
-          console.log(`[クラフトスキル] 作業台に移動中... (距離: ${distance.toFixed(1)})`);
-          try {
-            if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
-              const { goals } = require('mineflayer-pathfinder');
-              await bot.pathfinder.setGoal(new goals.GoalBlock(
-                craftingTable.position.x,
-                craftingTable.position.y,
-                craftingTable.position.z
-              ));
-            } else {
-              // Basic movement fallback
-              await this.basicMoveToTable(bot, craftingTable);
-            }
-          } catch (moveError) {
-            console.log(`[クラフトスキル] 作業台への移動に失敗: ${moveError.message}`);
-            return { success: false, error: `作業台への移動失敗: ${moveError.message}` };
-          }
-        }
-      } else if (recipe.requiresTable) {
-        return { success: false, error: `${toolName}の作成には作業台が必要ですが見つかりません` };
-      }
-
-      // Craft the item
-      console.log(`[クラフトスキル] ${toolName}をクラフト中...`);
-      await bot.craft(recipe, 1, craftingTable);
-      console.log(`[クラフトスキル] ${toolName}の作成完了`);
-      return { success: true };
-    } catch (error) {
-      console.log(`[クラフトスキル] ${toolName}作成エラー: ${error.message}`);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async checkRecipeMaterials(bot, recipe, toolName) {
-    try {
-      const inventory = bot.inventory.items();
-      const missingMaterials = [];
-      const requiredMaterials = [];
-
-      console.log(`[クラフトスキル] ${toolName}の材料チェック開始`);
-
-      // Check each ingredient in the recipe
-      if (recipe.ingredients) {
-        for (let i = 0; i < recipe.ingredients.length; i++) {
-          const ingredient = recipe.ingredients[i];
-          if (!ingredient) continue;
-
-          const itemName = this.getItemNameFromId(bot, ingredient.id);
-          const requiredCount = ingredient.count || 1;
-
-          requiredMaterials.push(`${itemName}×${requiredCount}`);
-
-          const availableCount = inventory.reduce((total, item) => {
-            if (item && item.type === ingredient.id) {
-              return total + item.count;
-            }
-            return total;
-          }, 0);
-
-          console.log(`[クラフトスキル] ${itemName}: 必要${requiredCount}個, 所持${availableCount}個`);
-
-          if (availableCount < requiredCount) {
-            missingMaterials.push(`${itemName}×${requiredCount - availableCount}`);
-          }
-        }
-      }
-
-      const canCraft = missingMaterials.length === 0;
-
-      if (canCraft) {
-        console.log(`[クラフトスキル] ${toolName}の材料は十分です: ${requiredMaterials.join(', ')}`);
-      } else {
-        console.log(`[クラフトスキル] ${toolName}の材料不足: ${missingMaterials.join(', ')}`);
-      }
-
-      return {
-        canCraft,
-        missingItems: canCraft ? '' : `材料不足: ${missingMaterials.join(', ')}`,
-        required: requiredMaterials
-      };
-    } catch (error) {
-      console.log(`[クラフトスキル] 材料チェックエラー: ${error.message}`);
-      return {
-        canCraft: false,
-        missingItems: `材料チェック失敗: ${error.message}`,
-        required: []
-      };
-    }
-  }
-
-  getItemNameFromId(bot, itemId) {
-    try {
-      const mcData = require('minecraft-data')(bot.version);
-      const item = mcData.items[itemId];
-      return item ? item.name : `unknown_item_${itemId}`;
-    } catch (error) {
-      return `item_${itemId}`;
-    }
-  }
-
-  async basicMoveToTable(bot, craftingTable) {
-    const targetPos = craftingTable.position;
-    const currentPos = bot.entity.position;
-
-    const distance = Math.sqrt(
-      Math.pow(targetPos.x - currentPos.x, 2) +
-      Math.pow(targetPos.z - currentPos.z, 2)
-    );
-
-    if (distance > 20) {
-      throw new Error('作業台が遠すぎます');
-    }
-
-    // Simple movement towards table
-    const steps = Math.ceil(distance / 2);
-    const stepX = (targetPos.x - currentPos.x) / steps;
-    const stepZ = (targetPos.z - currentPos.z) / steps;
-
-    for (let i = 0; i < steps; i++) {
-      try {
-        const targetX = currentPos.x + stepX * (i + 1);
-        const targetZ = currentPos.z + stepZ * (i + 1);
-
-        await bot.lookAt({ x: targetX, y: targetPos.y, z: targetZ });
-        bot.setControlState('forward', true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        bot.setControlState('forward', false);
-      } catch (stepError) {
-        console.log(`[クラフトスキル] 移動ステップエラー: ${stepError.message}`);
+    for (const toolName of tools) {
+      const item = mcData.itemsByName[toolName];
+      if (!item) {
+        console.log(`[クラフト] 不明なツール: ${toolName}`);
         continue;
       }
+
+      // Check if tool already exists
+      if (bot.inventory.findInventoryItem(item.id)) {
+        console.log(`[クラフト] ${toolName}は既に所持しています`);
+        craftedCount++;
+        continue;
+      }
+
+      // Find crafting table
+      const craftingTable = bot.findBlock({
+        matching: mcData.blocksByName.crafting_table.id,
+        maxDistance: 16
+      });
+
+      if (!craftingTable) {
+        return { success: false, reason: 'CRAFTING_TABLE_MISSING' };
+      }
+
+      const recipe = bot.recipesFor(item.id, null, 1, craftingTable)[0];
+      if (!recipe) {
+        console.log(`[クラフト] ${toolName}のレシピが見つかりません`);
+        const missing = this.getMissingMaterials(bot, item.id, mcData, craftingTable);
+        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing } };
+      }
+
+      try {
+        await bot.craft(recipe, 1, craftingTable);
+        console.log(`[クラフト] ${toolName}を作成しました`);
+        craftedCount++;
+      } catch (error) {
+        console.log(`[クラフト] ${toolName}の作成に失敗: ${error.message}`);
+        const missing = this.getMissingMaterials(bot, item.id, mcData, craftingTable);
+        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing, error: error.message } };
+      }
     }
+
+    if (craftedCount === tools.length) {
+      return { success: true, message: 'すべてのツールを作成しました' };
+    } else {
+      return { success: false, reason: 'UNKNOWN', error: '一部のツールの作成に失敗しました' };
+    }
+  }
+
+  getMissingMaterials(bot, itemId, mcData, craftingTable) {
+    const recipe = bot.recipesFor(itemId, null, 1, craftingTable)[0];
+    if (!recipe) return [];
+
+    const missing = [];
+    for (const ingredient of recipe.delta) {
+      if (ingredient.count < 0) {
+        const requiredAmount = -ingredient.count;
+        const currentAmount = bot.inventory.count(ingredient.id);
+        if (currentAmount < requiredAmount) {
+          missing.push({ item: mcData.items[ingredient.id].name, needed: requiredAmount, has: currentAmount });
+        }
+      }
+    }
+    return missing;
   }
 }
 
