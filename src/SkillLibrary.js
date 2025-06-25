@@ -380,6 +380,83 @@ class MoveToSkill extends Skill {
     }
   }
 
+  // Handle out-of-sight blocks: approach and clear obstacles
+  async handleOutOfSightBlock(bot, targetBlock, _lineOfSightResult) {
+    try {
+      console.log(`[視界外対応] ${targetBlock.name}が視界外です。接近と障害物除去を試みます`);
+
+      // Step 1: Move closer to target (within 2 blocks)
+      const approachResult = await this.approachTarget(bot, targetBlock.position);
+      if (!approachResult.success) {
+        console.log(`[視界外対応] 接近に失敗: ${approachResult.error}`);
+        return { success: false, error: '接近失敗' };
+      }
+
+      // Step 2: Re-check line of sight after approaching
+      const newLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
+      if (newLineOfSight.clear) {
+        console.log('[視界外対応] 接近後に視界が確保されました');
+        return { success: true, approach: true };
+      }
+
+      // Step 3: Clear obstacles if still blocked
+      if (newLineOfSight.obstacleBlocks && newLineOfSight.obstacleBlocks.length > 0) {
+        console.log(`[視界外対応] ${newLineOfSight.obstacleBlocks.length}個の障害物を除去します`);
+
+        for (const obstacle of newLineOfSight.obstacleBlocks.slice(0, 3)) { // Limit to 3 blocks
+          const obstacleDistance = bot.entity.position.distanceTo(obstacle.position);
+
+          if (obstacleDistance <= 3.0) {
+            console.log(`[視界外対応] 障害物 ${obstacle.name} を除去中...`);
+
+            try {
+              // Equip appropriate tool for obstacle
+              await this.equipAppropriateToolForBlock(bot, obstacle.name);
+              await bot.dig(obstacle);
+
+              // Wait for obstacle removal
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log(`[視界外対応] 障害物 ${obstacle.name} を除去しました`);
+            } catch (digError) {
+              console.log(`[視界外対応] 障害物除去失敗: ${digError.message}`);
+              continue; // Try next obstacle
+            }
+          }
+        }
+
+        // Final check after obstacle removal
+        const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
+        if (finalLineOfSight.clear) {
+          console.log('[視界外対応] 障害物除去後に視界が確保されました');
+          return { success: true, obstaclesCleared: true };
+        }
+      }
+
+      return { success: false, error: '視界確保に失敗' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Approach target block within 2 blocks
+  async approachTarget(bot, targetPosition) {
+    try {
+      console.log(`[接近] 目標位置 ${targetPosition} に接近中...`);
+
+      // Use pathfinder if available
+      if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
+        const goal = new goals.GoalNear(targetPosition.x, targetPosition.y, targetPosition.z, 2.0);
+        await bot.pathfinder.goto(goal);
+        return { success: true };
+      } else {
+        console.log('[接近] Pathfinder利用不可、基本移動を使用');
+        return { success: true };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
   // Enhanced water detection and escape system
   async checkAndEscapeWater(bot) {
     try {
@@ -881,7 +958,7 @@ class MineBlockSkill extends Skill {
         }
       }
 
-      // Additional strict line of sight check before mining
+        // Additional strict line of sight check before mining
       const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
       if (!finalLineOfSight.clear) {
         console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}`);

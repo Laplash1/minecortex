@@ -322,9 +322,9 @@ class MinecraftAI {
       multiplier = 0.3; // Reduced from 0.5 for faster danger response
     }
 
-    // Sleep more when idle, but not too much
-    if (!this.currentTask && this.goals.length === 0) {
-      multiplier = 1.5; // Reduced from 2.0 to stay responsive
+    // Sleep more when idle to prevent high CPU usage from rapid task planning loops
+    if (!this.currentTask) {
+      multiplier = 3.0; // Increased from 1.5 to provide a longer cooldown
     }
 
     // Sleep less when low on health/food
