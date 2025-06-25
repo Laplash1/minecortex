@@ -813,122 +813,182 @@ class MineBlockSkill extends Skill {
   }
 
   async execute(bot, params) {
-    const { blockType, position } = params;
-    let block;
+    const { blockType, position, amount = 1 } = params;
+    console.log(`[マイニング] ${blockType}を${amount}個採取開始`);
 
-    if (position) {
-      block = bot.blockAt(position);
-      if (!block || block.name !== blockType) {
-        console.log(`[マイニング] 指定位置に${blockType}がありません: ${block ? block.name : 'null'}`);
-        return { success: false, error: `指定位置に${blockType}がありません` };
-      }
-    } else {
-      // Stage 1: Find block nearby with progressive search
-      block = this.findBlockWithProgressiveSearch(bot, blockType);
-    }
+    let successfulMines = 0;
+    const targetAmount = amount;
 
-    if (!block) {
-      console.log(`[マイニング] ${blockType}が見つかりません。地下探索を試みます...`);
+    // Check initial inventory to track collected items
+    const initialItems = this.countItemsInInventory(bot, blockType);
+    console.log(`[マイニング] 開始時の${blockType}所持数: ${initialItems}個`);
 
-      // Stage 2: Try mining downward to find stone/ore
-      if (blockType === 'stone' || blockType === 'cobblestone' || blockType.includes('ore')) {
-        const result = await this.digDownForStone(bot, blockType);
-        if (result.success) {
-          return result;
+    // Mining loop until we have enough items
+    while (successfulMines < targetAmount) {
+      let block;
+
+      console.log(`[マイニング] 進捗: ${successfulMines}/${targetAmount}個採取済み`);
+
+      if (position && successfulMines === 0) {
+        // Only use position for first block
+        block = bot.blockAt(position);
+        if (!block || block.name !== blockType) {
+          console.log(`[マイニング] 指定位置に${blockType}がありません: ${block ? block.name : 'null'}`);
+          break; // Exit loop and return results so far
         }
+      } else {
+        // Stage 1: Find block nearby with progressive search
+        block = this.findBlockWithProgressiveSearch(bot, blockType);
       }
 
-      return { success: false, error: `ブロック ${blockType} が見つかりません` };
-    }
+      if (!block) {
+        console.log(`[マイニング] ${blockType}が見つかりません。地下探索を試みます...`);
 
-    // Check if block is reachable and within mining distance
-    const reachabilityCheck = await this.checkBlockReachability(bot, block);
-    if (!reachabilityCheck.canReach) {
-      console.log(`[マイニング] ${block.name}は採掘可能範囲外: ${reachabilityCheck.reason}`);
-
-      // Try to move closer to the block
-      const moveResult = await this.moveToMiningPosition(bot, block);
-      if (!moveResult.success) {
-        return { success: false, error: `採掘位置への移動失敗: ${moveResult.error}` };
-      }
-
-      // Re-check reachability after movement
-      const recheckResult = await this.checkBlockReachability(bot, block);
-      if (!recheckResult.canReach) {
-        return { success: false, error: `移動後も採掘不可: ${recheckResult.reason}` };
-      }
-    }
-
-    // Check inventory space before mining
-    const inventoryCheck = this.checkInventorySpace(bot);
-    if (!inventoryCheck.hasSpace) {
-      console.log('[マイニング] インベントリが満杯です。整理を試みます...');
-      const cleanupResult = await this.cleanupInventory(bot);
-      if (!cleanupResult.success) {
-        return { success: false, error: 'インベントリが満杯で採掘できません' };
-      }
-    }
-
-    try {
-      // Final distance check before mining - prevent mining from 3+ blocks away
-      const finalDistance = bot.entity.position.distanceTo(block.position);
-      if (finalDistance >= 3.0) {
-        console.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
-        return {
-          success: false,
-          error: `採掘距離が遠すぎます (${finalDistance.toFixed(2)}m >= 3.0m)`
-        };
-      }
-
-      // Check if block requires a tool and equip appropriate tool
-      const toolCheck = await this.equipAppropriateToolForBlock(bot, block);
-      if (!toolCheck.success) {
-        console.log(`[マイニング] ツール装備失敗: ${toolCheck.error}`);
-        return { success: false, error: `ツール不足: ${toolCheck.error}` };
-      }
-
-      const toolInfo = toolCheck.toolUsed ? ` - ツール: ${toolCheck.toolUsed}` : '';
-      console.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)${toolInfo}`);
-
-      // Store position for item collection
-      const miningPosition = block.position.clone();
-
-      // Check tool durability before mining if tool is used
-      if (toolCheck.toolUsed) {
-        const toolDurabilityCheck = this.checkToolDurability(bot);
-        if (!toolDurabilityCheck.usable) {
-          console.log(`[マイニング] ツール耐久度不足: ${toolDurabilityCheck.warning}`);
-          // Try to craft or find a replacement tool before critical failure
-          const replacementResult = await this.handleLowDurabilityTool(bot, toolCheck.toolUsed);
-          if (!replacementResult.success) {
-            return { success: false, error: `ツール耐久度不足: ${toolDurabilityCheck.warning}` };
+        // Stage 2: Try mining downward to find stone/ore
+        if (blockType === 'stone' || blockType === 'cobblestone' || blockType.includes('ore')) {
+          const result = await this.digDownForStone(bot, blockType);
+          if (result.success) {
+            successfulMines++;
+            totalItemsCollected++;
+            continue; // Continue to next iteration
           }
         }
+
+        // If no block found and no successful underground mining, break out of loop
+        console.log(`[マイニング] これ以上${blockType}が見つかりません。現在までの結果を返します`);
+        break;
       }
 
-      await bot.dig(block);
-      console.log(`[マイニング] ${block.name}を採掘完了`);
+      // Check if block is reachable and within mining distance
+      const reachabilityCheck = await this.checkBlockReachability(bot, block);
+      if (!reachabilityCheck.canReach) {
+        console.log(`[マイニング] ${block.name}は採掘可能範囲外: ${reachabilityCheck.reason}`);
 
-      // Wait for items to drop and settle
-      await new Promise(resolve => setTimeout(resolve, 500));
+        // Try to move closer to the block
+        const moveResult = await this.moveToMiningPosition(bot, block);
+        if (!moveResult.success) {
+          console.log(`[マイニング] 移動失敗、次のブロックを探します: ${moveResult.error}`);
+          continue; // Try next block instead of failing completely
+        }
 
-      // Collect dropped items
-      const collectionResult = await this.collectDroppedItems(bot, miningPosition);
-      if (collectionResult.itemsCollected > 0) {
-        console.log(`[マイニング] ${collectionResult.itemsCollected}個のアイテムを回収しました`);
-        bot.chat(`${block.name}を採掘して${collectionResult.itemsCollected}個のアイテムを回収！ ⛏️`);
-      } else {
-        bot.chat(`${block.name}を採掘しました！ ⛏️`);
+        // Re-check reachability after movement
+        const recheckResult = await this.checkBlockReachability(bot, block);
+        if (!recheckResult.canReach) {
+          console.log(`[マイニング] 移動後も採掘不可、次のブロックを探します: ${recheckResult.reason}`);
+          continue; // Try next block instead of failing completely
+        }
       }
 
+      // Additional strict line of sight check before mining
+      const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
+      if (!finalLineOfSight.clear) {
+        console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}。次のブロックを探します`);
+        continue; // Skip this block and find another
+      }
+
+      // Check inventory space before mining
+      const inventoryCheck = this.checkInventorySpace(bot);
+      if (!inventoryCheck.hasSpace) {
+        console.log('[マイニング] インベントリが満杯です。整理を試みます...');
+        const cleanupResult = await this.cleanupInventory(bot);
+        if (!cleanupResult.success) {
+          console.log('[マイニング] インベントリ整理失敗、次のブロックを探します');
+          continue; // Try to continue rather than fail completely
+        }
+      }
+
+      try {
+        // Final distance check before mining - prevent mining from 3+ blocks away
+        const finalDistance = bot.entity.position.distanceTo(block.position);
+        if (finalDistance >= 3.0) {
+          console.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+          continue; // Try next block instead of failing completely
+        }
+
+        // Check if block requires a tool and equip appropriate tool
+        const toolCheck = await this.equipAppropriateToolForBlock(bot, block);
+        if (!toolCheck.success) {
+          console.log(`[マイニング] ツール装備失敗: ${toolCheck.error}`);
+          continue; // Try to continue without tool or find alternative
+        }
+
+        const toolInfo = toolCheck.toolUsed ? ` - ツール: ${toolCheck.toolUsed}` : '';
+        console.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)${toolInfo}`);
+
+        // Store position for item collection
+        const miningPosition = block.position.clone();
+
+        // Check tool durability before mining if tool is used
+        if (toolCheck.toolUsed) {
+          const toolDurabilityCheck = this.checkToolDurability(bot);
+          if (!toolDurabilityCheck.usable) {
+            console.log(`[マイニング] ツール耐久度不足: ${toolDurabilityCheck.warning}`);
+            // Try to craft or find a replacement tool before critical failure
+            const replacementResult = await this.handleLowDurabilityTool(bot, toolCheck.toolUsed);
+            if (!replacementResult.success) {
+              console.log(`[マイニング] ツール交換失敗、次のブロックを探します: ${toolDurabilityCheck.warning}`);
+              continue; // Try to continue with next block
+            }
+          }
+        }
+
+        await bot.dig(block);
+        console.log(`[マイニング] ${block.name}を採掘完了`);
+
+        // Wait for items to drop and settle
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Collect dropped items
+        const collectionResult = await this.collectDroppedItems(bot, miningPosition);
+        if (collectionResult.itemsCollected > 0) {
+          console.log(`[マイニング] ${collectionResult.itemsCollected}個のアイテムを回収しました`);
+          bot.chat(`${block.name}を採掘して${collectionResult.itemsCollected}個のアイテムを回収！ ⛏️`);
+        } else {
+          bot.chat(`${block.name}を採掘しました！ ⛏️`);
+        }
+
+        successfulMines++;
+        console.log(`[マイニング] 採掘成功! 進捗: ${successfulMines}/${targetAmount}個`);
+
+        // Check if we have enough items in inventory (more accurate than just counting mines)
+        const currentItems = this.countItemsInInventory(bot, blockType);
+        const itemsGained = currentItems - initialItems;
+
+        if (itemsGained >= targetAmount) {
+          console.log(`[マイニング] 目標達成! ${blockType}を${itemsGained}個取得しました`);
+          break;
+        }
+
+        // Short wait before next mining attempt
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.log(`[マイニング] 採掘に失敗: ${error.message}`);
+        // Don't return here, continue to next iteration or exit loop
+        continue;
+      }
+    } // End of while loop
+
+    // Final result calculation
+    const finalItems = this.countItemsInInventory(bot, blockType);
+    const totalItemsGained = finalItems - initialItems;
+
+    if (totalItemsGained >= targetAmount) {
+      console.log(`[マイニング] タスク完了! ${blockType}を${totalItemsGained}個取得 (目標: ${targetAmount}個)`);
+      bot.chat(`${blockType}採取完了! ${totalItemsGained}個取得しました！ ⛏️`);
       return {
         success: true,
-        message: `${block.name}を採掘しました`,
-        itemsCollected: collectionResult.itemsCollected
+        message: `${blockType}を${totalItemsGained}個採取しました`,
+        itemsCollected: totalItemsGained,
+        targetReached: true
       };
-    } catch (error) {
-      console.log(`[マイニング] 採掘に失敗: ${error.message}`);
-      return { success: false, error: error.message };
+    } else {
+      console.log(`[マイニング] 部分的成功: ${blockType}を${totalItemsGained}個取得 (目標: ${targetAmount}個)`);
+      return {
+        success: totalItemsGained > 0,
+        message: `${blockType}を${totalItemsGained}個採取しました (目標未達成)`,
+        itemsCollected: totalItemsGained,
+        targetReached: false
+      };
     }
   }
 
@@ -1817,6 +1877,20 @@ class MineBlockSkill extends Skill {
     }
 
     return { success: false, error: '利用可能なツールがありません' };
+  }
+
+  // Count specific items in inventory
+  countItemsInInventory(bot, itemName) {
+    const items = bot.inventory.items().filter(item => {
+      if (!item || !item.name) return false;
+      // Handle block type variations (e.g., stone -> cobblestone when mined)
+      if (itemName === 'stone' && (item.name === 'stone' || item.name === 'cobblestone')) {
+        return true;
+      }
+      return item.name === itemName || item.name.includes(itemName);
+    });
+
+    return items.reduce((total, item) => total + item.count, 0);
   }
 }
 
