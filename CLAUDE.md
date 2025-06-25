@@ -10,19 +10,15 @@
 
 ### AIプレイヤーの開始
 ```bash
-npm start                     # デフォルト設定でシングルボットを開始
+npm start                     # デフォルト設定でマルチプレイヤーボットを開始
 npm run dev                   # デバッグモードを有効にして開始
-node index.js <username>      # カスタムユーザー名で開始
+npm run multi-players         # マルチプレイヤーボット実行（npm startと同等）
 ```
 
 ### マルチプレイヤー操作
 ```bash
-npm run multi-server          # 複数サーバーに接続
-npm run multi-players         # 1つのサーバーで複数ボットを実行
-npm run advanced-multi        # 設定ファイルを使用した高度なマルチプレイヤー
 npm run squad                 # 5体のAIプレイヤーをデプロイ
 npm run army                  # 10体のAIプレイヤーをデプロイ
-npm run config-squad          # players-config.jsonを使用してデプロイ
 ```
 
 ### テスト

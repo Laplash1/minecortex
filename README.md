@@ -117,10 +117,10 @@ mc-ai/
 
 ### 基本起動
 ```bash
-# シングルボット
+# マルチプレイヤーボット（デフォルト）
 npm start
 
-# 複数AIプレイヤー（3体）
+# マルチプレイヤーボット（明示的）
 npm run multi-players
 
 # 5体チーム
@@ -128,16 +128,6 @@ npm run squad
 
 # 10体軍団
 npm run army
-```
-
-### 🆕 マルチプレイヤー機能
-v1.1.0では複数のAIプレイヤーが協調して動作します：
-```bash
-# 設定ファイルベースの高度な管理
-npm run advanced-multi
-
-# 複数サーバー同時接続
-npm run multi-server
 ```
 
 ### チャットコマンド
