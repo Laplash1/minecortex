@@ -880,10 +880,31 @@ class MineBlockSkill extends Skill {
         };
       }
 
-      console.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)`);
+      // Check if block requires a tool and equip appropriate tool
+      const toolCheck = await this.equipAppropriateToolForBlock(bot, block);
+      if (!toolCheck.success) {
+        console.log(`[マイニング] ツール装備失敗: ${toolCheck.error}`);
+        return { success: false, error: `ツール不足: ${toolCheck.error}` };
+      }
+
+      const toolInfo = toolCheck.toolUsed ? ` - ツール: ${toolCheck.toolUsed}` : '';
+      console.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)${toolInfo}`);
 
       // Store position for item collection
       const miningPosition = block.position.clone();
+
+      // Check tool durability before mining if tool is used
+      if (toolCheck.toolUsed) {
+        const toolDurabilityCheck = this.checkToolDurability(bot);
+        if (!toolDurabilityCheck.usable) {
+          console.log(`[マイニング] ツール耐久度不足: ${toolDurabilityCheck.warning}`);
+          // Try to craft or find a replacement tool before critical failure
+          const replacementResult = await this.handleLowDurabilityTool(bot, toolCheck.toolUsed);
+          if (!replacementResult.success) {
+            return { success: false, error: `ツール耐久度不足: ${toolDurabilityCheck.warning}` };
+          }
+        }
+      }
 
       await bot.dig(block);
       console.log(`[マイニング] ${block.name}を採掘完了`);
@@ -1488,6 +1509,314 @@ class MineBlockSkill extends Skill {
         error: error.message
       };
     }
+  }
+
+  // Tool management for mining different block types
+  async equipAppropriateToolForBlock(bot, block) {
+    const blockName = block.name;
+
+    // Define which blocks require tools and what tools are needed
+    const toolRequirements = {
+      // Stone and cobblestone can be mined with any pickaxe, faster with better pickaxes
+      stone: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+      cobblestone: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+      deepslate: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+
+      // Iron ore requires stone pickaxe or better
+      iron_ore: ['stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_iron_ore: ['stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'],
+
+      // Gold ore requires iron pickaxe or better
+      gold_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_gold_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+
+      // Diamond ore requires iron pickaxe or better
+      diamond_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_diamond_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+
+      // Coal ore can be mined with any pickaxe
+      coal_ore: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+      deepslate_coal_ore: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+
+      // Copper ore can be mined with stone pickaxe or better
+      copper_ore: ['stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_copper_ore: ['stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'],
+
+      // Lapis lazuli ore requires stone pickaxe or better
+      lapis_ore: ['stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_lapis_ore: ['stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe'],
+
+      // Redstone ore requires iron pickaxe or better
+      redstone_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_redstone_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+
+      // Emerald ore requires iron pickaxe or better
+      emerald_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+      deepslate_emerald_ore: ['iron_pickaxe', 'diamond_pickaxe'],
+
+      // Obsidian requires diamond pickaxe
+      obsidian: ['diamond_pickaxe'],
+
+      // Nether ores
+      nether_quartz_ore: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+      nether_gold_ore: ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'diamond_pickaxe', 'golden_pickaxe'],
+      ancient_debris: ['diamond_pickaxe']
+    };
+
+    const requiredTools = toolRequirements[blockName];
+
+    // If no specific tool is required, no tool needed (like dirt, grass, etc.)
+    if (!requiredTools) {
+      console.log(`[ツール管理] ${blockName}は素手で採掘可能`);
+      return { success: true, toolUsed: null };
+    }
+
+    // Check current equipped item
+    const currentItem = bot.heldItem;
+    if (currentItem && requiredTools.includes(currentItem.name)) {
+      console.log(`[ツール管理] 適切なツールが既に装備されています: ${currentItem.name}`);
+      return { success: true, toolUsed: currentItem.name };
+    }
+
+    // Find the best available tool from inventory
+    const availableTools = bot.inventory.items().filter(item =>
+      item && item.name && requiredTools.includes(item.name)
+    );
+
+    if (availableTools.length === 0) {
+      console.log(`[ツール管理] ${blockName}に必要なツールがありません: ${requiredTools.join(', ')}`);
+
+      // Try to craft basic tools if we have materials
+      const craftResult = await this.tryToCraftBasicPickaxe(bot);
+      if (craftResult.success) {
+        console.log(`[ツール管理] 基本ツールを作成しました: ${craftResult.toolName}`);
+        // Try to equip the newly crafted tool
+        const newTool = bot.inventory.items().find(item => item.name === craftResult.toolName);
+        if (newTool) {
+          await bot.equip(newTool, 'hand');
+          return { success: true, toolUsed: newTool.name };
+        }
+      }
+
+      return {
+        success: false,
+        error: `${blockName}に必要なツール (${requiredTools.join(', ')}) がありません`
+      };
+    }
+
+    // Sort tools by preference (better tools first)
+    const toolPriority = ['diamond_pickaxe', 'iron_pickaxe', 'stone_pickaxe', 'wooden_pickaxe', 'golden_pickaxe'];
+    availableTools.sort((a, b) => {
+      const priorityA = toolPriority.indexOf(a.name);
+      const priorityB = toolPriority.indexOf(b.name);
+      return (priorityA === -1 ? 999 : priorityA) - (priorityB === -1 ? 999 : priorityB);
+    });
+
+    const bestTool = availableTools[0];
+
+    try {
+      await bot.equip(bestTool, 'hand');
+      console.log(`[ツール管理] ${bestTool.name}を装備しました (${blockName}採掘用)`);
+      return { success: true, toolUsed: bestTool.name };
+    } catch (error) {
+      console.log(`[ツール管理] ツール装備に失敗: ${error.message}`);
+      return { success: false, error: `ツール装備失敗: ${error.message}` };
+    }
+  }
+
+  // Try to craft a basic pickaxe if materials are available
+  async tryToCraftBasicPickaxe(bot) {
+    console.log('[ツール作成] 基本ピッケルの作成を試みます...');
+
+    const inventory = bot.inventory.items();
+
+    // Check for sticks first
+    const sticks = inventory.filter(item => item && item.name === 'stick');
+    const totalSticks = sticks.reduce((sum, item) => sum + item.count, 0);
+
+    if (totalSticks < 2) {
+      console.log(`[ツール作成] スティック不足: 必要2本, 現在${totalSticks}本`);
+
+      // Try to craft sticks from planks
+      const planks = inventory.filter(item =>
+        item && item.name && item.name.includes('_planks')
+      );
+      const totalPlanks = planks.reduce((sum, item) => sum + item.count, 0);
+
+      if (totalPlanks >= 2) {
+        console.log('[ツール作成] 板材からスティックを作成します...');
+        try {
+          const mcData = require('minecraft-data')(bot.version);
+          const stickItem = mcData.itemsByName.stick;
+          if (stickItem) {
+            const stickRecipes = bot.recipesFor(stickItem.id, null, 1, null);
+            if (stickRecipes.length > 0) {
+              await bot.craft(stickRecipes[0], 1, null);
+              console.log('[ツール作成] スティックを作成しました');
+            }
+          }
+        } catch (error) {
+          console.log(`[ツール作成] スティック作成に失敗: ${error.message}`);
+        }
+      }
+    }
+
+    // Re-check sticks after potential crafting
+    const updatedInventory = bot.inventory.items();
+    const updatedSticks = updatedInventory.filter(item => item && item.name === 'stick');
+    const updatedTotalSticks = updatedSticks.reduce((sum, item) => sum + item.count, 0);
+
+    if (updatedTotalSticks < 2) {
+      return { success: false, error: 'スティック不足でピッケル作成不可' };
+    }
+
+    // Try to craft pickaxe in order of preference
+    const craftingMaterials = [
+      { material: 'cobblestone', tool: 'stone_pickaxe', needed: 3 },
+      { material: 'planks', tool: 'wooden_pickaxe', needed: 3 }
+    ];
+
+    for (const { material, tool, needed } of craftingMaterials) {
+      const materials = updatedInventory.filter(item =>
+        item && item.name && (
+          item.name === material ||
+          (material === 'planks' && item.name.includes('_planks'))
+        )
+      );
+      const totalMaterials = materials.reduce((sum, item) => sum + item.count, 0);
+
+      if (totalMaterials >= needed) {
+        console.log(`[ツール作成] ${tool}を作成します (${material} x${needed})`);
+        try {
+          const mcData = require('minecraft-data')(bot.version);
+          const toolItem = mcData.itemsByName[tool];
+          if (toolItem) {
+            const toolRecipes = bot.recipesFor(toolItem.id, null, 1, null);
+            if (toolRecipes.length > 0) {
+              await bot.craft(toolRecipes[0], 1, null);
+              console.log(`[ツール作成] ${tool}を作成しました`);
+              return { success: true, toolName: tool };
+            }
+          }
+        } catch (error) {
+          console.log(`[ツール作成] ${tool}作成に失敗: ${error.message}`);
+        }
+      }
+    }
+
+    return { success: false, error: '適切な材料不足でピッケル作成不可' };
+  }
+
+  // Check tool durability and warn if low
+  checkToolDurability(bot) {
+    const currentTool = bot.heldItem;
+
+    if (!currentTool || !currentTool.nbt) {
+      return { usable: true, durability: null };
+    }
+
+    // Extract durability from NBT data
+    let damage = 0;
+    let maxDurability = 0;
+
+    try {
+      if (currentTool.nbt && currentTool.nbt.value && currentTool.nbt.value.Damage) {
+        damage = currentTool.nbt.value.Damage.value || 0;
+      }
+
+      // Get max durability from minecraft-data
+      const mcData = require('minecraft-data')(bot.version);
+      const itemData = mcData.items[currentTool.type];
+      if (itemData && itemData.maxDurability) {
+        maxDurability = itemData.maxDurability;
+      }
+    } catch (error) {
+      console.log(`[ツール耐久度] 耐久度情報取得エラー: ${error.message}`);
+      return { usable: true, durability: null };
+    }
+
+    if (maxDurability === 0) {
+      return { usable: true, durability: null }; // Tool doesn't have durability
+    }
+
+    const remainingDurability = maxDurability - damage;
+    const durabilityPercentage = (remainingDurability / maxDurability) * 100;
+
+    const durabilityInfo = `${remainingDurability}/${maxDurability} (${durabilityPercentage.toFixed(1)}%)`;
+    console.log(`[ツール耐久度] ${currentTool.name}: ${durabilityInfo}`);
+
+    if (remainingDurability <= 1) {
+      return {
+        usable: false,
+        durability: remainingDurability,
+        warning: `${currentTool.name}が破損寸前です (残り${remainingDurability})`
+      };
+    } else if (durabilityPercentage < 20) {
+      return {
+        usable: true,
+        durability: remainingDurability,
+        warning: `${currentTool.name}の耐久度が低下しています (${durabilityPercentage.toFixed(1)}%)`
+      };
+    }
+
+    return { usable: true, durability: remainingDurability };
+  }
+
+  // Handle low durability tool situation
+  async handleLowDurabilityTool(bot, currentToolName) {
+    console.log(`[ツール管理] ${currentToolName}の交換または修理を試みます`);
+
+    // First, try to find a replacement tool of the same type
+    const replacementTool = bot.inventory.items().find(item =>
+      item && item.name === currentToolName && item !== bot.heldItem
+    );
+
+    if (replacementTool) {
+      console.log(`[ツール管理] 代替ツールを発見: ${replacementTool.name}`);
+      try {
+        await bot.equip(replacementTool, 'hand');
+        console.log(`[ツール管理] ${replacementTool.name}に交換しました`);
+        return { success: true, action: 'replaced' };
+      } catch (error) {
+        console.log(`[ツール管理] ツール交換失敗: ${error.message}`);
+      }
+    }
+
+    // If no replacement found, try to craft a new one
+    console.log('[ツール管理] 代替ツールが見つかりません。新しいツールの作成を試みます');
+    const craftResult = await this.tryToCraftBasicPickaxe(bot);
+
+    if (craftResult.success) {
+      console.log(`[ツール管理] 新しいツールを作成しました: ${craftResult.toolName}`);
+      const newTool = bot.inventory.items().find(item => item.name === craftResult.toolName);
+      if (newTool) {
+        try {
+          await bot.equip(newTool, 'hand');
+          console.log(`[ツール管理] 新しいツール ${newTool.name} を装備しました`);
+          return { success: true, action: 'crafted' };
+        } catch (error) {
+          console.log(`[ツール管理] 新しいツール装備失敗: ${error.message}`);
+        }
+      }
+    }
+
+    // Try to find any working pickaxe as last resort
+    const anyPickaxe = bot.inventory.items().find(item =>
+      item && item.name && item.name.includes('pickaxe') && item !== bot.heldItem
+    );
+
+    if (anyPickaxe) {
+      console.log(`[ツール管理] 代替ピッケルを使用: ${anyPickaxe.name}`);
+      try {
+        await bot.equip(anyPickaxe, 'hand');
+        console.log(`[ツール管理] ${anyPickaxe.name}に交換しました`);
+        return { success: true, action: 'fallback' };
+      } catch (error) {
+        console.log(`[ツール管理] 代替ピッケル装備失敗: ${error.message}`);
+      }
+    }
+
+    return { success: false, error: '利用可能なツールがありません' };
   }
 }
 
