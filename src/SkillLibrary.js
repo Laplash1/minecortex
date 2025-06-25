@@ -1688,6 +1688,13 @@ class MineBlockSkill extends Skill {
   async tryToCraftBasicPickaxe(bot) {
     console.log('[ツール作成] 基本ピッケルの作成を試みます...');
 
+    // Step 1: Ensure we have or can get a workbench
+    const workbenchResult = await this.ensureWorkbench(bot);
+    if (!workbenchResult.success) {
+      console.log(`[ツール作成] 作業台の確保に失敗: ${workbenchResult.error}`);
+      return { success: false, error: `作業台不足: ${workbenchResult.error}` };
+    }
+
     const inventory = bot.inventory.items();
 
     // Check for sticks first
@@ -1718,6 +1725,33 @@ class MineBlockSkill extends Skill {
         } catch (error) {
           console.log(`[ツール作成] スティック作成に失敗: ${error.message}`);
         }
+      } else {
+        // No planks available, try to get wood
+        console.log('[ツール作成] 板材不足、木材の収集を試みます...');
+        const woodResult = await this.gatherWoodForCrafting(bot);
+        if (woodResult.success) {
+          console.log('[ツール作成] 木材収集成功、板材を作成します...');
+          await this.craftPlanksFromLogs(bot);
+          // Retry stick crafting after getting planks
+          const planksAfterWood = bot.inventory.items().filter(item =>
+            item && item.name && item.name.includes('_planks')
+          );
+          if (planksAfterWood.length > 0) {
+            try {
+              const mcData = require('minecraft-data')(bot.version);
+              const stickItem = mcData.itemsByName.stick;
+              if (stickItem) {
+                const stickRecipes = bot.recipesFor(stickItem.id, null, 1, null);
+                if (stickRecipes.length > 0) {
+                  await bot.craft(stickRecipes[0], 1, null);
+                  console.log('[ツール作成] 木材から板材経由でスティックを作成しました');
+                }
+              }
+            } catch (error) {
+              console.log(`[ツール作成] 板材からスティック作成失敗: ${error.message}`);
+            }
+          }
+        }
       }
     }
 
@@ -1730,41 +1764,9 @@ class MineBlockSkill extends Skill {
       return { success: false, error: 'スティック不足でピッケル作成不可' };
     }
 
-    // Try to craft pickaxe in order of preference
-    const craftingMaterials = [
-      { material: 'cobblestone', tool: 'stone_pickaxe', needed: 3 },
-      { material: 'planks', tool: 'wooden_pickaxe', needed: 3 }
-    ];
-
-    for (const { material, tool, needed } of craftingMaterials) {
-      const materials = updatedInventory.filter(item =>
-        item && item.name && (
-          item.name === material ||
-          (material === 'planks' && item.name.includes('_planks'))
-        )
-      );
-      const totalMaterials = materials.reduce((sum, item) => sum + item.count, 0);
-
-      if (totalMaterials >= needed) {
-        console.log(`[ツール作成] ${tool}を作成します (${material} x${needed})`);
-        try {
-          const mcData = require('minecraft-data')(bot.version);
-          const toolItem = mcData.itemsByName[tool];
-          if (toolItem) {
-            const toolRecipes = bot.recipesFor(toolItem.id, null, 1, null);
-            if (toolRecipes.length > 0) {
-              await bot.craft(toolRecipes[0], 1, null);
-              console.log(`[ツール作成] ${tool}を作成しました`);
-              return { success: true, toolName: tool };
-            }
-          }
-        } catch (error) {
-          console.log(`[ツール作成] ${tool}作成に失敗: ${error.message}`);
-        }
-      }
-    }
-
-    return { success: false, error: '適切な材料不足でピッケル作成不可' };
+    // Now try to craft pickaxe using workbench
+    const craftResult = await this.craftPickaxeWithWorkbench(bot);
+    return craftResult;
   }
 
   // Check tool durability and warn if low
@@ -1891,6 +1893,346 @@ class MineBlockSkill extends Skill {
     });
 
     return items.reduce((total, item) => total + item.count, 0);
+  }
+
+  // Ensure workbench is available (search first, then craft if needed)
+  async ensureWorkbench(bot) {
+    console.log('[作業台管理] 作業台の確保を開始...');
+
+    // Step 1: Search for existing workbench nearby
+    const workbenchResult = await this.searchForWorkbench(bot);
+    if (workbenchResult.success) {
+      console.log('[作業台管理] 既存の作業台を発見しました');
+      return { success: true, found: true };
+    }
+
+    // Step 2: Check if we have workbench in inventory
+    const workbenchItem = bot.inventory.items().find(item => 
+      item && item.name && (item.name === 'crafting_table' || item.name === 'workbench')
+    );
+
+    if (workbenchItem) {
+      console.log('[作業台管理] インベントリに作業台を発見、設置します');
+      try {
+        await this.placeWorkbench(bot, workbenchItem);
+        return { success: true, placed: true };
+      } catch (error) {
+        console.log(`[作業台管理] 作業台設置失敗: ${error.message}`);
+      }
+    }
+
+    // Step 3: Try to craft workbench if we have materials
+    console.log('[作業台管理] 作業台の作成を試みます...');
+    const craftResult = await this.craftWorkbench(bot);
+    if (craftResult.success) {
+      console.log('[作業台管理] 作業台を作成し設置しました');
+      return { success: true, crafted: true };
+    }
+
+    return { success: false, error: '作業台の確保に失敗しました' };
+  }
+
+  // Search for nearby workbench
+  async searchForWorkbench(bot) {
+    console.log('[作業台検索] 周辺の作業台を検索中...');
+
+    const searchRadii = [8, 16, 32];
+    for (const radius of searchRadii) {
+      const workbench = bot.findBlock({
+        matching: (block) => {
+          if (!block || !block.name) return false;
+          return block.name === 'crafting_table' || block.name === 'workbench';
+        },
+        maxDistance: radius
+      });
+
+      if (workbench) {
+        const distance = bot.entity.position.distanceTo(workbench.position);
+        console.log(`[作業台検索] ${radius}ブロック範囲で作業台を発見: ${workbench.name} (距離: ${distance.toFixed(2)})`);
+        
+        // Move close to workbench if needed
+        if (distance > 4.0) {
+          console.log('[作業台検索] 作業台に接近中...');
+          try {
+            if (bot.pathfinder) {
+              const { goals } = require('mineflayer-pathfinder');
+              const goal = new goals.GoalNear(workbench.position.x, workbench.position.y, workbench.position.z, 3);
+              bot.pathfinder.setGoal(goal);
+              await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for movement
+            }
+          } catch (error) {
+            console.log(`[作業台検索] 作業台への移動失敗: ${error.message}`);
+          }
+        }
+
+        return { success: true, workbench, distance };
+      }
+    }
+
+    console.log('[作業台検索] 周辺に作業台が見つかりませんでした');
+    return { success: false, error: '作業台が見つかりません' };
+  }
+
+  // Place workbench near bot
+  async placeWorkbench(bot, workbenchItem) {
+    console.log('[作業台設置] 作業台を設置中...');
+
+    try {
+      // Find suitable ground position
+      const botPos = bot.entity.position;
+      const positions = [
+        { x: Math.floor(botPos.x) + 1, y: Math.floor(botPos.y), z: Math.floor(botPos.z) },
+        { x: Math.floor(botPos.x) - 1, y: Math.floor(botPos.y), z: Math.floor(botPos.z) },
+        { x: Math.floor(botPos.x), y: Math.floor(botPos.y), z: Math.floor(botPos.z) + 1 },
+        { x: Math.floor(botPos.x), y: Math.floor(botPos.y), z: Math.floor(botPos.z) - 1 }
+      ];
+
+      for (const pos of positions) {
+        const blockAtPos = bot.blockAt(new bot.Vec3(pos.x, pos.y, pos.z));
+        const blockBelow = bot.blockAt(new bot.Vec3(pos.x, pos.y - 1, pos.z));
+
+        if (blockAtPos && blockAtPos.name === 'air' && blockBelow && blockBelow.name !== 'air') {
+          await bot.equip(workbenchItem, 'hand');
+          await bot.placeBlock(blockBelow, new bot.Vec3(0, 1, 0));
+          console.log(`[作業台設置] 作業台を${pos.x}, ${pos.y}, ${pos.z}に設置しました`);
+          return { success: true };
+        }
+      }
+
+      return { success: false, error: '適切な設置場所が見つかりません' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Craft workbench from wood
+  async craftWorkbench(bot) {
+    console.log('[作業台作成] 作業台のクラフトを開始...');
+
+    const inventory = bot.inventory.items();
+    
+    // Check for planks
+    const planks = inventory.filter(item =>
+      item && item.name && item.name.includes('_planks')
+    );
+    const totalPlanks = planks.reduce((sum, item) => sum + item.count, 0);
+
+    if (totalPlanks >= 4) {
+      console.log(`[作業台作成] 板材から作業台を作成 (板材: ${totalPlanks}個)`);
+      try {
+        const mcData = require('minecraft-data')(bot.version);
+        const workbenchItem = mcData.itemsByName.crafting_table || mcData.itemsByName.workbench;
+        if (workbenchItem) {
+          const recipes = bot.recipesFor(workbenchItem.id, null, 1, null);
+          if (recipes.length > 0) {
+            await bot.craft(recipes[0], 1, null);
+            console.log('[作業台作成] 作業台を作成しました');
+            
+            // Place the crafted workbench
+            const craftedWorkbench = bot.inventory.items().find(item => 
+              item.name === 'crafting_table' || item.name === 'workbench'
+            );
+            if (craftedWorkbench) {
+              await this.placeWorkbench(bot, craftedWorkbench);
+            }
+            
+            return { success: true };
+          }
+        }
+      } catch (error) {
+        console.log(`[作業台作成] 作業台クラフト失敗: ${error.message}`);
+      }
+    } else {
+      // Try to get wood for planks
+      console.log('[作業台作成] 板材不足、木材収集を開始...');
+      const woodResult = await this.gatherWoodForCrafting(bot);
+      if (woodResult.success) {
+        await this.craftPlanksFromLogs(bot);
+        // Retry workbench crafting
+        return await this.craftWorkbench(bot);
+      }
+    }
+
+    return { success: false, error: '作業台作成に必要な材料が不足しています' };
+  }
+
+  // Gather wood specifically for crafting purposes
+  async gatherWoodForCrafting(bot) {
+    console.log('[木材収集] クラフト用木材の収集を開始...');
+    
+    try {
+      // Use the wood gathering skill to get wood
+      const woodSkill = new SimpleGatherWoodSkill();
+      const result = await woodSkill.execute(bot, { amount: 2 }); // Get at least 2 logs
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Craft planks from logs
+  async craftPlanksFromLogs(bot) {
+    console.log('[板材作成] 木材から板材を作成中...');
+
+    const inventory = bot.inventory.items();
+    const logs = inventory.filter(item => {
+      if (!item || !item.name) return false;
+      const itemName = item.name.toLowerCase();
+      return itemName.includes('_log') || itemName.includes('_wood') || itemName === 'log';
+    });
+
+    if (logs.length > 0) {
+      const log = logs[0];
+      console.log(`[板材作成] ${log.name}から板材を作成します`);
+      
+      try {
+        const mcData = require('minecraft-data')(bot.version);
+        // Find appropriate plank type
+        const plankTypes = ['oak_planks', 'birch_planks', 'spruce_planks', 'jungle_planks', 'acacia_planks', 'dark_oak_planks'];
+        
+        for (const plankType of plankTypes) {
+          const plankItem = mcData.itemsByName[plankType];
+          if (plankItem) {
+            const recipes = bot.recipesFor(plankItem.id, null, 1, null);
+            if (recipes.length > 0) {
+              // Craft as many planks as possible
+              const maxCrafts = Math.min(log.count, 16); // Limit to prevent overflow
+              await bot.craft(recipes[0], maxCrafts, null);
+              console.log(`[板材作成] ${plankType}を${maxCrafts * 4}個作成しました`);
+              return { success: true };
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`[板材作成] 板材作成失敗: ${error.message}`);
+      }
+    }
+
+    return { success: false, error: '板材作成に失敗しました' };
+  }
+
+  // Craft pickaxe using workbench
+  async craftPickaxeWithWorkbench(bot) {
+    console.log('[ピッケル作成] 作業台を使用してピッケルを作成...');
+
+    // Find and approach workbench
+    const workbenchResult = await this.searchForWorkbench(bot);
+    if (!workbenchResult.success) {
+      return { success: false, error: '作業台が見つかりません' };
+    }
+
+    const inventory = bot.inventory.items();
+    const sticks = inventory.filter(item => item && item.name === 'stick');
+    const totalSticks = sticks.reduce((sum, item) => sum + item.count, 0);
+
+    if (totalSticks < 2) {
+      return { success: false, error: 'スティック不足でピッケル作成不可' };
+    }
+
+    // Try to craft pickaxe in order of preference
+    const craftingMaterials = [
+      { material: 'cobblestone', tool: 'stone_pickaxe', needed: 3 },
+      { material: 'planks', tool: 'wooden_pickaxe', needed: 3 }
+    ];
+
+    for (const { material, tool, needed } of craftingMaterials) {
+      const materials = inventory.filter(item =>
+        item && item.name && (
+          item.name === material ||
+          (material === 'planks' && item.name.includes('_planks'))
+        )
+      );
+      const totalMaterials = materials.reduce((sum, item) => sum + item.count, 0);
+
+      if (totalMaterials >= needed) {
+        console.log(`[ピッケル作成] ${tool}を作成します (${material} x${needed})`);
+        try {
+          const mcData = require('minecraft-data')(bot.version);
+          const toolItem = mcData.itemsByName[tool];
+          if (toolItem) {
+            const toolRecipes = bot.recipesFor(toolItem.id, workbenchResult.workbench, 1, null);
+            if (toolRecipes.length > 0) {
+              await bot.craft(toolRecipes[0], 1, workbenchResult.workbench);
+              console.log(`[ピッケル作成] ${tool}を作成しました`);
+              return { success: true, toolName: tool };
+            } else {
+              console.log(`[ピッケル作成] ${tool}のレシピが見つかりません`);
+            }
+          }
+        } catch (error) {
+          console.log(`[ピッケル作成] ${tool}作成に失敗: ${error.message}`);
+          
+          // If cobblestone crafting fails, try to get cobblestone
+          if (material === 'cobblestone') {
+            console.log('[ピッケル作成] 丸石不足、石の採掘を試みます...');
+            const stoneResult = await this.gatherStoneForCrafting(bot);
+            if (stoneResult.success) {
+              // Retry crafting after getting stone
+              const updatedInventory = bot.inventory.items();
+              const cobblestone = updatedInventory.filter(item => 
+                item && item.name === 'cobblestone'
+              );
+              if (cobblestone.length > 0) {
+                try {
+                  const toolRecipes = bot.recipesFor(toolItem.id, workbenchResult.workbench, 1, null);
+                  if (toolRecipes.length > 0) {
+                    await bot.craft(toolRecipes[0], 1, workbenchResult.workbench);
+                    console.log(`[ピッケル作成] 石採掘後に${tool}を作成しました`);
+                    return { success: true, toolName: tool };
+                  }
+                } catch (retryError) {
+                  console.log(`[ピッケル作成] 再試行でも${tool}作成失敗: ${retryError.message}`);
+                }
+              }
+            }
+          }
+        }
+      } else if (material === 'cobblestone') {
+        // Try to get cobblestone if we don't have enough
+        console.log('[ピッケル作成] 丸石不足、石の採掘を開始...');
+        const stoneResult = await this.gatherStoneForCrafting(bot);
+        if (stoneResult.success) {
+          // Retry this material after gathering
+          const updatedInventory = bot.inventory.items();
+          const cobblestone = updatedInventory.filter(item => 
+            item && item.name === 'cobblestone'
+          );
+          const totalCobblestone = cobblestone.reduce((sum, item) => sum + item.count, 0);
+          
+          if (totalCobblestone >= needed) {
+            try {
+              const mcData = require('minecraft-data')(bot.version);
+              const toolItem = mcData.itemsByName[tool];
+              if (toolItem) {
+                const toolRecipes = bot.recipesFor(toolItem.id, workbenchResult.workbench, 1, null);
+                if (toolRecipes.length > 0) {
+                  await bot.craft(toolRecipes[0], 1, workbenchResult.workbench);
+                  console.log(`[ピッケル作成] 石採掘後に${tool}を作成しました`);
+                  return { success: true, toolName: tool };
+                }
+              }
+            } catch (error) {
+              console.log(`[ピッケル作成] 石採掘後の${tool}作成失敗: ${error.message}`);
+            }
+          }
+        }
+      }
+    }
+
+    return { success: false, error: '適切な材料不足でピッケル作成不可' };
+  }
+
+  // Gather stone specifically for crafting
+  async gatherStoneForCrafting(bot) {
+    console.log('[石材収集] クラフト用石材の収集を開始...');
+    
+    try {
+      // Use stone gathering with minimal tools requirement
+      const result = await this.execute(bot, { blockType: 'stone', amount: 3 });
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 }
 
