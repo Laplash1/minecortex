@@ -4,7 +4,7 @@ const { EnvironmentObserver } = require('./EnvironmentObserver');
 const { VoyagerAI } = require('./VoyagerAI');
 // MultiPlayerCoordinator is passed as parameter
 const { StateManager } = require('./StateManager');
-const { InventoryUtils } = require('./InventoryUtils');
+const InventoryUtils = require('./InventoryUtils');
 
 class MinecraftAI {
   constructor(bot, coordinator = null) {
@@ -1129,7 +1129,7 @@ class MinecraftAI {
   }
 
   calculateSkillTimeout(task) {
-    const baseTimeout = 30000; // Reduced from 60000ms to 30000ms for faster response
+    const baseTimeout = 60000; // Reduced from 60000ms to 30000ms for faster response
     const taskType = task.type;
     const params = task.params || {};
 

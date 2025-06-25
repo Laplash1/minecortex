@@ -620,54 +620,6 @@ class InventoryUtils {
       return [];
     }
   }
-
-  static getInventorySummary(bot) {
-    if (!bot || !bot.inventory) {
-      return {
-        wood: 0,
-        stone: 0,
-        planks: 0,
-        availablePlanks: 0,
-        hasPickaxe: false,
-        hasAxe: false,
-        hasSword: false,
-        hasCraftingTable: false,
-        canCraftWorkbench: false,
-        canCraftBasicTools: false
-      };
-    }
-
-    const wood = this.getWoodCount(bot);
-    const stone = this.getStoneCount(bot);
-    const planks = this.getPlanksCount(bot);
-    const availablePlanks = this.getAvailablePlanks(bot);
-    const hasCraftingTable = this.hasItem(bot, 'crafting_table', 1, true); // Enable flexible matching
-
-    // Get detailed inventory information for debugging
-    const allItems = bot.inventory.items();
-    const inventoryDetails = allItems.map(item => ({
-      name: item.name,
-      count: item.count,
-      type: item.type
-    }));
-
-    return {
-      wood,
-      stone,
-      planks,
-      availablePlanks,
-      hasPickaxe: this.hasTool(bot, 'pickaxe'),
-      hasAxe: this.hasTool(bot, 'axe'),
-      hasSword: this.hasTool(bot, 'sword'),
-      hasCraftingTable,
-      // 作業台作成可能判定: 板材4個が利用可能で作業台未所持
-      canCraftWorkbench: availablePlanks >= 4 && !hasCraftingTable,
-      // 基本ツール作成可能判定: 板材8個が利用可能（作業台4個+ツール4個）
-      canCraftBasicTools: availablePlanks >= 8,
-      totalItems: allItems.length,
-      inventoryDetails
-    };
-  }
 }
 
-module.exports = { InventoryUtils };
+module.exports = InventoryUtils;
