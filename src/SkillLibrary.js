@@ -878,6 +878,9 @@ class MineBlockSkill extends Skill {
       await bot.dig(block);
       console.log(`[マイニング] ${block.name}を採掘完了`);
 
+      // Wait for items to drop and settle
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Collect dropped items
       const collectionResult = await this.collectDroppedItems(bot, miningPosition);
       if (collectionResult.itemsCollected > 0) {
@@ -946,8 +949,8 @@ class MineBlockSkill extends Skill {
   findBlockWithProgressiveSearch(bot, blockType) {
     console.log(`[マイニング] ${blockType}の段階的探索を開始...`);
 
-    // Start with close-range search for immediate blocks
-    const searchRadii = [4, 8, 16, 32]; // Prioritize nearby blocks
+    // Start with close-range search and expand for better coverage
+    const searchRadii = [4, 8, 16, 32, 48, 64]; // Extended search range
     const botPosition = bot.entity.position;
 
     for (const radius of searchRadii) {
@@ -1140,9 +1143,9 @@ class MineBlockSkill extends Skill {
       const botPos = bot.entity.position;
       const blockPos = block.position;
 
-      // Check distance (typical mining reach is about 4 blocks)
+      // Check distance (extended mining reach for better accessibility)
       const distance = botPos.distanceTo(blockPos);
-      const maxMiningDistance = 4.5;
+      const maxMiningDistance = 5.5;
 
       if (distance > maxMiningDistance) {
         return {
@@ -1330,7 +1333,7 @@ class MineBlockSkill extends Skill {
       console.log('[マイニング] ドロップアイテム回収開始');
 
       let itemsCollected = 0;
-      const maxCollectionTime = 10000; // Increased to 10 seconds for better collection
+      const maxCollectionTime = 15000; // Increased to 15 seconds for thorough collection
       const startTime = Date.now();
       let lastItemCount = -1;
       let consecutiveNoItemChecks = 0;
@@ -1339,15 +1342,15 @@ class MineBlockSkill extends Skill {
       const initialInventoryCount = bot.inventory.items().length;
       console.log(`[マイニング] 回収前インベントリアイテム数: ${initialInventoryCount}`);
 
-      // Wait a bit initially for items to spawn
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Wait longer initially for items to spawn and settle
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       while (Date.now() - startTime < maxCollectionTime) {
-        // Find nearby dropped items with optimized range
+        // Find nearby dropped items with expanded range for better detection
         const droppedItems = Object.values(bot.entities).filter(entity => {
           if (entity.name !== 'item' || !entity.position) return false;
           const distance = entity.position.distanceTo(miningPosition);
-          return distance < 5; // Optimized range from 8 to 5 blocks
+          return distance < 8; // Expanded range back to 8 blocks for better coverage
         });
 
         const coords = `${miningPosition.x}, ${miningPosition.y}, ${miningPosition.z}`;
@@ -1386,40 +1389,40 @@ class MineBlockSkill extends Skill {
             const distance = bot.entity.position.distanceTo(itemEntity.position);
             console.log(`[マイニング] アイテムまでの距離: ${distance.toFixed(2)}ブロック`);
 
-            if (distance > 1.5) { // Improved pickup distance threshold
-              // Move closer to the item with higher precision
+            if (distance > 2.0) { // Increased pickup distance threshold for better collection
+              // Move closer to the item with improved positioning
               if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
                 const { goals } = require('mineflayer-pathfinder');
                 const goal = new goals.GoalNear(
                   itemEntity.position.x,
                   itemEntity.position.y,
                   itemEntity.position.z,
-                  1.0 // More precise goal distance
+                  1.5 // Adjusted goal distance for better pickup
                 );
                 bot.pathfinder.setGoal(goal);
 
-                // Wait for movement with improved timeout
+                // Wait for movement with extended timeout
                 const moveStartTime = Date.now();
-                while (Date.now() - moveStartTime < 3000) {
+                while (Date.now() - moveStartTime < 5000) {
                   const newDistance = bot.entity.position.distanceTo(itemEntity.position);
-                  if (newDistance <= 1.5) {
+                  if (newDistance <= 2.0) {
                     console.log(`[マイニング] アイテムに接近完了: ${newDistance.toFixed(2)}ブロック`);
                     break;
                   }
-                  await new Promise(resolve => setTimeout(resolve, 100));
+                  await new Promise(resolve => setTimeout(resolve, 150));
                 }
               } else {
-                // Fallback: simple movement
+                // Enhanced fallback: look and move towards item
                 await bot.lookAt(itemEntity.position);
                 bot.setControlState('forward', true);
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 800));
                 bot.setControlState('forward', false);
               }
             }
 
             // Items are automatically collected when bot gets close enough
-            // Extended wait time for pickup
-            await new Promise(resolve => setTimeout(resolve, 600));
+            // Extended wait time for reliable pickup
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Verify item was actually collected by checking if it still exists
             const stillExists = Object.values(bot.entities).some(entity =>
@@ -1428,9 +1431,12 @@ class MineBlockSkill extends Skill {
 
             if (!stillExists) {
               itemsCollected++;
-              console.log(`[マイニング] アイテム回収成功: ${itemsCollected}個`);
+              console.log(`[マイニング] アイテム回収成功: ${itemsCollected}個目`);
             } else {
-              console.log('[マイニング] アイテム回収失敗: まだ存在しています');
+              console.log(`[マイニング] アイテム回収失敗: アイテムID ${itemEntity.id} がまだ存在`);
+              // Try additional pickup attempts for stubborn items
+              await bot.lookAt(itemEntity.position);
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
           } catch (error) {
             console.log(`[マイニング] アイテム回収エラー: ${error.message}`);

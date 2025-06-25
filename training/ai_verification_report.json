@@ -3,50 +3,50 @@
     "totalTests": 7,
     "successfulTests": 7,
     "successRate": 100,
-    "timestamp": "2025-06-22T05:35:19.709Z"
+    "timestamp": "2025-06-25T12:31:43.135Z"
   },
   "results": [
     {
       "test": "スキル生成",
       "success": true,
       "details": "GPT使用可能またはフォールバック成功",
-      "timestamp": "2025-06-22T05:35:19.708Z"
+      "timestamp": "2025-06-25T12:31:43.134Z"
     },
     {
       "test": "スキル実行",
       "success": true,
       "details": "実行結果: {\"success\":false,\"error\":\"Generic skill not implemented\"}",
-      "timestamp": "2025-06-22T05:35:19.708Z"
+      "timestamp": "2025-06-25T12:31:43.134Z"
     },
     {
       "test": "経験学習",
       "success": true,
       "details": "学習履歴に正しく記録された",
-      "timestamp": "2025-06-22T05:35:19.708Z"
+      "timestamp": "2025-06-25T12:31:43.134Z"
     },
     {
       "test": "カリキュラム生成",
       "success": true,
       "details": "5個のタスクを生成",
-      "timestamp": "2025-06-22T05:35:19.709Z"
+      "timestamp": "2025-06-25T12:31:43.135Z"
     },
     {
       "test": "シナリオ実行",
       "success": true,
       "details": "シナリオの構造とタスク実行可能",
-      "timestamp": "2025-06-22T05:35:19.709Z"
+      "timestamp": "2025-06-25T12:31:43.135Z"
     },
     {
       "test": "データフロー",
       "success": true,
       "details": "統計データの取得と計算が正常",
-      "timestamp": "2025-06-22T05:35:19.709Z"
+      "timestamp": "2025-06-25T12:31:43.135Z"
     },
     {
       "test": "訓練データ処理",
       "success": true,
       "details": "訓練データの読み込みと処理が正常",
-      "timestamp": "2025-06-22T05:35:19.709Z"
+      "timestamp": "2025-06-25T12:31:43.135Z"
     }
   ]
 }
