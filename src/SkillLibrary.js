@@ -1949,24 +1949,71 @@ class SimpleGatherWoodSkill extends Skill {
     super('gather_wood', 'Simple wood gathering');
   }
 
-  async execute(bot, _params) {
-    // Use default amount of 5 logs to gather
+  async execute(bot, params) {
+    const { amount = 5 } = params;
+    let successfulGathers = 0;
+    const targetAmount = amount;
 
-    console.log('[木材収集] 近くの木を探しています...');
+    console.log(`[木材収集] ${targetAmount}個の木材を収集開始...`);
 
-    // Stage 1: Find wood blocks nearby (optimized progressive search)
-    let woodBlock = this.findWoodWithProgressiveSearch(bot);
+    // Mining loop until we have enough wood
+    while (successfulGathers < targetAmount) {
+      console.log(`[木材収集] 進捗: ${successfulGathers}/${targetAmount}個収集済み`);
 
-    if (woodBlock) {
-      console.log(`[木材収集] ${woodBlock.position}で${woodBlock.name}を発見しました`);
-      try {
-        await bot.dig(woodBlock);
-        bot.chat(`${woodBlock.name}を採取しました！ 🌳`);
-        return { success: true, gathered: 1 };
-      } catch (error) {
-        console.log(`[木材収集] 採掘に失敗: ${error.message}`);
-        return { success: false, error: error.message };
+      // Stage 1: Find wood blocks nearby (optimized progressive search)
+      let woodBlock = this.findWoodWithProgressiveSearch(bot);
+
+      if (woodBlock) {
+        console.log(`[木材収集] ${woodBlock.position}で${woodBlock.name}を発見しました`);
+        
+        // Final line-of-sight check before mining
+        const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, woodBlock.position);
+        if (!finalLineOfSight.clear) {
+          console.log(`[木材収集] 視界外のため採集をスキップ: ${finalLineOfSight.obstacle}`);
+          continue; // Skip this block and find another
+        }
+
+        // Check if we're within mining range
+        const distance = bot.entity.position.distanceTo(woodBlock.position);
+        if (distance >= 3.0) {
+          console.log(`[木材収集] 距離が遠すぎるためスキップ: ${distance.toFixed(2)}ブロック`);
+          continue; // Skip this block and find another
+        }
+
+        // Count wood items before mining
+        const woodCountBefore = this.countWoodInInventory(bot);
+
+        try {
+          await bot.dig(woodBlock);
+          
+          // Wait for item to be collected
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Check if we actually got the wood
+          const woodCountAfter = this.countWoodInInventory(bot);
+          const woodObtained = woodCountAfter - woodCountBefore;
+          
+          if (woodObtained > 0) {
+            successfulGathers += woodObtained;
+            bot.chat(`${woodBlock.name}を採取しました！ 🌳 (${successfulGathers}/${targetAmount})`);
+            console.log(`[木材収集] 成功: ${woodObtained}個取得 (合計: ${successfulGathers}/${targetAmount})`);
+          } else {
+            console.log(`[木材収集] 採集したが木材が取得できませんでした`);
+          }
+        } catch (error) {
+          console.log(`[木材収集] 採掘に失敗: ${error.message}`);
+          continue; // Try to find another block
+        }
+      } else {
+        console.log('[木材収集] 近くに木が見つかりません。探索を実行します...');
+        break; // Exit loop to try exploration
       }
+    }
+
+    // If we've gathered enough, return success
+    if (successfulGathers >= targetAmount) {
+      console.log(`[木材収集] 目標達成: ${successfulGathers}個収集完了`);
+      return { success: true, gathered: successfulGathers };
     }
 
     // Stage 2: If no wood found, try to explore and search again
@@ -2245,6 +2292,44 @@ class SimpleGatherWoodSkill extends Skill {
 
     console.log('[木材収集] 全ての検索方法で木材が見つかりませんでした');
     return null;
+  }
+
+  // Count wood items in inventory
+  countWoodInInventory(bot) {
+    const woodItems = bot.inventory.items().filter(item => {
+      if (!item || !item.name) return false;
+      const itemName = item.name.toLowerCase();
+      return itemName.includes('log') || itemName.includes('wood') || itemName.includes('stem');
+    });
+    return woodItems.reduce((total, item) => total + item.count, 0);
+  }
+
+  // Check if there's a clear line of sight to the block
+  checkLineOfSight(bot, from, to) {
+    try {
+      const direction = to.clone().subtract(from).normalize();
+      const distance = from.distanceTo(to);
+      const steps = Math.ceil(distance * 2); // Check every 0.5 blocks
+
+      for (let i = 1; i < steps; i++) {
+        const checkPos = from.clone().add(direction.clone().scale(i * 0.5));
+        const block = bot.blockAt(checkPos);
+
+        if (block && block.name !== 'air' && !block.name.startsWith('water') && !block.name.startsWith('lava')) {
+          return {
+            clear: false,
+            obstacle: `${block.name} at ${checkPos.floored()}`
+          };
+        }
+      }
+
+      return { clear: true };
+    } catch (error) {
+      return {
+        clear: false,
+        obstacle: `Line of sight check error: ${error.message}`
+      };
+    }
   }
 }
 
