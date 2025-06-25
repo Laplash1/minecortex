@@ -870,7 +870,17 @@ class MineBlockSkill extends Skill {
     }
 
     try {
-      console.log(`[マイニング] ${block.position}で${block.name}を採掘中...`);
+      // Final distance check before mining - prevent mining from 3+ blocks away
+      const finalDistance = bot.entity.position.distanceTo(block.position);
+      if (finalDistance >= 3.0) {
+        console.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+        return {
+          success: false,
+          error: `採掘距離が遠すぎます (${finalDistance.toFixed(2)}m >= 3.0m)`
+        };
+      }
+
+      console.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)`);
 
       // Store position for item collection
       const miningPosition = block.position.clone();
@@ -959,10 +969,11 @@ class MineBlockSkill extends Skill {
       // First, try to find blocks that are visible and accessible
       const visibleBlocks = this.findVisibleBlocks(bot, blockType, radius);
       if (visibleBlocks.length > 0) {
-        // Sort by distance and accessibility
+        // Filter blocks within mining distance and accessibility
         const accessibleBlocks = visibleBlocks.filter(block => {
+          const distance = botPosition.distanceTo(block.position);
           const reachCheck = this.checkBlockReachability(bot, block);
-          return reachCheck.canReach || reachCheck.distance < 6; // Allow slightly farther blocks if reachable
+          return reachCheck.canReach && distance < 3.0; // Only allow blocks within 3 blocks
         });
 
         if (accessibleBlocks.length > 0) {
@@ -1022,8 +1033,14 @@ class MineBlockSkill extends Skill {
       });
 
       if (block) {
-        console.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name} at ${block.position}`);
-        return block;
+        // Check distance before returning the block
+        const distance = bot.entity.position.distanceTo(block.position);
+        if (distance < 3.0) {
+          console.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name} at ${block.position} (距離: ${distance.toFixed(2)})`);
+          return block;
+        } else {
+          console.log(`[マイニング] ブロック発見したが距離が遠すぎます: ${distance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+        }
       }
     }
 
@@ -1084,8 +1101,14 @@ class MineBlockSkill extends Skill {
       });
 
       if (block) {
-        console.log(`[マイニング] ${radius}ブロック範囲で代替発見: ${block.name}`);
-        return block;
+        // Check distance before returning the fallback block
+        const distance = bot.entity.position.distanceTo(block.position);
+        if (distance < 3.0) {
+          console.log(`[マイニング] ${radius}ブロック範囲で代替発見: ${block.name} (距離: ${distance.toFixed(2)})`);
+          return block;
+        } else {
+          console.log(`[マイニング] 代替ブロック発見したが距離が遠すぎます: ${distance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+        }
       }
     }
 
@@ -1143,14 +1166,14 @@ class MineBlockSkill extends Skill {
       const botPos = bot.entity.position;
       const blockPos = block.position;
 
-      // Check distance (extended mining reach for better accessibility)
+      // Check distance (strict mining reach limit to prevent long-distance mining)
       const distance = botPos.distanceTo(blockPos);
-      const maxMiningDistance = 5.5;
+      const maxMiningDistance = 3.0;
 
-      if (distance > maxMiningDistance) {
+      if (distance >= maxMiningDistance) {
         return {
           canReach: false,
-          reason: `距離が遠すぎます (${distance.toFixed(1)}m > ${maxMiningDistance}m)`
+          reason: `距離が遠すぎます (${distance.toFixed(1)}m >= ${maxMiningDistance}m)`
         };
       }
 
@@ -1216,18 +1239,16 @@ class MineBlockSkill extends Skill {
   async moveToMiningPosition(bot, block) {
     try {
       const blockPos = block.position;
-      const botPos = bot.entity.position;
 
       console.log(`[マイニング] 採掘位置への移動開始: ${blockPos}`);
 
-      // Calculate optimal position (2-3 blocks away from the block)
-      const direction = botPos.clone().subtract(blockPos).normalize();
-      const targetPos = blockPos.clone().add(direction.scale(2.5));
+      // Move to within 2.5 blocks of the block for reliable mining
+      console.log(`[マイニング] 採掘可能距離内(2.5ブロック)への移動を実行: ${blockPos}`);
 
       // Use pathfinder if available
       if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
         const { goals } = require('mineflayer-pathfinder');
-        const goal = new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 1);
+        const goal = new goals.GoalNear(blockPos.x, blockPos.y, blockPos.z, 2.5);
 
         return new Promise((resolve) => {
           const timeout = setTimeout(() => {
