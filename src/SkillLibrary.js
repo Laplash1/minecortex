@@ -2438,172 +2438,34 @@ class SimpleGatherWoodSkill extends Skill {
 
   async execute(bot, params) {
     const { amount = 5 } = params;
-    let successfulGathers = 0;
-    const targetAmount = amount;
+    let collected = 0;
+    const failedTargets = new Set();
 
-    console.log(`[木材収集] ${targetAmount}個の木材を収集開始...`);
+    while (collected < amount) {
+      const tree = bot.findBlock({
+        matching: (block) => block.name.includes('_log') && !failedTargets.has(block.position.toString()),
+        maxDistance: 32
+      });
 
-    // Mining loop until we have enough wood
-    while (successfulGathers < targetAmount) {
-      console.log(`[木材収集] 進捗: ${successfulGathers}/${targetAmount}個収集済み`);
-
-      // Stage 1: Find wood blocks nearby (optimized progressive search)
-      const woodBlock = this.findWoodWithProgressiveSearch(bot);
-
-      if (woodBlock) {
-        console.log(`[木材収集] ${woodBlock.position}で${woodBlock.name}を発見しました`);
-
-        // Final line-of-sight check before mining
-        const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, woodBlock.position);
-        if (!finalLineOfSight.clear) {
-          console.log(`[木材収集] 視界外のため採集処理を試みます: ${finalLineOfSight.obstacle}`);
-
-          // Try to handle out-of-sight block: approach and clear obstacles
-          const handleResult = await this.handleOutOfSightWoodBlock(bot, woodBlock, finalLineOfSight);
-          if (!handleResult.success) {
-            console.log(`[木材収集] 視界外ブロック処理失敗: ${handleResult.error}。次のブロックを探します`);
-            continue; // Skip this block and find another
-          }
-
-          console.log('[木材収集] 視界外ブロック処理成功、採集を継続します');
-
-          // Re-verify line of sight after handling
-          const verifyLineOfSight = this.checkLineOfSight(bot, bot.entity.position, woodBlock.position);
-          if (!verifyLineOfSight.clear) {
-            console.log('[木材収集] 処理後も視界が確保されません。次のブロックを探します');
-            continue;
-          }
-        }
-
-        // Check if we're within mining range
-        const distance = bot.entity.position.distanceTo(woodBlock.position);
-        if (distance >= 3.0) {
-          console.log(`[木材収集] 距離が遠すぎるためスキップ: ${distance.toFixed(2)}ブロック`);
-          continue; // Skip this block and find another
-        }
-
-        // Count wood items before mining
-        const woodCountBefore = this.countWoodInInventory(bot);
-
-        try {
-          await bot.dig(woodBlock);
-
-          // Wait for item to be collected
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // Check if we actually got the wood
-          const woodCountAfter = this.countWoodInInventory(bot);
-          const woodObtained = woodCountAfter - woodCountBefore;
-
-          if (woodObtained > 0) {
-            successfulGathers += woodObtained;
-            bot.chat(`${woodBlock.name}を採取しました！ 🌳 (${successfulGathers}/${targetAmount})`);
-            console.log(`[木材収集] 成功: ${woodObtained}個取得 (合計: ${successfulGathers}/${targetAmount})`);
-          } else {
-            console.log('[木材収集] 採集したが木材が取得できませんでした');
-          }
-        } catch (error) {
-          console.log(`[木材収集] 採掘に失敗: ${error.message}`);
-          continue; // Try to find another block
-        }
-      } else {
-        console.log('[木材収集] 近くに木が見つかりません。探索を実行します...');
-        break; // Exit loop to try exploration
+      if (!tree) {
+        return { success: collected > 0, reason: 'TARGET_NOT_FOUND', error: 'No new trees found nearby', details: { collected } };
       }
-    }
 
-    // If we've gathered enough, return success
-    if (successfulGathers >= targetAmount) {
-      console.log(`[木材収集] 目標達成: ${successfulGathers}個収集完了`);
-      return { success: true, gathered: successfulGathers };
-    }
-
-    // Stage 2: If no wood found, try to explore and search again
-    console.log('[木材収集] 近くに木が見つかりません。ワールド生成木を探します...');
-
-    // Check if this is a generated world without trees - try placing wood blocks as emergency fallback
-    const hasAnyBlocks = bot.findBlocks({
-      matching: (block) => {
-        if (!block || !block.name) return false;
-        return block.name !== 'air' && block.name !== 'water' && block.name !== 'lava';
-      },
-      maxDistance: 16,
-      count: 10
-    });
-
-    if (hasAnyBlocks.length === 0) {
-      console.log('[木材収集] 空のワールドを検出、基本リソース確保を試みます');
-      // Try to get starter items from server or other means
       try {
-        bot.chat('/give @p oak_log 10');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const woodAfterGive = bot.inventory.items().find(item =>
-          item && item.name && (item.name.includes('log') || item.name.includes('wood'))
-        );
-
-        if (woodAfterGive) {
-          console.log(`[木材収集] サーバーコマンドで木材を取得しました: ${woodAfterGive.name}`);
-          bot.chat('サーバーから木材を取得しました！ 🌳');
-          return { success: true, gathered: woodAfterGive.count };
-        }
-      } catch (giveError) {
-        console.log(`[木材収集] サーバーコマンド失敗: ${giveError.message}`);
+        console.log(`[木材収集] 発見: ${tree.name} at ${tree.position}`);
+        await bot.pathfinder.goto(new goals.GoalLookAtBlock(tree.position, bot.world));
+        await bot.dig(tree);
+        collected++;
+        console.log(`[木材収集] 収集成功: ${collected}/${amount} 個`);
+        // Wait a bit for the bot to settle
+        await new Promise(resolve => setTimeout(resolve, 250));
+      } catch (error) {
+        console.log(`[木材収集] エラー: ${error.message}`);
+        failedTargets.add(tree.position.toString()); // Add failed target to avoid retrying
       }
     }
 
-    // Generate random exploration target with expanded range
-    const currentPos = bot.entity.position;
-    const searchDirections = [
-      { x: currentPos.x + 120, y: currentPos.y, z: currentPos.z },
-      { x: currentPos.x - 120, y: currentPos.y, z: currentPos.z },
-      { x: currentPos.x, y: currentPos.y, z: currentPos.z + 120 },
-      { x: currentPos.x, y: currentPos.y, z: currentPos.z - 120 },
-      // Add diagonal directions for better coverage
-      { x: currentPos.x + 100, y: currentPos.y, z: currentPos.z + 100 },
-      { x: currentPos.x - 100, y: currentPos.y, z: currentPos.z - 100 },
-      { x: currentPos.x + 100, y: currentPos.y, z: currentPos.z - 100 },
-      { x: currentPos.x - 100, y: currentPos.y, z: currentPos.z + 100 }
-    ];
-
-    for (const target of searchDirections) {
-      console.log(`[木材収集] ${target.x}, ${target.z}方向を探索中...`);
-
-      // Move towards target
-      try {
-        const moveResult = await this.moveToPosition(bot, target, 15000); // 15 second timeout
-        if (moveResult.success) {
-          // Search for wood at new position with expanded range
-          woodBlock = bot.findBlock({
-            matching: (block) => {
-              return block.name && (
-                block.name.includes('_log') ||
-                block.name === 'log'
-              );
-            },
-            maxDistance: 64 // Expanded range for movement search
-          });
-
-          if (woodBlock) {
-            console.log(`[木材収集] 探索後に${woodBlock.position}で${woodBlock.name}を発見しました`);
-            try {
-              await bot.dig(woodBlock);
-              bot.chat(`探索して${woodBlock.name}を採取しました！ 🌳`);
-              return { success: true, gathered: 1 };
-            } catch (error) {
-              console.log(`[木材収集] 採掘に失敗: ${error.message}`);
-              continue; // Try next direction
-            }
-          }
-        }
-      } catch (moveError) {
-        console.log(`[木材収集] 探索移動に失敗: ${moveError.message}`);
-        continue; // Try next direction
-      }
-    }
-
-    console.log('[木材収集] 全方向探索後も木が見つかりません');
-    return { success: false, error: '探索後も木が見つかりません' };
+    return { success: true, message: `Gathered ${collected} wood`, details: { collected } };
   }
 
   async moveToPosition(bot, target, timeout = 10000) {

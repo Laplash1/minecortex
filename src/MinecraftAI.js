@@ -24,6 +24,8 @@ class MinecraftAI {
 
     this.isInitialized = false;
     this.debugMode = process.env.DEBUG_MODE === 'true';
+    this.failedTargets = new Map(); // To track recently failed targets
+    this.taskFailureCounts = new Map(); // To track generic task failures
 
     // Enhanced socket safety to prevent EPIPE errors - comprehensive protection
     this.setupComprehensiveEPIPEProtection();
@@ -839,6 +841,13 @@ class MinecraftAI {
     }
 
     if (result && result.success) {
+      // Clear failure tracker for this target on success
+      if (this.currentTask.params?.position) {
+        const targetKey = `${Math.round(this.currentTask.params.position.x)},${Math.round(this.currentTask.params.position.y)},${Math.round(this.currentTask.params.position.z)}`;
+        this.failedTargets.delete(targetKey);
+      }
+      // Also reset generic task failure count on success
+      this.taskFailureCounts.delete(taskName);
       // currentTask may have been cleared by skill internals
       if (!this.currentTask) {
         this.log('processTaskResult: currentTask lost before success handling', 'warn');
@@ -953,6 +962,32 @@ class MinecraftAI {
     const reason = result?.reason || 'UNKNOWN';
     const details = result?.details || {};
     this.log(`タスク ${taskName} が失敗: ${reason}`);
+
+    // Track failed target to prevent position-based loops
+    if (details.position) {
+      const targetKey = `${Math.round(details.position.x)},${Math.round(details.position.y)},${Math.round(details.position.z)}`;
+      const failureCount = (this.failedTargets.get(targetKey) || 0) + 1;
+      this.failedTargets.set(targetKey, failureCount);
+
+      if (failureCount >= 3) {
+        this.log(`ターゲット ${targetKey} で3回失敗しました。別の場所を探索します。`);
+        this.failedTargets.delete(targetKey); // Reset counter after taking action
+        this.goals.unshift({ type: 'explore', priority: 0, description: '同じ場所での失敗が続いたため、場所を変更します。' });
+        return;
+      }
+    } else {
+      // Track generic task failures to prevent non-position-based loops
+      const taskKey = taskName;
+      const failureCount = (this.taskFailureCounts.get(taskKey) || 0) + 1;
+      this.taskFailureCounts.set(taskKey, failureCount);
+
+      if (failureCount >= 3) {
+        this.log(`タスク '${taskKey}' が3回連続で失敗しました。探索に切り替えます。`);
+        this.taskFailureCounts.delete(taskKey); // Reset counter
+        this.goals.unshift({ type: 'explore', priority: 0, description: `タスク'${taskKey}'の失敗が続いたため、気分転換に探索します。` });
+        return;
+      }
+    }
 
     const recoveryTask = this.generateRecoveryTask(reason, details);
     if (recoveryTask) {
