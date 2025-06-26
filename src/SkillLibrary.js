@@ -157,6 +157,14 @@ class SkillLibrary {
             }
             
             console.log(`[レシピ検索] minecraft-data直接検索で${itemName}のレシピを発見`);
+            console.log(`[レシピ検索] 生成されたレシピ詳細:`, {
+              id: foundRecipe.id,
+              result: foundRecipe.result,
+              deltaLength: foundRecipe.delta.length,
+              delta: foundRecipe.delta,
+              hasInShape: !!foundRecipe.inShape,
+              hasIngredients: !!foundRecipe.ingredients
+            });
           }
         } catch (directError) {
           console.warn(`[レシピ検索] Direct minecraft-data search failed: ${directError.message}`);
@@ -2759,90 +2767,165 @@ class CraftToolsSkill extends Skill {
 
 class CraftWorkbenchSkill extends Skill {
   constructor() {
-    super('craft_workbench', 'Crafts a crafting table.');
+    super('craft_workbench', 'Crafts a crafting table from planks, with automatic log-to-plank conversion');
   }
 
   async execute(bot, _params) {
-    console.log('[作業台スキル] 作業台の作成を開始します...');
-
-    const mcData = require('minecraft-data')(bot.version);
-    const workbenchItem = mcData.itemsByName.crafting_table;
-    if (!workbenchItem) {
-      console.log('[作業台スキル] クラフトテーブルのアイテムデータが見つかりません');
-      return { success: false, error: 'クラフトテーブルのアイテムデータが見つかりません' };
-    }
-
-    // Check if we already have a crafting table in inventory
-    if (InventoryUtils.hasItem(bot, 'crafting_table', 1, true)) {
-      console.log('[作業台スキル] インベントリに作業台が既にあります');
-      return { success: true, message: 'インベントリに作業台が既にあります' };
-    }
-
-    // Check for planks
-    const planksCount = InventoryUtils.getAvailablePlanks(bot);
-    console.log(`[作業台スキル] 利用可能な板材: ${planksCount}個`);
-    if (planksCount < 4) {
-      console.log('[作業台スキル] 板材が不足しています。木材収集を試みます...');
-      const gatherWoodSkill = new SimpleGatherWoodSkill();
-      const gatherResult = await gatherWoodSkill.execute(bot, { amount: 1 }); // Gather at least 1 wood
-      if (!gatherResult.success) {
-        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing: [{ item: 'wood', needed: 1 }] } };
-      }
-      // After gathering wood, try to craft planks
-      await this.craftPlanksFromLogs(bot);
-      const updatedPlanksCount = InventoryUtils.getAvailablePlanks(bot);
-      if (updatedPlanksCount < 4) {
-        console.log('[作業台スキル] 木材を収集しましたが、まだ板材が不足しています');
-        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing: [{ item: 'planks', needed: 4 - updatedPlanksCount }] } };
-      }
-    }
-
-    // Find recipe for crafting table (inventory crafting, no table needed)
-    const recipe = SkillLibrary.getRecipeSafe(bot, workbenchItem.id, 1, null);
-    if (!recipe) {
-      console.log('[作業台スキル] 作業台のレシピが見つかりません');
-      bot.chat('作業台のレシピが見つかりません');
-      return {
-        success: false,
-        reason: 'NO_RECIPE',
-        details: { item: 'crafting_table', message: '作業台のレシピが見つかりません' }
-      };
-    }
-
-    console.log('[作業台スキル] 作業台をクラフト中...');
     try {
-      await bot.craft(recipe, 1, null); // Craft in inventory
-      console.log('[作業台スキル] 作業台をクラフトしました！');
-      bot.chat('作業台をクラフトしました！');
-      return { success: true, crafted: 'crafting_table' };
+      console.log('[作業台スキル] 作業台の作成を開始します...');
+      
+      const mcData = require('minecraft-data')(bot.version);
+      const requiredPlanks = 4;
+
+      // Phase 1: Check if we already have a workbench
+      if (InventoryUtils.hasItem(bot, 'crafting_table', 1, true)) {
+        console.log('[作業台スキル] インベントリに作業台が既にあります');
+        return { success: true, message: 'インベントリに作業台が既にあります' };
+      }
+
+      // Phase 2: Material assessment
+      console.log('[作業台スキル] 材料評価フェーズ...');
+      InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-Start');
+
+      const currentPlanks = this.countItemsInInventory(bot, 'planks');
+      const currentLogs = this.countItemsInInventory(bot, 'log');
+      const totalAvailablePlanks = currentPlanks + (currentLogs * 4);
+
+      console.log(`[作業台スキル] 材料状況: 板材=${currentPlanks}, 原木=${currentLogs}, 総利用可能板材=${totalAvailablePlanks}`);
+
+      if (totalAvailablePlanks < requiredPlanks) {
+        const message = `材料不足: 必要な板材=${requiredPlanks}, 利用可能=${totalAvailablePlanks}`;
+        console.log(`[作業台スキル] ${message}`);
+        return { success: false, reason: 'INSUFFICIENT_MATERIALS', error: message };
+      }
+
+      // Phase 3: Plank preparation (convert logs to planks if needed)
+      if (currentPlanks < requiredPlanks) {
+        const planksNeeded = requiredPlanks - currentPlanks;
+        const logsToCraft = Math.ceil(planksNeeded / 4);
+        
+        console.log(`[作業台スキル] 板材準備フェーズ: ${planksNeeded}個の板材が必要、${logsToCraft}個の原木を変換します`);
+        
+        const plankCraftResult = await this.craftPlanksFromLogs(bot, logsToCraft);
+        if (!plankCraftResult.success) {
+          return { success: false, error: `板材の作成に失敗: ${plankCraftResult.error}` };
+        }
+
+        // Verify we now have enough planks
+        const updatedPlanks = this.countItemsInInventory(bot, 'planks');
+        console.log(`[作業台スキル] 板材準備完了: ${updatedPlanks}個の板材を確保`);
+        
+        if (updatedPlanks < requiredPlanks) {
+          const message = `板材作成後も材料不足: 必要=${requiredPlanks}, 現在=${updatedPlanks}`;
+          console.log(`[作業台スキル] ${message}`);
+          return { success: false, error: message };
+        }
+      }
+
+      // Phase 4: Workbench crafting
+      console.log('[作業台スキル] 作業台作成フェーズ...');
+      const workbenchRecipe = SkillLibrary.getRecipeSafe(bot, 'crafting_table', 1, null);
+      if (!workbenchRecipe) {
+        const message = '作業台のレシピが見つかりません';
+        console.log(`[作業台スキル] ${message}`);
+        return { success: false, reason: 'NO_RECIPE', error: message };
+      }
+
+      console.log('[作業台スキル] レシピ詳細:', {
+        id: workbenchRecipe.id,
+        deltaLength: workbenchRecipe.delta?.length,
+        delta: workbenchRecipe.delta
+      });
+
+      // Final material verification before crafting (only check negative counts = input materials)
+      for (const ingredient of workbenchRecipe.delta) {
+        if (ingredient.count < 0) { // Only check input materials (negative counts)
+          const requiredCount = Math.abs(ingredient.count);
+          const ingredientName = mcData.items[ingredient.id]?.name || `id_${ingredient.id}`;
+          const available = this.countItemsInInventory(bot, ingredientName);
+          if (available < requiredCount) {
+            const message = `最終確認で材料不足: ${ingredientName} (必要=${requiredCount}, 所持=${available})`;
+            console.log(`[作業台スキル] ${message}`);
+            InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-MaterialError');
+            return { success: false, error: message };
+          }
+          console.log(`[作業台スキル] 材料確認OK: ${ingredientName} (必要=${requiredCount}, 所持=${available})`);
+        }
+      }
+
+      // Execute crafting
+      try {
+        await bot.craft(workbenchRecipe, 1, null);
+        console.log('[作業台スキル] 作業台のクラフトに成功しました！');
+        bot.chat('作業台をクラフトしました！');
+        InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-Success');
+        return { success: true, crafted: 'crafting_table', message: '作業台のクラフトに成功' };
+      } catch (error) {
+        const message = `作業台クラフト実行エラー: ${error.message}`;
+        console.log(`[作業台スキル] ${message}`);
+        InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-CraftError');
+        return { success: false, error: message };
+      }
+
     } catch (error) {
-      console.log(`[作業台スキル] 作業台のクラフトに失敗: ${error.message}`);
-      return { success: false, error: `作業台のクラフトに失敗: ${error.message}` };
+      const message = `予期せぬエラー: ${error.message}`;
+      console.log(`[作業台スキル] ${message}`);
+      return { success: false, error: message };
     }
   }
 
-  async craftPlanksFromLogs(bot) {
-    const mcData = require('minecraft-data')(bot.version);
-    const oakPlanks = mcData.itemsByName.oak_planks;
-    if (!oakPlanks) return;
-
-    const logCount = InventoryUtils.getWoodCount(bot);
-    if (logCount === 0) return;
-
-    console.log(`[作業台スキル] ${logCount}個の原木から板材を作成中...`);
-    const recipe = bot.recipesFor(oakPlanks.id, null, 1, null)[0];
-    if (!recipe) {
-      console.log('[作業台スキル] 板材のレシピが見つかりません');
-      return;
-    }
-
+  // Helper method to craft planks from logs
+  async craftPlanksFromLogs(bot, logCount = 1) {
     try {
-      await bot.craft(recipe, logCount, null); // Craft all logs into planks
-      console.log('[作業台スキル] 原木から板材を作成しました。');
+      console.log(`[作業台スキル] 原木から板材への変換を開始: ${logCount}個の原木を使用`);
+      
+      const plankRecipe = SkillLibrary.getRecipeSafe(bot, 'oak_planks', 1, null);
+      if (!plankRecipe) {
+        return { success: false, error: '板材のレシピが見つかりません' };
+      }
+
+      // Verify we have enough logs
+      const availableLogs = this.countItemsInInventory(bot, 'log');
+      if (availableLogs < logCount) {
+        return { success: false, error: `原木不足: 必要=${logCount}, 所持=${availableLogs}` };
+      }
+
+      await bot.craft(plankRecipe, logCount, null);
+      const planksCreated = logCount * 4;
+      console.log(`[作業台スキル] 板材作成成功: ${planksCreated}個の板材を作成`);
+      return { success: true, planksCreated };
+      
     } catch (error) {
-      console.log(`[作業台スキル] 板材作成失敗: ${error.message}`);
+      console.log(`[作業台スキル] 板材作成エラー: ${error.message}`);
+      return { success: false, error: error.message };
     }
   }
+
+  // Count items in inventory with flexible name matching
+  countItemsInInventory(bot, itemType) {
+    let count = 0;
+    const items = bot.inventory.items();
+
+    for (const item of items) {
+      if (!item || !item.name) continue;
+
+      const itemName = item.name.toLowerCase();
+      const targetType = itemType.toLowerCase();
+
+      if (itemName === targetType) {
+        count += item.count;
+      } else if (targetType === 'planks' && itemName.includes('_planks')) {
+        count += item.count;
+      } else if (targetType === 'log' && itemName.includes('_log')) {
+        count += item.count;
+      } else if (targetType === 'oak_planks' && itemName === 'oak_planks') {
+        count += item.count;
+      }
+    }
+
+    return count;
+  }
+
 }
 
 class CraftFurnaceSkill extends Skill {
