@@ -7,6 +7,24 @@ class SkillLibrary {
     this.skills = new Map();
   }
 
+  /**
+   * Safe recipe search helper to prevent API misuse
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {number} itemId - Item ID to craft
+   * @param {number} count - Number of items to craft
+   * @param {Block|null} table - Crafting table block (null for inventory crafting)
+   * @returns {Object|null} Recipe object or null if not found
+   */
+  static getRecipeSafe(bot, itemId, count = 1, table = null) {
+    try {
+      const recipes = bot.recipesFor(itemId, null, count, table);
+      return recipes.length > 0 ? recipes[0] : null;
+    } catch (error) {
+      console.error(`[レシピ検索] エラー: ${error.message}`);
+      return null;
+    }
+  }
+
   loadBasicSkills() {
     // Movement skills
     this.registerSkill('move_to', new MoveToSkill());
@@ -2617,9 +2635,9 @@ class CraftWorkbenchSkill extends Skill {
       }
     }
 
-    // Find recipe for crafting table
-    const recipe = bot.recipesFor(workbenchItem.id, null, 1, bot.currentWorld.blocks[0]);
-    if (!recipe || recipe.length === 0) {
+    // Find recipe for crafting table (inventory crafting, no table needed)
+    const recipe = SkillLibrary.getRecipeSafe(bot, workbenchItem.id, 1, null);
+    if (!recipe) {
       console.log('[作業台スキル] 作業台のレシピが見つかりません');
       bot.chat('作業台のレシピが見つかりません');
       return {
@@ -2631,7 +2649,7 @@ class CraftWorkbenchSkill extends Skill {
 
     console.log('[作業台スキル] 作業台をクラフト中...');
     try {
-      await bot.craft(recipe[0], 1, null); // Craft in inventory
+      await bot.craft(recipe, 1, null); // Craft in inventory
       console.log('[作業台スキル] 作業台をクラフトしました！');
       bot.chat('作業台をクラフトしました！');
       return { success: true, crafted: 'crafting_table' };

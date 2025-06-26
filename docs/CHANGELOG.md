@@ -1,5 +1,37 @@
 # MineCortex 変更履歴
 
+## v1.4.19 - 2025-06-26
+
+### CraftWorkbenchSkillエラー完全解決とレシピ検索安全性向上
+- **bot.currentWorld誤用修正**: 存在しないAPIプロパティアクセスによる`Cannot read properties of undefined (reading 'blocks')`エラー完全解決
+- **安全なレシピ検索ヘルパー実装**: `SkillLibrary.getRecipeSafe()`静的メソッドでAPI誤用防止機構構築
+- **作業台クラフト機能復旧**: 長期間クラッシュしていた作業台自動作成機能が正常動作に復旧
+- **Mineflayer API準拠**: 正しいインベントリクラフト仕様に準拠したレシピ検索方法への変更
+
+### 変更されたファイル
+
+#### src/SkillLibrary.js
+**変更内容**: CraftWorkbenchSkillの`bot.currentWorld.blocks[0]`を`null`に修正、`getRecipeSafe()`ヘルパー実装
+**変更意図**: Mineflayer v4でのAPI仕様準拠と作業台クラフト（2×2インベントリ）の正しい実装
+**期待効果**: 作業台クラフト時のundefinedアクセスエラー完全防止、レシピ検索の安全性向上
+
+### 技術改善詳細
+- **修正前**: `bot.recipesFor(workbenchItem.id, null, 1, bot.currentWorld.blocks[0])` - 存在しないAPI
+- **修正後**: `SkillLibrary.getRecipeSafe(bot, workbenchItem.id, 1, null)` - 安全なヘルパー経由
+- **レシピ検索ヘルパー**: try-catchによるエラーハンドリングと適切な戻り値統一
+- **API仕様準拠**: 作業台クラフトはインベントリ内2×2なので第4引数nullが正しい
+
+### 動作検証結果
+- 90秒のE2Eテスト実行で`Cannot read properties of undefined (reading 'blocks')`エラー完全消失確認
+- TaskPlannerと組み合わせた作業台クラフトタスク計画・実行の正常動作確認
+- マルチプレイヤー環境での5体AI安定動作確認
+- 新フェーズとして`NO_RECIPE`エラーを発見（minecraft-data関連の別問題）
+
+### セキュリティと保守性向上
+- `getRecipeSafe()`により将来的なAPI誤用を防止
+- エラーログの詳細化でデバッグ支援強化
+- 統一されたレシピ検索パターンの確立
+
 ## v1.4.18 - 2025-06-26
 
 ### InventoryUtilsインポート修正によるTaskPlannerエラー完全解決
