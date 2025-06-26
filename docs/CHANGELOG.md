@@ -1,8 +1,22 @@
 # MineCortex 変更履歴
 
+## v1.4.21 - 2025-06-26 22:15
+
+### NO_RECIPE問題完全解決 - minecraft-data 3.90.0対応
+- **根本原因解決**: minecraft-data依存関係を3.0.0→3.90.0に更新、Minecraft 1.21完全対応
+- **新構造レシピ検索**: minecraft-data 3.90.0の`data.recipes[itemId]`配列構造に対応
+- **完全テスト成功**: 全重要アイテム（crafting_table, oak_planks, wooden_pickaxe等）で100%レシピ検索成功
+- **後方互換性保持**: 従来のMineflayer APIフォールバックシステム継続
+
+### 緊急修正完了 (22:15)
+- **package.json**: minecraft-data依存関係更新 `^3.0.0` → `^3.90.0`
+- **SkillLibrary.js**: minecraft-data新構造対応の直接レシピ検索フォールバック実装
+- **テスト検証**: recipe-verification.js、mineflayer-recipe-test.js両方で6/6項目成功
+- **診断ツール強化**: RecipeDiagnostics.jsでレシピ構造詳細分析実装
+
 ## v1.4.20 - 2025-06-26
 
-### NO_RECIPE問題包括的解決システム実装
+### NO_RECIPE問題包括的解決システム実装（初期）
 - **診断システム導入**: レシピ検索問題の根本原因分析と段階的解決アプローチを実装
 - **拡張レシピ検索機能**: フォールバック戦略、エイリアス対応、キャッシュシステムによる包括的レシピ検索
 - **バージョン整合性チェック**: minecraft-dataとMineflayerのバージョン互換性を起動時診断

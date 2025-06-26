@@ -5,6 +5,7 @@
 
 const mineflayer = require('mineflayer');
 const mcData = require('minecraft-data');
+const SkillLibrary = require('../src/SkillLibrary');
 
 class MineflayerRecipeTest {
   constructor() {
@@ -67,27 +68,35 @@ class MineflayerRecipeTest {
         return;
       }
 
-      // Test with different approaches
+      // Test using SkillLibrary.getRecipeSafe() with updated minecraft-data 3.90.0 support
       let recipeFound = false;
       let recipeDetails = '';
 
       try {
-        // Approach 1: Try with mock recipesFor function (simulate mineflayer behavior)
-        const recipes = this.mockRecipesFor(data, item.id);
-        if (recipes && recipes.length > 0) {
+        // Approach 1: Use the enhanced getRecipeSafe method
+        const recipe = SkillLibrary.getRecipeSafe(this.bot, item.name, 1, null);
+        if (recipe) {
           recipeFound = true;
-          recipeDetails = `Mock API found ${recipes.length} recipe(s)`;
+          const ingredientCount = recipe.delta ? recipe.delta.length : 'unknown';
+          recipeDetails = `getRecipeSafe found recipe with ${ingredientCount} ingredients`;
+          console.log(`[MineflayerRecipeTest] ✓ getRecipeSafe success for ${item.name}:`, {
+            hasResult: !!recipe.result,
+            hasIngredients: !!recipe.delta,
+            ingredientCount: recipe.delta?.length || 0
+          });
         }
       } catch (error) {
-        console.log(`[MineflayerRecipeTest] Mock API failed for ${item.name}: ${error.message}`);
+        console.log(`[MineflayerRecipeTest] getRecipeSafe failed for ${item.name}: ${error.message}`);
       }
 
       if (!recipeFound) {
-        // Approach 2: Direct minecraft-data recipe search
-        const directRecipes = this.findRecipesInData(data, item.id);
-        if (directRecipes.length > 0) {
-          recipeFound = true;
-          recipeDetails = `Direct search found ${directRecipes.length} recipe(s)`;
+        // Approach 2: Fallback to direct minecraft-data search (new structure)
+        if (data.recipes && data.recipes[item.id]) {
+          const directRecipes = data.recipes[item.id];
+          if (Array.isArray(directRecipes) && directRecipes.length > 0) {
+            recipeFound = true;
+            recipeDetails = `Direct minecraft-data 3.90.0 search found ${directRecipes.length} recipe(s)`;
+          }
         }
       }
 

@@ -24,7 +24,7 @@
   "dependencies": {
     "mineflayer": "^4.29.0",
     "mineflayer-pathfinder": "^2.4.0",
-    "minecraft-data": "^3.0.0",
+    "minecraft-data": "^3.90.0",
     "openai": "^4.0.0",
     "axios": "^1.6.0",
     "dotenv": "^16.0.0",

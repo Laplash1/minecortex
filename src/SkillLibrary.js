@@ -118,6 +118,48 @@ class SkillLibrary {
         }
       }
 
+      // minecraft-data 3.90.0+ direct recipe search fallback
+      if (!foundRecipe && mcData.recipes) {
+        try {
+          console.log(`[レシピ検索] minecraft-data直接検索を試行: ${itemName}(id:${itemId})`);
+          
+          // minecraft-data 3.90.0の新構造: data.recipes[itemId] が配列
+          const directRecipes = mcData.recipes[itemId];
+          if (directRecipes && Array.isArray(directRecipes) && directRecipes.length > 0) {
+            // 最初のレシピを変換
+            const rawRecipe = directRecipes[0];
+            
+            // Mineflayer形式に変換
+            foundRecipe = {
+              result: rawRecipe.result || { id: itemId, count: count },
+              delta: []
+            };
+            
+            // 材料情報を変換
+            if (rawRecipe.ingredients) {
+              // shapeless recipe
+              foundRecipe.delta = rawRecipe.ingredients.map(ingredientId => ({
+                id: ingredientId,
+                count: 1
+              }));
+              console.log(`[レシピ検索] Shapeless recipe found for ${itemName}: ingredients ${rawRecipe.ingredients}`);
+            } else if (rawRecipe.inShape) {
+              // shaped recipe
+              const flatIngredients = rawRecipe.inShape.flat().filter(id => id !== null && id !== undefined);
+              foundRecipe.delta = flatIngredients.map(ingredientId => ({
+                id: ingredientId,
+                count: 1
+              }));
+              console.log(`[レシピ検索] Shaped recipe found for ${itemName}: shape ${JSON.stringify(rawRecipe.inShape)}`);
+            }
+            
+            console.log(`[レシピ検索] minecraft-data直接検索で${itemName}のレシピを発見`);
+          }
+        } catch (directError) {
+          console.warn(`[レシピ検索] Direct minecraft-data search failed: ${directError.message}`);
+        }
+      }
+
       // Cache the result (success or failure)
       SkillLibrary._recipeCache.set(cacheKey, {
         recipe: foundRecipe,

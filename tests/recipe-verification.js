@@ -66,19 +66,43 @@ class RecipeVerificationTest {
         return;
       }
 
-      // minecraft-data has different recipe structure - check all possible recipes
+      // minecraft-data 3.90.0+ 新構造対応テスト
       let recipeFound = false;
       let recipeDetails = '';
 
-      // Check shaped recipes
-      if (data.recipes && Object.keys(data.recipes).length > 0) {
-        for (const [recipeId, recipe] of Object.entries(data.recipes)) {
-          if (recipe.result && recipe.result.id === item.id) {
-            recipeFound = true;
-            const ingredientCount = recipe.ingredients ? recipe.ingredients.length : 
-                                   recipe.inShape ? recipe.inShape.flat().filter(x => x !== null).length : 0;
-            recipeDetails = `Recipe ID: ${recipeId}, ingredients: ${ingredientCount}`;
-            break;
+      // 直接検索: data.recipes[itemId] が配列になっている
+      if (data.recipes && data.recipes[item.id]) {
+        const directRecipes = data.recipes[item.id];
+        if (Array.isArray(directRecipes) && directRecipes.length > 0) {
+          recipeFound = true;
+          const recipe = directRecipes[0];
+          const ingredientCount = recipe.ingredients ? recipe.ingredients.length : 
+                                 recipe.inShape ? recipe.inShape.flat().filter(x => x !== null && x !== undefined).length : 0;
+          recipeDetails = `Direct lookup: ${directRecipes.length} recipe(s), ingredients: ${ingredientCount}`;
+          
+          console.log(`[RecipeTest] ✓ Found recipe for ${itemName} via direct lookup:`, {
+            recipeCount: directRecipes.length,
+            hasIngredients: !!recipe.ingredients,
+            hasInShape: !!recipe.inShape,
+            result: recipe.result
+          });
+        }
+      }
+
+      // バックアップ検索: 全レシピをスキャン
+      if (!recipeFound && data.recipes && Object.keys(data.recipes).length > 0) {
+        for (const [recipeId, recipeArray] of Object.entries(data.recipes)) {
+          if (Array.isArray(recipeArray)) {
+            for (const recipe of recipeArray) {
+              if (recipe.result && recipe.result.id === item.id) {
+                recipeFound = true;
+                const ingredientCount = recipe.ingredients ? recipe.ingredients.length : 
+                                       recipe.inShape ? recipe.inShape.flat().filter(x => x !== null && x !== undefined).length : 0;
+                recipeDetails = `Full scan: Recipe ID ${recipeId}, ingredients: ${ingredientCount}`;
+                break;
+              }
+            }
+            if (recipeFound) break;
           }
         }
       }
