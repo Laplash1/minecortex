@@ -1,4 +1,4 @@
-const { InventoryUtils } = require('./InventoryUtils');
+const InventoryUtils = require('./InventoryUtils');
 
 class TaskPlanner {
   constructor(bot) {

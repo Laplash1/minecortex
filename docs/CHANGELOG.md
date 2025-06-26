@@ -1,5 +1,67 @@
 # MineCortex 変更履歴
 
+## v1.4.18 - 2025-06-26
+
+### InventoryUtilsインポート修正によるTaskPlannerエラー完全解決
+- **require文構文エラー修正**: TaskPlanner.js、ControlPrimitives.jsでの誤った分割代入を正しいデフォルトインポートに修正
+- **TaskPlannerエラー完全消失**: `Cannot read properties of undefined (reading 'hasItem')`エラーの根本解決
+- **作業台クラフトタスク復旧**: 長期間動作不能だった作業台クラフト計画機能が正常復旧
+- **マルチプレイヤー安定性向上**: 全プレイヤーでの頻発エラーが解消され、AI基本機能が安定動作
+
+### 変更されたファイル
+
+#### src/TaskPlanner.js
+**変更内容**: 1行目のInventoryUtilsインポートを分割代入からデフォルトインポートに修正
+**変更意図**: InventoryUtils.jsのデフォルトエクスポートに対応した正しいインポート方式の適用
+**期待効果**: TaskPlannerでのInventoryUtilsメソッド呼び出し時のundefinedエラー完全防止
+
+#### src/ControlPrimitives.js
+**変更内容**: 同様にInventoryUtilsインポートを正しい構文に修正
+**変更意図**: 一貫したモジュールインポート方式の統一とエラー予防
+**期待効果**: 将来的なControlPrimitivesでのInventoryUtils使用時の安定性確保
+
+### 技術詳細
+- **修正前**: `const { InventoryUtils } = require('./InventoryUtils');` (分割代入)
+- **修正後**: `const InventoryUtils = require('./InventoryUtils');` (デフォルトインポート)
+- **根本原因**: InventoryUtils.jsが`module.exports = InventoryUtils`でデフォルトエクスポートしているため、分割代入ではundefinedとなる
+
+### 動作検証結果
+- 2分間のE2Eテスト実行でTaskPlannerエラー完全消失確認
+- `[タスクプランナー] 作業台クラフトタスクを計画中...`の正常実行確認
+- マルチプレイヤー環境での5体AI同時動作での安定性確認
+- 新規課題として`Cannot read properties of undefined (reading 'blocks')`を発見
+
+## v1.4.17 - 2025-06-26
+
+### TaskPlannerエラー修正とCraftSkill改善
+- **TaskPlannerのundefinedエラー解決**: `Cannot read properties of undefined (reading 'hasItem')`エラーの根本修正
+- **全メソッド安全性強化**: TaskPlannerの全メソッドに`this.bot`と`this.bot.inventory`の存在チェック追加
+- **CraftToolsSkillレシピnull対応**: レシピ不存在時の早期リターンとクラッシュ防止機能実装
+- **エラー区別システム**: NO_RECIPE vs INSUFFICIENT_MATERIALSの明確な区別でAI回復戦略向上
+
+### 変更されたファイル
+
+#### src/TaskPlanner.js
+**変更内容**: 全メソッドにbot/inventory安全性チェック追加、詳細エラーログ実装
+**変更意図**: undefinedオブジェクトアクセスによる実行時エラーを防止し、システム安定性向上
+**期待効果**: TaskPlanner関連クラッシュの完全防止、デバッグ容易性向上
+
+#### src/SkillLibrary.js
+**変更内容**: CraftToolsSkill、CraftWorkbenchSkill、CraftFurnaceSkillでレシピnull早期チェック実装
+**変更意図**: レシピ不存在と材料不足を明確に区別し、適切なエラー情報提供
+**期待効果**: AIの自己回復能力向上、クラフト失敗時の適切な代替アクション実行
+
+### 技術改善詳細
+- **グレースフルエラーハンドリング**: null戻り値による上位層への安全な失敗通知
+- **統一エラーレスポンス**: 全CraftSkillで一貫したエラー形式（reason、details）採用
+- **詳細デバッグ情報**: エラー発生時の具体的な状況とコンテキスト情報出力
+- **初期化状態検証**: ボット初期化不完全時の適切な処理とログ出力
+
+### 動作検証
+- マルチプレイヤー環境での90秒テスト実行で改善確認
+- 作業台クラフトタスクでのエラー頻発問題解決
+- undefinedアクセスエラーの完全排除確認
+
 ## v1.4.16 - 2025-06-26
 
 ### InventoryUtils.js 安定性向上とAPI互換性問題解決

@@ -1,7 +1,7 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { GoalBlock, GoalLookAtBlock } = goals;
 const { Vec3 } = require('vec3');
-const { InventoryUtils } = require('./InventoryUtils');
+const InventoryUtils = require('./InventoryUtils');
 
 class ControlPrimitives {
   constructor(bot) {
