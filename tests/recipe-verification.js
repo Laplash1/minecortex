@@ -10,7 +10,7 @@ class RecipeVerificationTest {
     this.testResults = [];
   }
 
-  async runTests(version = '1.20.4') {
+  async runTests(version = '1.21') {
     console.log(`[RecipeTest] Starting recipe verification for Minecraft ${version}`);
     
     try {

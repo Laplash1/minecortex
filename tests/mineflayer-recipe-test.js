@@ -26,7 +26,7 @@ class MineflayerRecipeTest {
       });
 
       // Initialize minecraft-data
-      const version = '1.20.4';
+      const version = '1.21';
       const data = mcData(version);
       console.log(`[MineflayerRecipeTest] Testing with version: ${version}`);
       

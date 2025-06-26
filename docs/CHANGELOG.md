@@ -52,16 +52,18 @@
 - **構造解析テスト**: minecraft-dataの実際の構造理解とAPI適応
 - **継続的監視**: 定期実行による品質劣化の早期発見
 
-### 動作検証結果
+### 動作検証結果（Minecraft 1.21環境）
 - 120秒のE2Eテスト実行でNO_RECIPEエラーの診断情報大幅向上確認
 - バージョン情報ログ出力により`Bot version`と`mcData version`の可視化実現
 - フォールバック戦略により一部レシピの復旧可能性を実証
-- 根本的なminecraft-dataバージョン問題の特定（crafting_table id:300での継続的失敗）
+- **Minecraft 1.21特有問題の特定**: crafting_table id:300でのレシピ検索失敗の継続的発生
+- minecraft-data@3.0.0とMineflayer v4のMinecraft 1.21対応における互換性問題を確認
 
 ### 今後の発展方針
-- **次段階**: minecraft-dataバージョン更新またはMineflayer v4対応レシピデータ再構築
+- **次段階**: Minecraft 1.21対応のminecraft-dataバージョン更新またはMineflayer v4互換レシピデータ再構築
+- **1.21特化対応**: 最新バージョン固有のアイテムID変更とレシピ構造調査
 - **ESLint拡張**: bot.currentWorld使用禁止ルールでAPI誤用防止
-- **CI/CD統合**: GitHub Actionsでの自動レシピ検証テスト実行
+- **CI/CD統合**: GitHub Actionsでの自動レシピ検証テスト実行（複数バージョンmatrix含む）
 
 ## v1.4.19 - 2025-06-26
 
