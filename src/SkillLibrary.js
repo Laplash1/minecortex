@@ -33,7 +33,6 @@ class SkillLibrary {
     this.registerSkill('craft_furnace', new CraftFurnaceSkill());
 
     // Building skills
-    this.registerSkill('build_shelter', new BuildShelterSkill());
     this.registerSkill('place_blocks', new PlaceBlocksSkill());
 
     console.log(`${this.skills.size}個のスキルを読み込みました`);
@@ -958,26 +957,11 @@ class MineBlockSkill extends Skill {
         }
       }
 
-        // Additional strict line of sight check before mining
+      // Additional strict line of sight check before mining
       const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
       if (!finalLineOfSight.clear) {
         console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}`);
-
-        // Try to handle out-of-sight block: approach and clear obstacles
-        const handleResult = await this.handleOutOfSightBlock(bot, block, finalLineOfSight);
-        if (!handleResult.success) {
-          console.log(`[マイニング] 視界外ブロック処理失敗: ${handleResult.error}。次のブロックを探します`);
-          continue; // Skip this block and find another
-        }
-
-        console.log('[マイニング] 視界外ブロック処理成功、採掘を継続します');
-
-        // Re-verify line of sight after handling
-        const verifyLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
-        if (!verifyLineOfSight.clear) {
-          console.log('[マイニング] 処理後も視界が確保されません。次のブロックを探します');
-          continue;
-        }
+        continue;
       }
 
       // Check inventory space before mining
@@ -1136,7 +1120,6 @@ class MineBlockSkill extends Skill {
 
     // Start with close-range search and expand for better coverage
     const searchRadii = [16, 32, 64, 128]; // Extended search range
-    const botPosition = bot.entity.position;
 
     for (const radius of searchRadii) {
       console.log(`[マイニング] ${radius}ブロック範囲で${blockType}を探索中...`);
@@ -1707,6 +1690,7 @@ class MineBlockSkill extends Skill {
 
   // Tool management for mining different block types
   async equipAppropriateToolForBlock(bot, block) {
+    console.log(`[ツール管理] ${block.name}の採掘に適したツールを装備します`);
     const blockName = block.name;
 
     // Define which blocks require tools and what tools are needed
@@ -2409,96 +2393,250 @@ class SimpleFindFoodSkill extends Skill {
 // Crafting Skills
 class CraftToolsSkill extends Skill {
   constructor() {
-    super('craft_tools', 'Craft basic tools');
+    super('craft_tools', 'Crafts specified tools.');
   }
 
   async execute(bot, params) {
-    const { toolType = 'wooden_pickaxe' } = params;
+    const { tools } = params;
+    const mcData = require('minecraft-data')(bot.version);
+
+    console.log(`[ツールスキル] ${tools.join(', ')}の作成を開始します...`);
+
+    // Ensure we have a crafting table nearby or in inventory
+    const workbenchSkill = new CraftWorkbenchSkill();
+    const workbenchResult = await workbenchSkill.ensureWorkbench(bot);
+
+    if (!workbenchResult.success) {
+      console.log(`[ツールスキル] 作業台の確保に失敗: ${workbenchResult.error}`);
+      return { success: false, reason: 'CRAFTING_TABLE_MISSING', details: { error: workbenchResult.error } };
+    }
+
+    const craftingTable = workbenchResult.workbench;
+
+    const craftedTools = [];
+    for (const toolName of tools) {
+      console.log(`[ツールスキル] ${toolName}の作成を試みます`);
+
+      const toolItem = mcData.itemsByName[toolName];
+      if (!toolItem) {
+        console.log(`[ツールスキル] 不明なツール: ${toolName}`);
+        continue;
+      }
+
+      // Check if tool already exists in inventory
+      if (InventoryUtils.hasItem(bot, toolName)) {
+        console.log(`[ツールスキル] ${toolName}は既にインベントリにあります`);
+        craftedTools.push(toolName);
+        continue;
+      }
+
+      const recipe = bot.recipesFor(toolItem.id, null, 1, craftingTable)[0];
+      if (!recipe) {
+        const missingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+        console.log(`[ツールスキル] ${toolName}のレシピが見つからないか、材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
+        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing: missingMaterials, tool: toolName } };
+      }
+
+      try {
+        console.log(`[ツールスキル] ${toolName}をクラフト中...`);
+        await bot.craft(recipe, 1, craftingTable);
+        console.log(`[ツールスキル] ${toolName}をクラフトしました！`);
+        bot.chat(`${toolName}をクラフトしました！ 🔨`);
+        craftedTools.push(toolName);
+      } catch (error) {
+        console.log(`[ツールスキル] ${toolName}のクラフトに失敗: ${error.message}`);
+        return { success: false, error: `Failed to craft ${toolName}: ${error.message}` };
+      }
+    }
+
+    if (craftedTools.length === tools.length) {
+      console.log('[ツールスキル] 全てのツールを正常にクラフトしました。');
+      return { success: true, crafted: craftedTools };
+    } else if (craftedTools.length > 0) {
+      console.log('[ツールスキル] 一部のツールをクラフトしました。');
+      return { success: true, crafted: craftedTools, message: '一部のツールをクラフトしました' };
+    } else {
+      console.log('[ツールスキル] ツールをクラフトできませんでした。');
+      return { success: false, error: 'ツールをクラフトできませんでした' };
+    }
+  }
+
+  getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
+    const mcData = require('minecraft-data')(bot.version);
+    const recipes = bot.recipesFor(itemId, null, 1, craftingTable);
+    if (recipes.length === 0) return [{ item: 'unknown', needed: 1, reason: 'No recipe' }];
+
+    const recipe = recipes[0];
+    const missing = [];
+
+    for (const ingredient of recipe.ingredients) {
+      const needed = ingredient.count;
+      const available = bot.inventory.count(ingredient.id);
+      if (available < needed) {
+        const itemName = mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
+        missing.push({ item: itemName, needed: needed - available, have: available });
+      }
+    }
+    return missing;
+  }
+
+  async ensureWorkbench(bot) {
+    console.log('[ツールスキル] 作業台の確保を開始...');
+
+    // Check if a workbench is already placed nearby
+    const workbench = bot.findBlock({
+      matching: (block) => block && block.name === 'crafting_table',
+      maxDistance: 8
+    });
+
+    if (workbench) {
+      console.log(`[ツールスキル] 近くに作業台を発見: ${workbench.position}`);
+      return { success: true, workbench };
+    }
+
+    // Check if we have a crafting table in inventory
+    if (InventoryUtils.hasItem(bot, 'crafting_table', 1, true)) {
+      console.log('[ツールスキル] インベントリに作業台があります。設置を試みます...');
+      const placeResult = await this.placeCraftingTable(bot);
+      if (placeResult.success) {
+        return { success: true, workbench: placeResult.workbench };
+      } else {
+        console.log(`[ツールスキル] 作業台の設置に失敗: ${placeResult.error}`);
+        return { success: false, error: `作業台の設置に失敗: ${placeResult.error}` };
+      }
+    }
+
+    // If not, try to craft one
+    console.log('[ツールスキル] 作業台がありません。作成を試みます...');
+    const craftWorkbenchSkill = new CraftWorkbenchSkill();
+    const craftResult = await craftWorkbenchSkill.execute(bot, {});
+
+    if (craftResult.success) {
+      console.log('[ツールスキル] 作業台の作成に成功しました。設置を試みます...');
+      const placeResult = await this.placeCraftingTable(bot);
+      if (placeResult.success) {
+        return { success: true, workbench: placeResult.workbench };
+      } else {
+        console.log(`[ツールスキル] 作成した作業台の設置に失敗: ${placeResult.error}`);
+        return { success: false, error: `作成した作業台の設置に失敗: ${placeResult.error}` };
+      }
+    } else {
+      console.log(`[ツールスキル] 作業台の作成に失敗: ${craftResult.error}`);
+      return { success: false, error: `作業台の作成に失敗: ${craftResult.error}` };
+    }
+  }
+
+  async placeCraftingTable(bot) {
+    console.log('[ツールスキル] 作業台の設置場所を探しています...');
+    const refBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0)); // Block below bot
+
+    if (!refBlock) {
+      console.log('[ツールスキル] 設置基準ブロックが見つかりません。');
+      return { success: false, error: '設置基準ブロックが見つかりません' };
+    }
 
     try {
-      // Ensure we have a workbench
-      const workbench = bot.findBlock({
-        matching: (block) => block && block.name === 'crafting_table',
-        maxDistance: 8
-      });
-
-      if (!workbench) {
-        return { success: false, error: 'CRAFTING_TABLE_MISSING' };
+      const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
+      if (!craftingTableItem) {
+        console.log('[ツールスキル] インベントリに作業台がありません。');
+        return { success: false, error: 'インベントリに作業台がありません' };
       }
 
-      // Get recipe
-      const mcData = require('minecraft-data')(bot.version);
-      const item = mcData.itemsByName[toolType];
-      if (!item) {
-        return { success: false, error: `ツールタイプ ${toolType} が見つかりません` };
-      }
+      await bot.equip(craftingTableItem, 'hand');
+      await bot.placeBlock(refBlock, new Vec3(0, 1, 0)); // Place on top of the block below
 
-      const recipe = bot.recipesFor(item.id, null, 1, workbench)[0];
-      if (!recipe) {
-        return { success: false, error: `${toolType} のレシピが見つかりません` };
+      // Verify placement
+      const placedBlock = bot.blockAt(refBlock.position.offset(0, 1, 0));
+      if (placedBlock && placedBlock.name === 'crafting_table') {
+        console.log('[ツールスキル] 作業台を正常に設置しました！');
+        return { success: true, workbench: placedBlock };
+      } else {
+        console.log('[ツールスキル] 作業台の設置を確認できませんでした。');
+        return { success: false, error: '作業台の設置を確認できませんでした' };
       }
-
-      // Craft the tool
-      await bot.craft(recipe, 1, workbench);
-      return { success: true, tool: toolType };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.log(`[ツールスキル] 作業台の設置中にエラー: ${error.message}`);
+      return { success: false, error: `作業台の設置中にエラー: ${error.message}` };
     }
   }
 }
 
 class CraftWorkbenchSkill extends Skill {
   constructor() {
-    super('craft_workbench', 'Craft a workbench');
+    super('craft_workbench', 'Crafts a crafting table.');
   }
 
-  async execute(bot, _params) {
+  async execute(bot, params) {
+    console.log('[作業台スキル] 作業台の作成を開始します...');
+
+    const mcData = require('minecraft-data')(bot.version);
+    const workbenchItem = mcData.itemsByName.crafting_table;
+    if (!workbenchItem) {
+      console.log('[作業台スキル] クラフトテーブルのアイテムデータが見つかりません');
+      return { success: false, error: 'クラフトテーブルのアイテムデータが見つかりません' };
+    }
+
+    // Check if we already have a crafting table in inventory
+    if (InventoryUtils.hasItem(bot, 'crafting_table', 1, true)) {
+      console.log('[作業台スキル] インベントリに作業台が既にあります');
+      return { success: true, message: 'インベントリに作業台が既にあります' };
+    }
+
+    // Check for planks
+    const planksCount = InventoryUtils.getAvailablePlanks(bot);
+    console.log(`[作業台スキル] 利用可能な板材: ${planksCount}個`);
+    if (planksCount < 4) {
+      console.log('[作業台スキル] 板材が不足しています。木材収集を試みます...');
+      const gatherWoodSkill = new SimpleGatherWoodSkill();
+      const gatherResult = await gatherWoodSkill.execute(bot, { amount: 1 }); // Gather at least 1 wood
+      if (!gatherResult.success) {
+        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing: [{ item: 'wood', needed: 1 }] } };
+      }
+      // After gathering wood, try to craft planks
+      await this.craftPlanksFromLogs(bot);
+      const updatedPlanksCount = InventoryUtils.getAvailablePlanks(bot);
+      if (updatedPlanksCount < 4) {
+        console.log('[作業台スキル] 木材を収集しましたが、まだ板材が不足しています');
+        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing: [{ item: 'planks', needed: 4 - updatedPlanksCount }] } };
+      }
+    }
+
+    // Find recipe for crafting table
+    const recipe = bot.recipesFor(workbenchItem.id, null, 1, bot.currentWorld.blocks[0]);
+    if (!recipe || recipe.length === 0) {
+      console.log('[作業台スキル] 作業台のレシピが見つかりません');
+      return { success: false, error: '作業台のレシピが見つかりません' };
+    }
+
+    console.log('[作業台スキル] 作業台をクラフト中...');
     try {
-      console.log('[作業台スキル] 作業台を作成します');
-
-      // 1. Check inventory for wood and planks
-      const inventorySummary = InventoryUtils.getInventorySummary(bot);
-      console.log(`[作業台スキル] インベントリ状況: 木材 ${inventorySummary.wood}個, 板材 ${inventorySummary.planks}個`);
-
-      // 2. If not enough planks, craft them from wood
-      if (inventorySummary.planks < 4) {
-        if (inventorySummary.wood > 0) {
-          console.log('[作業台スキル] 板材が不足しています。木材から板材を作成します...');
-          const mcData = require('minecraft-data')(bot.version);
-          const plankItem = mcData.itemsByName.oak_planks;
-          if (plankItem) {
-            const plankRecipes = bot.recipesFor(plankItem.id, null, 1, null);
-            if (plankRecipes.length > 0) {
-              await bot.craft(plankRecipes[0], inventorySummary.wood, null);
-              console.log('[作業台スキル] 板材を作成しました');
-            }
-          }
-        } else {
-          console.log('[作業台スキル] 木材も板材も不足しています');
-          return { success: false, error: 'WOOD_AND_PLANKS_MISSING' };
-        }
-      }
-
-      // 3. Get workbench recipe
-      const mcData = require('minecraft-data')(bot.version);
-      const workbenchItem = mcData.itemsByName.crafting_table;
-      if (!workbenchItem) {
-        return { success: false, error: '作業台のアイテムデータが見つかりません' };
-      }
-
-      const recipe = bot.recipesFor(workbenchItem.id, null, 1, null)[0];
-      if (!recipe) {
-        return { success: false, error: '作業台のレシピが見つかりません' };
-      }
-
-      // 4. Craft the workbench
-      await bot.craft(recipe, 1, null);
-      console.log('[作業台スキル] 作業台の作成に成功しました');
-      return { success: true };
+      await bot.craft(recipe[0], 1, null); // Craft in inventory
+      console.log('[作業台スキル] 作業台をクラフトしました！');
+      bot.chat('作業台をクラフトしました！');
+      return { success: true, crafted: 'crafting_table' };
     } catch (error) {
-      console.log(`[作業台スキル] エラー詳細: ${error.message}`);
-      console.log(`[作業台スキル] エラースタック: ${error.stack}`);
-      return { success: false, error: error.message };
+      console.log(`[作業台スキル] 作業台のクラフトに失敗: ${error.message}`);
+      return { success: false, error: `作業台のクラフトに失敗: ${error.message}` };
+    }
+  }
+
+  async craftPlanksFromLogs(bot) {
+    const mcData = require('minecraft-data')(bot.version);
+    const oakPlanks = mcData.itemsByName.oak_planks;
+    if (!oakPlanks) return;
+
+    const logCount = InventoryUtils.getWoodCount(bot);
+    if (logCount === 0) return;
+
+    console.log(`[作業台スキル] ${logCount}個の原木から板材を作成中...`);
+    const recipe = bot.recipesFor(oakPlanks.id, null, 1, null)[0];
+    if (recipe) {
+      try {
+        await bot.craft(recipe, logCount, null); // Craft all logs into planks
+        console.log('[作業台スキル] 原木から板材を作成しました。');
+      } catch (error) {
+        console.log(`[作業台スキル] 板材作成失敗: ${error.message}`);
+      }
     }
   }
 }
@@ -2540,56 +2678,6 @@ class CraftFurnaceSkill extends Skill {
     } catch (error) {
       return { success: false, error: error.message };
     }
-  }
-}
-
-// Building Skills
-class BuildShelterSkill extends Skill {
-  constructor() {
-    super('build_shelter', 'Build a simple shelter');
-  }
-
-  async execute(bot, params) {
-    const { size = 3, material = 'dirt' } = params;
-
-    try {
-      const startPos = bot.entity.position.floored();
-
-      // Build walls
-      for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) {
-          if (i === 0 || i === size - 1 || j === 0 || j === size - 1) {
-            for (let k = 0; k < 3; k++) {
-              const pos = startPos.offset(i, k, j);
-              await this.placeBlock(bot, material, pos);
-            }
-          }
-        }
-      }
-
-      // Build roof
-      for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) {
-          const pos = startPos.offset(i, 3, j);
-          await this.placeBlock(bot, material, pos);
-        }
-      }
-
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  async placeBlock(bot, material, position) {
-    const block = bot.inventory.items().find(item => item.name === material);
-    if (!block) return;
-
-    const referenceBlock = bot.blockAt(position.offset(0, -1, 0));
-    if (!referenceBlock) return;
-
-    await bot.equip(block, 'hand');
-    await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
   }
 }
 
@@ -2678,7 +2766,7 @@ class ExploreSkill extends Skill {
         return { success: true, message: '探索完了、興味深い地点なし' };
       }
     } catch (error) {
-      console.log(`[探索スキル] 移動失敗、近場で探索続行`);
+      console.log('[探索スキル] 移動失敗、近場で探索続行');
       try {
         const scanResult = this.scanForInterestPoints(bot, objective);
         if (scanResult.found.length > 0) {
@@ -2737,10 +2825,6 @@ class ExploreSkill extends Skill {
     );
     interestPoints.animals = animalEntities.map(e => ({ type: 'animal', name: e.name, position: e.position }));
 
-    // Scan for structures (e.g., villages, temples) - basic version
-    const structureKeywords = ['village', 'temple', 'ruin', 'portal'];
-    // This is a placeholder for more advanced structure detection
-    // For now, we can check for blocks that are part of structures
     const structureBlocks = bot.findBlocks({
       matching: (block) => block && (block.name.includes('planks') || block.name.includes('cobblestone')),
       maxDistance: 64,

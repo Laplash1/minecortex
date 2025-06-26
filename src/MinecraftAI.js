@@ -998,40 +998,42 @@ class MinecraftAI {
 
   generateRecoveryTask(reason, details) {
     switch (reason) {
-      case 'NO_TOOL':
-        return {
-          type: 'craft_tools',
-          priority: 0,
-          description: `緊急: ${details.required}を作成`,
-          params: { tools: [details.required] }
-        };
-      case 'INSUFFICIENT_MATERIALS':
-        const material = details.missing[0];
-        return {
-          type: material.item.includes('log') || material.item.includes('planks') ? 'gather_wood' : 'mine_block',
-          priority: 0,
-          description: `緊急: ${material.item}を${material.needed}個集める`,
-          params: {
-            amount: material.needed,
-            blockType: material.item.includes('log') ? 'oak_log' : 'stone' // Simple mapping
-          }
-        };
-      case 'TARGET_NOT_FOUND':
-        return {
-          type: 'explore',
-          priority: 1,
-          description: `探索: ${details.type}を探す`,
-          params: { radius: 100 }
-        };
-      case 'CRAFTING_TABLE_MISSING':
-        return {
-          type: 'craft_workbench',
-          priority: 0,
-          description: '緊急: 作業台を作成'
-        };
-      default:
-        this.log(`不明な失敗理由(${reason})のため、回復タスクを生成できません`);
-        return null;
+    case 'NO_TOOL': {
+      return {
+        type: 'craft_tools',
+        priority: 0,
+        description: `緊急: ${details.required}を作成`,
+        params: { tools: [details.required] }
+      };
+    }
+    case 'INSUFFICIENT_MATERIALS': {
+      const material = details.missing[0];
+      return {
+        type: material.item.includes('log') || material.item.includes('planks') ? 'gather_wood' : 'mine_block',
+        priority: 0,
+        description: `緊急: ${material.item}を${material.needed}個集める`,
+        params: {
+          amount: material.needed,
+          blockType: material.item.includes('log') ? 'oak_log' : 'stone' // Simple mapping
+        }
+      };
+    }
+    case 'TARGET_NOT_FOUND':
+      return {
+        type: 'explore',
+        priority: 1,
+        description: `探索: ${details.type}を探す`,
+        params: { radius: 100 }
+      };
+    case 'CRAFTING_TABLE_MISSING':
+      return {
+        type: 'craft_workbench',
+        priority: 0,
+        description: '緊急: 作業台を作成'
+      };
+    default:
+      this.log(`不明な失敗理由(${reason})のため、回復タスクを生成できません`);
+      return null;
     }
   }
 
@@ -1537,8 +1539,10 @@ class MinecraftAI {
         this.log('アイドル中: 短時間の探索を実行');
       } else {
         // Most of the time, just rest briefly
-        this.log('アイドル中: リソースが十分なため休憩');
-        await this.sleep(2000);
+      this.log('アイドル中: リソースが十分なため休憩');
+      // Log inventory summary during idle to monitor resource levels
+      InventoryUtils.logInventoryDetails(this.bot, 'アイドル時');
+      await this.sleep(2000);
       }
     } catch (error) {
       this.log(`アイドル処理エラー: ${error.message}`);
@@ -1569,7 +1573,7 @@ class MinecraftAI {
 
       // Priority 1: Create workbench if we can craft one
       if (canCraftWorkbench) {
-        this.log(`自動作成: 作業台が必要です（板材${availablePlanks}個利用可能）`);
+        this.log(`自動作成: 作業台が必要です（板材${availablePlanks}個利用可能）`, 'info');
         this.goals.unshift({
           type: 'craft_workbench',
           priority: 1,
@@ -1581,7 +1585,7 @@ class MinecraftAI {
 
       // Priority 2: Create basic tools if we have resources but no tools
       if (canCraftBasicTools && !hasPickaxe && !hasAxe) {
-        this.log(`自動作成: 基本ツールが必要です（板材${availablePlanks}個利用可能）`);
+        this.log(`自動作成: 基本ツールが必要です（板材${availablePlanks}個利用可能）`, 'info');
         this.goals.unshift({
           type: 'craft_tools',
           priority: 1,
@@ -1598,7 +1602,7 @@ class MinecraftAI {
 
         if (upgradeInfo.canUpgrade && upgradeInfo.bestUpgrade) {
           const upgrade = upgradeInfo.bestUpgrade;
-          this.log(`自動アップグレード: ${tool.name} → ${upgrade.to}`);
+          this.log(`自動アップグレード: ${tool.name} → ${upgrade.to}`, 'info');
 
           this.goals.unshift({
             type: 'craft_tools',
@@ -1617,7 +1621,7 @@ class MinecraftAI {
       const toolNeeds = this.analyzeToolNeeds(inventorySummary);
       if (toolNeeds.length > 0) {
         const nextTool = toolNeeds[0];
-        this.log(`自動作成: ${nextTool.type}が必要です`);
+        this.log(`自動作成: ${nextTool.type}が必要です`, 'info');
 
         this.goals.unshift({
           type: 'craft_tools',

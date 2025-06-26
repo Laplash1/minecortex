@@ -116,9 +116,11 @@ class TaskPlanner {
 
   planToolCrafting(goal) {
     const { tools = ['wooden_pickaxe', 'wooden_axe', 'wooden_sword'] } = goal;
+    console.log(`[タスクプランナー] ツールクラフトタスクを計画中: ${tools.join(', ')}`);
 
     // Check materials needed
     const needsWood = this.checkWoodRequirements(tools);
+    console.log(`[タスクプランナー] ツールクラフトの前提条件: 木材必要量=${needsWood}`);
 
     const task = {
       type: 'craft_tools',
@@ -537,25 +539,29 @@ class TaskPlanner {
   }
 
   planWorkbenchCrafting(goal) {
+    console.log('[タスクプランナー] 作業台クラフトタスクを計画中...');
     // Check if we already have a crafting table
     const hasCraftingTable = InventoryUtils.hasItem(this.bot, 'crafting_table');
 
     if (hasCraftingTable) {
-      console.log('作業台を既に所持しています');
+      console.log('[タスクプランナー] 作業台を既に所持しています。タスクをスキップします。');
       return null; // Skip if already have one
     }
+
+    const needsWood = !this.hasEnoughWoodForWorkbench();
+    console.log(`[タスクプランナー] 作業台クラフトの前提条件: 木材収集が必要=${needsWood}`);
 
     return {
       type: 'craft_workbench',
       params: { item: 'crafting_table' },
       priority: goal.priority || 3,
       timeout: Date.now() + 180000, // 3 minutes
-      prerequisites: this.hasEnoughWoodForWorkbench()
-        ? []
-        : [{
+      prerequisites: needsWood
+        ? [{
           type: 'gather_wood',
           params: { amount: 5 }
         }]
+        : []
     };
   }
 
