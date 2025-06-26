@@ -7,13 +7,48 @@
 
 class InventoryUtils {
   /**
+   * Safe count method that handles both Mineflayer v3 standard API and callback extensions
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {Function} predicate - Filter function for items
+   * @returns {number} Item count
+   */
+  static _safeCount(bot, predicate) {
+    if (!bot || !bot.inventory) return 0;
+    
+    try {
+      // Try using bot.inventory.items() method for safer access
+      const items = bot.inventory.items();
+      if (Array.isArray(items)) {
+        return items.filter(item => {
+          if (!item || !item.name) return false;
+          return predicate(item);
+        }).reduce((total, item) => total + item.count, 0);
+      }
+
+      // Fallback: try callback-style count if available
+      if (typeof bot.inventory.count === 'function') {
+        try {
+          return bot.inventory.count(predicate);
+        } catch (callbackError) {
+          console.warn('[InventoryUtils] Callback-style count failed, using items() method');
+        }
+      }
+
+      return 0;
+    } catch (error) {
+      console.error('[InventoryUtils] _safeCount error:', error.message);
+      return 0;
+    }
+  }
+
+  /**
    * Get total wood count (logs) from bot inventory
    * @param {Bot} bot - Mineflayer bot instance
    * @returns {number} Total wood/log count
    */
   static getWoodCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return bot.inventory.count(item => item.name === 'oak_log' || item.name === 'log');
+    return this._safeCount(bot, item => item.name === 'oak_log' || item.name === 'log');
   }
 
   /**
@@ -23,7 +58,7 @@ class InventoryUtils {
    */
   static getStoneCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return bot.inventory.count(item => item.name === 'stone' || item.name === 'cobblestone');
+    return this._safeCount(bot, item => item.name === 'stone' || item.name === 'cobblestone');
   }
 
   /**
@@ -33,7 +68,7 @@ class InventoryUtils {
    */
   static getPlanksCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return bot.inventory.count(item => item.name === 'oak_planks' || item.name === 'planks');
+    return this._safeCount(bot, item => item.name === 'oak_planks' || item.name === 'planks');
   }
 
   /**
@@ -313,11 +348,21 @@ class InventoryUtils {
         gravel: { shovel: 10, pickaxe: 1, axe: 1, sword: 1 }
       };
 
+      // Early check for unsupported block types
+      if (!toolEfficiency[blockType]) {
+        return {
+          tool: null,
+          efficiency: 0,
+          error: `Unsupported block type: ${blockType}`,
+          supportedTypes: Object.keys(toolEfficiency)
+        };
+      }
+
       let bestTool = null;
       let bestEfficiency = 0;
 
       for (const tool of tools) {
-        const toolType = Object.keys(toolEfficiency[blockType] || {}).find(type =>
+        const toolType = Object.keys(toolEfficiency[blockType]).find(type =>
           tool.name.includes(type)
         );
 
