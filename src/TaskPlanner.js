@@ -91,9 +91,12 @@ class TaskPlanner {
     const { amount = 20 } = goal;
 
     // Check if we have an axe
-    const hasAxe = this.bot.inventory.items().some(item =>
-      item && item.name && item.name.includes('axe')
-    );
+    let hasAxe = false;
+    if (this.bot && this.bot.inventory) {
+      hasAxe = this.bot.inventory.items().some(item =>
+        item && item.name && item.name.includes('axe')
+      );
+    }
 
     const task = {
       type: 'gather_wood',
@@ -176,9 +179,12 @@ class TaskPlanner {
     };
 
     // Check if we have weapons for hunting
-    const hasWeapon = this.bot.inventory.items().some(item =>
-      item && item.name && (item.name.includes('sword') || item.name.includes('axe'))
-    );
+    let hasWeapon = false;
+    if (this.bot && this.bot.inventory) {
+      hasWeapon = this.bot.inventory.items().some(item =>
+        item && item.name && (item.name.includes('sword') || item.name.includes('axe'))
+      );
+    }
 
     if (!hasWeapon) {
       task.prerequisites.push({
@@ -265,6 +271,23 @@ class TaskPlanner {
     const timeout = this.calculateTaskTimeout(goal);
 
     // Check current inventory to determine best fallback
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] planGenericTask: botまたはinventoryが未定義です。探索タスクにフォールバックします。');
+      // Fall back to exploration with minimal radius
+      const radius = this.calculateExplorationRadius(goal) * 0.5;
+      return {
+        type: 'explore',
+        params: { radius },
+        priority: goal.priority || 6,
+        timeout: Date.now() + 180000, // 3 minutes
+        prerequisites: [],
+        context: {
+          originalType: taskType,
+          fallbackReason: 'Bot inventory not available'
+        }
+      };
+    }
+    
     const woodCount = InventoryUtils.getWoodCount(this.bot);
     const stoneCount = InventoryUtils.getStoneCount(this.bot);
 
@@ -445,14 +468,27 @@ class TaskPlanner {
   }
 
   hasPickaxe() {
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] hasPickaxe: botまたはinventoryが未定義です');
+      return false;
+    }
     return InventoryUtils.hasTool(this.bot, 'pickaxe');
   }
 
   hasWeapon() {
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] hasWeapon: botまたはinventoryが未定義です');
+      return false;
+    }
     return InventoryUtils.hasTool(this.bot, 'sword');
   }
 
   checkWoodRequirements(tools) {
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] checkWoodRequirements: botまたはinventoryが未定義です');
+      return 10; // Default requirement when bot is not available
+    }
+    
     const woodNeeded = InventoryUtils.calculateWoodRequirements(tools);
     const availablePlanks = InventoryUtils.getAvailablePlanks(this.bot);
 
@@ -489,6 +525,11 @@ class TaskPlanner {
   }
 
   checkWoodGatheringComplete(task) {
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] checkWoodGatheringComplete: botまたはinventoryが未定義です');
+      return false; // Can't determine completion status
+    }
+    
     const { amount } = task.params;
     const currentWood = InventoryUtils.getWoodCount(this.bot) +
                        (InventoryUtils.getPlanksCount(this.bot) / 4);
@@ -497,6 +538,11 @@ class TaskPlanner {
   }
 
   checkToolCraftingComplete(task) {
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] checkToolCraftingComplete: botまたはinventoryが未定義です');
+      return false; // Can't determine completion status
+    }
+    
     const { tools } = task.params;
 
     return tools.every(tool => {
@@ -505,11 +551,21 @@ class TaskPlanner {
   }
 
   checkFoodGatheringComplete(task) {
+    if (!this.bot) {
+      console.warn('[タスクプランナー] checkFoodGatheringComplete: botが未定義です');
+      return false; // Can't determine completion status
+    }
+    
     const { minHunger } = task.params;
     return this.bot.food >= minHunger;
   }
 
   checkMovementComplete(task) {
+    if (!this.bot || !this.bot.entity || !this.bot.entity.position) {
+      console.warn('[タスクプランナー] checkMovementComplete: botまたはpositionが未定義です');
+      return false; // Can't determine completion status
+    }
+    
     const { x, y, z } = task.params;
     const pos = this.bot.entity.position;
     const distance = Math.sqrt(
@@ -540,6 +596,18 @@ class TaskPlanner {
 
   planWorkbenchCrafting(goal) {
     console.log('[タスクプランナー] 作業台クラフトタスクを計画中...');
+    
+    // Validate bot instance before proceeding
+    if (!this.bot) {
+      console.error('[タスクプランナー] エラー: botインスタンスが未定義です');
+      return null;
+    }
+    
+    if (!this.bot.inventory) {
+      console.error('[タスクプランナー] エラー: bot.inventoryが未定義です');
+      return null;
+    }
+    
     // Check if we already have a crafting table
     const hasCraftingTable = InventoryUtils.hasItem(this.bot, 'crafting_table');
 
@@ -566,6 +634,10 @@ class TaskPlanner {
   }
 
   hasEnoughWoodForWorkbench() {
+    if (!this.bot || !this.bot.inventory) {
+      console.warn('[タスクプランナー] hasEnoughWoodForWorkbench: botまたはinventoryが未定義です');
+      return false;
+    }
     return InventoryUtils.getAvailablePlanks(this.bot) >= 4; // Need 4 planks for crafting table
   }
 }

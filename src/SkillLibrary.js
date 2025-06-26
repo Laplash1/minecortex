@@ -2432,9 +2432,25 @@ class CraftToolsSkill extends Skill {
 
       const recipe = bot.recipesFor(toolItem.id, null, 1, craftingTable)[0];
       if (!recipe) {
-        const missingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
-        console.log(`[ツールスキル] ${toolName}のレシピが見つからないか、材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
-        return { success: false, reason: 'INSUFFICIENT_MATERIALS', details: { missing: missingMaterials, tool: toolName } };
+        console.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
+        bot.chat(`${toolName}のレシピが見つかりません`);
+        return {
+          success: false,
+          reason: 'NO_RECIPE',
+          details: { tool: toolName, message: 'レシピが見つかりません' }
+        };
+      }
+
+      // Check for sufficient materials now that we have a valid recipe
+      const missingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+      if (missingMaterials && missingMaterials.length > 0) {
+        console.log(`[ツールスキル] ${toolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
+        bot.chat(`${toolName}の材料が不足しています`);
+        return {
+          success: false,
+          reason: 'INSUFFICIENT_MATERIALS',
+          details: { missing: missingMaterials, tool: toolName }
+        };
       }
 
       try {
@@ -2566,7 +2582,7 @@ class CraftWorkbenchSkill extends Skill {
     super('craft_workbench', 'Crafts a crafting table.');
   }
 
-  async execute(bot, params) {
+  async execute(bot, _params) {
     console.log('[作業台スキル] 作業台の作成を開始します...');
 
     const mcData = require('minecraft-data')(bot.version);
@@ -2605,7 +2621,12 @@ class CraftWorkbenchSkill extends Skill {
     const recipe = bot.recipesFor(workbenchItem.id, null, 1, bot.currentWorld.blocks[0]);
     if (!recipe || recipe.length === 0) {
       console.log('[作業台スキル] 作業台のレシピが見つかりません');
-      return { success: false, error: '作業台のレシピが見つかりません' };
+      bot.chat('作業台のレシピが見つかりません');
+      return {
+        success: false,
+        reason: 'NO_RECIPE',
+        details: { item: 'crafting_table', message: '作業台のレシピが見つかりません' }
+      };
     }
 
     console.log('[作業台スキル] 作業台をクラフト中...');
@@ -2630,13 +2651,16 @@ class CraftWorkbenchSkill extends Skill {
 
     console.log(`[作業台スキル] ${logCount}個の原木から板材を作成中...`);
     const recipe = bot.recipesFor(oakPlanks.id, null, 1, null)[0];
-    if (recipe) {
-      try {
-        await bot.craft(recipe, logCount, null); // Craft all logs into planks
-        console.log('[作業台スキル] 原木から板材を作成しました。');
-      } catch (error) {
-        console.log(`[作業台スキル] 板材作成失敗: ${error.message}`);
-      }
+    if (!recipe) {
+      console.log('[作業台スキル] 板材のレシピが見つかりません');
+      return;
+    }
+
+    try {
+      await bot.craft(recipe, logCount, null); // Craft all logs into planks
+      console.log('[作業台スキル] 原木から板材を作成しました。');
+    } catch (error) {
+      console.log(`[作業台スキル] 板材作成失敗: ${error.message}`);
     }
   }
 }
@@ -2669,7 +2693,13 @@ class CraftFurnaceSkill extends Skill {
       const item = mcData.itemsByName.furnace;
       const recipe = bot.recipesFor(item.id, null, 1, workbench)[0];
       if (!recipe) {
-        return { success: false, error: 'Furnace recipe not found' };
+        console.log('[かまどスキル] かまどのレシピが見つかりません');
+        bot.chat('かまどのレシピが見つかりません');
+        return {
+          success: false,
+          reason: 'NO_RECIPE',
+          details: { item: 'furnace', message: 'かまどのレシピが見つかりません' }
+        };
       }
 
       // Craft the furnace
