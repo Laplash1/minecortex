@@ -1,0 +1,94 @@
+{
+  "version_aliases": {
+    "1.18": {
+      "crafting_table": "workbench",
+      "oak_planks": "planks"
+    },
+    "1.19": {
+      "crafting_table": "crafting_table",
+      "oak_planks": "oak_planks"
+    },
+    "1.20": {
+      "crafting_table": "crafting_table", 
+      "oak_planks": "oak_planks"
+    },
+      "1.21": {
+      "crafting_table": "crafting_table",
+      "oak_planks": "oak_planks"
+    }
+  },
+  "common_aliases": {
+    "workbench": "crafting_table",
+    "work_bench": "crafting_table",
+    "table": "crafting_table",
+    "planks": "oak_planks",
+    "wood_planks": "oak_planks",
+    "wooden_planks": "oak_planks",
+    "pick": "wooden_pickaxe",
+    "pickaxe": "wooden_pickaxe",
+    "wood_pick": "wooden_pickaxe",
+    "axe": "wooden_axe",
+    "wood_axe": "wooden_axe",
+    "raw_iron": "iron_ingot",
+    "iron": "iron_ingot"
+  },
+  "material_variants": {
+    "planks": [
+      "oak_planks",
+      "birch_planks", 
+      "spruce_planks",
+      "jungle_planks",
+      "acacia_planks",
+      "dark_oak_planks",
+      "mangrove_planks",
+      "cherry_planks",
+      "bamboo_planks",
+      "crimson_planks",
+      "warped_planks"
+    ],
+    "logs": [
+      "oak_log",
+      "birch_log",
+      "spruce_log", 
+      "jungle_log",
+      "acacia_log",
+      "dark_oak_log",
+      "mangrove_log",
+      "cherry_log",
+      "bamboo_block",
+      "crimson_stem",
+      "warped_stem"
+    ],
+    "pickaxes": [
+      "wooden_pickaxe",
+      "stone_pickaxe",
+      "iron_pickaxe",
+      "golden_pickaxe",
+      "diamond_pickaxe",
+      "netherite_pickaxe"
+    ],
+    "axes": [
+      "wooden_axe",
+      "stone_axe", 
+      "iron_axe",
+      "golden_axe",
+      "diamond_axe",
+      "netherite_axe"
+    ]
+  },
+  "critical_recipes": {
+    "survival_priority": [
+      "crafting_table",
+      "oak_planks",
+      "wooden_pickaxe",
+      "wooden_axe", 
+      "furnace",
+      "chest"
+    ],
+    "fallback_materials": {
+      "planks": "oak_planks",
+      "pickaxe": "wooden_pickaxe",
+      "axe": "wooden_axe"
+    }
+  }
+}

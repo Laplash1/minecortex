@@ -5,20 +5,137 @@ const InventoryUtils = require('./InventoryUtils');
 class SkillLibrary {
   constructor() {
     this.skills = new Map();
+    this.recipeCache = new Map();
+    this.aliasConfig = null;
   }
 
   /**
-   * Safe recipe search helper to prevent API misuse
+   * Load item alias configuration
+   */
+  static loadAliasConfig() {
+    if (!SkillLibrary._aliasConfig) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const configPath = path.join(__dirname, '..', 'config', 'item-alias.json');
+        SkillLibrary._aliasConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      } catch (error) {
+        console.warn(`[レシピ検索] Alias config load failed: ${error.message}`);
+        SkillLibrary._aliasConfig = { common_aliases: {}, material_variants: {} };
+      }
+    }
+    return SkillLibrary._aliasConfig;
+  }
+
+  /**
+   * Enhanced safe recipe search helper with caching and fallback strategies
    * @param {Bot} bot - Mineflayer bot instance
-   * @param {number} itemId - Item ID to craft
+   * @param {number|string} itemIdentifier - Item ID or name to craft
    * @param {number} count - Number of items to craft
    * @param {Block|null} table - Crafting table block (null for inventory crafting)
    * @returns {Object|null} Recipe object or null if not found
    */
-  static getRecipeSafe(bot, itemId, count = 1, table = null) {
+  static getRecipeSafe(bot, itemIdentifier, count = 1, table = null) {
     try {
-      const recipes = bot.recipesFor(itemId, null, count, table);
-      return recipes.length > 0 ? recipes[0] : null;
+      // Generate cache key
+      const cacheKey = `${itemIdentifier}-${count}-${table ? 'table' : 'inventory'}`;
+      
+      // Check cache first
+      if (!SkillLibrary._recipeCache) {
+        SkillLibrary._recipeCache = new Map();
+      }
+      
+      if (SkillLibrary._recipeCache.has(cacheKey)) {
+        const cached = SkillLibrary._recipeCache.get(cacheKey);
+        if (cached.timestamp > Date.now() - 300000) { // 5 minute cache
+          return cached.recipe;
+        }
+        SkillLibrary._recipeCache.delete(cacheKey);
+      }
+
+      // Version compatibility check
+      const mcData = require('minecraft-data')(bot.version);
+      if (!mcData) {
+        console.error(`[レシピ検索] minecraft-data for version ${bot.version} not found`);
+        return null;
+      }
+
+      // Log version info on first call
+      if (!SkillLibrary._versionLogged) {
+        console.info(`[RecipeDebug] Bot version: ${bot.version}, mcData version: ${mcData.version?.minecraftVersion || 'unknown'}`);
+        SkillLibrary._versionLogged = true;
+      }
+
+      // Load alias configuration
+      const aliasConfig = SkillLibrary.loadAliasConfig();
+
+      // Handle both item ID and item name with alias support
+      let itemId = itemIdentifier;
+      let itemName = 'unknown';
+      
+      if (typeof itemIdentifier === 'string') {
+        // Check for aliases
+        let resolvedName = itemIdentifier;
+        if (aliasConfig.common_aliases[itemIdentifier]) {
+          resolvedName = aliasConfig.common_aliases[itemIdentifier];
+          console.log(`[レシピ検索] Using alias: ${itemIdentifier} -> ${resolvedName}`);
+        }
+        
+        const item = mcData.itemsByName[resolvedName];
+        if (!item) {
+          console.warn(`[レシピ検索] Item '${resolvedName}' not found in minecraft-data`);
+          return null;
+        }
+        itemId = item.id;
+        itemName = item.name;
+      } else {
+        itemName = mcData.items[itemId]?.name || 'unknown';
+      }
+
+      // Multiple fallback strategies for recipe search
+      const searchStrategies = [
+        () => bot.recipesFor(itemId, null, count, table),
+        () => bot.recipesFor(itemId, null, count),
+        () => bot.recipesFor(itemId),
+        () => count > 1 ? bot.recipesFor(itemId, null, 1, table) : null
+      ];
+
+      let foundRecipe = null;
+      for (let i = 0; i < searchStrategies.length; i++) {
+        try {
+          const recipes = searchStrategies[i]();
+          if (recipes && recipes.length > 0) {
+            foundRecipe = recipes[0];
+            if (i > 0) {
+              console.log(`[レシピ検索] フォールバック戦略${i}で${itemName}のレシピを発見`);
+            }
+            break;
+          }
+        } catch (error) {
+          if (i === 0) {
+            console.warn(`[レシピ検索] Primary search failed for ${itemName}: ${error.message}`);
+          }
+        }
+      }
+
+      // Cache the result (success or failure)
+      SkillLibrary._recipeCache.set(cacheKey, {
+        recipe: foundRecipe,
+        timestamp: Date.now()
+      });
+
+      if (!foundRecipe) {
+        // Enhanced diagnostics for NO_RECIPE cases
+        console.warn(`[レシピ検索] NO_RECIPE: ${itemName}(id:${itemId}) count:${count} table:${table ? 'table' : 'inventory'}`);
+        
+        // Store failed recipe search for diagnostics
+        if (!SkillLibrary._failedRecipes) {
+          SkillLibrary._failedRecipes = new Set();
+        }
+        SkillLibrary._failedRecipes.add(itemName);
+      }
+      
+      return foundRecipe;
     } catch (error) {
       console.error(`[レシピ検索] エラー: ${error.message}`);
       return null;
