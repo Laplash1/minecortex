@@ -1,5 +1,19 @@
 # MineCortex 変更履歴
 
+## v1.4.22 - 2025-06-26 22:26
+
+### MineflayerクラフトAPI互換性問題特定と部分解決
+- **レシピ検索完全復旧**: minecraft-data 3.90.0統合でNO_RECIPE問題根本解決
+- **MultiAI安定性確認**: 5人のAIプレイヤー同期起動・サーバー接続成功
+- **新問題特定**: `Error: missing ingredient`でMineflayerクラフト実行時失敗
+- **レシピ変換改良**: minecraft-data形式からMineflayer API形式への変換実装
+
+### 技術進歩詳細 (22:26)
+- **SkillLibrary.js**: レシピオブジェクトに`id`, `inShape`, `ingredients`プロパティ追加
+- **診断強化**: crafting_tableレシピ正常検出（shape `[[41,41],[41,41]]`）確認
+- **システム統合**: minecraft-data 3.90.0とMineflayer v4の部分的統合達成
+- **問題分析**: `delta`配列の材料情報不正確性特定
+
 ## v1.4.21 - 2025-06-26 22:15
 
 ### NO_RECIPE問題完全解決 - minecraft-data 3.90.0対応

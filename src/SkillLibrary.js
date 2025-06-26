@@ -131,8 +131,11 @@ class SkillLibrary {
             
             // Mineflayer形式に変換
             foundRecipe = {
+              id: itemId, // レシピIDとしてitemIdを使用
               result: rawRecipe.result || { id: itemId, count: count },
-              delta: []
+              delta: [],
+              inShape: rawRecipe.inShape || null,
+              ingredients: rawRecipe.ingredients || null
             };
             
             // 材料情報を変換
