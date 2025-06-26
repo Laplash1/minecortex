@@ -2889,7 +2889,6 @@ module.exports = {
   CraftToolsSkill,
   CraftWorkbenchSkill,
   CraftFurnaceSkill,
-  BuildShelterSkill,
   PlaceBlocksSkill,
   ExploreSkill
 };
