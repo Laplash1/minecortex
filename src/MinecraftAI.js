@@ -5,6 +5,7 @@ const { VoyagerAI } = require('./VoyagerAI');
 // MultiPlayerCoordinator is passed as parameter
 const { StateManager } = require('./StateManager');
 const InventoryUtils = require('./InventoryUtils');
+const { NLUProcessor } = require('./NLUProcessor');
 
 class MinecraftAI {
   constructor(bot, coordinator = null) {
@@ -15,6 +16,7 @@ class MinecraftAI {
     this.observer = new EnvironmentObserver(bot);
     this.voyagerAI = new VoyagerAI(bot);
     this.coordinator = coordinator; // Multi-player coordinator (optional)
+    this.nluProcessor = new NLUProcessor(); // Natural Language Understanding processor
 
     // Legacy properties for backward compatibility
     this.currentTask = null;
@@ -145,7 +147,38 @@ class MinecraftAI {
   async processCommand(username, command) {
     const [cmd, ...args] = command.split(' ');
 
-    switch (cmd.toLowerCase()) {
+    // 1. 静的コマンドの処理（後方互換性維持）
+    const staticCommands = ['status', 'goto', 'follow', 'stop', 'learn', 'curriculum', 'coord', 'claim', 'release', 'state', 'perf'];
+    if (staticCommands.includes(cmd.toLowerCase())) {
+      return this.handleStaticCommand(cmd.toLowerCase(), args, username);
+    }
+
+    // 2. NLU処理への移行
+    try {
+      this.bot.chat(`「${command}」を解析中...`);
+      const context = this.getContext();
+      const nluResult = await this.nluProcessor.parse(command, context);
+
+      if (nluResult && nluResult.intent) {
+        // 3. NLU結果をタスクに変換して実行
+        const task = this.mapNluToTask(nluResult);
+        if (task) {
+          await this.executeNluTask(task);
+        } else {
+          this.bot.chat('意図は理解できましたが、実行可能なタスクに変換できませんでした。');
+        }
+      } else {
+        this.bot.chat('すみません、コマンドを理解できませんでした。`!status`などをお試しください。');
+      }
+    } catch (error) {
+      console.error('[NLU Command Error]', error);
+      this.bot.chat('コマンドの解釈中にエラーが発生しました。');
+    }
+  }
+
+  // 静的コマンド処理（既存のロジックを分離）
+  async handleStaticCommand(cmd, args, username) {
+    switch (cmd) {
     case 'status':
       this.reportStatus();
       break;
@@ -188,6 +221,142 @@ class MinecraftAI {
       break;
     default:
       this.bot.chat(`不明なコマンド: ${cmd}`);
+    }
+  }
+
+  // ボットの現在状態をNLUのコンテキストとして提供
+  getContext() {
+    try {
+      const context = {};
+
+      if (this.bot?.entity?.position) {
+        context.position = this.bot.entity.position;
+      }
+
+      if (this.bot?.health !== undefined) {
+        context.health = this.bot.health;
+      }
+
+      if (this.bot?.food !== undefined) {
+        context.food = this.bot.food;
+      }
+
+      // インベントリの要約
+      if (this.bot?.inventory) {
+        const inventoryItems = this.bot.inventory.items();
+        const inventorySummary = inventoryItems.slice(0, 10).map(item =>
+          `${item.name} x${item.count}`
+        ).join(', ');
+        context.inventory = inventorySummary || '空';
+      }
+
+      return context;
+    } catch (error) {
+      console.error('[Context Error]', error);
+      return {};
+    }
+  }
+
+  // NLU結果をTaskPlannerが理解できる形式に変換
+  mapNluToTask(nluResult) {
+    const { intent, entities } = nluResult;
+
+    switch (intent) {
+    case 'goto':
+      if (entities.x !== undefined && entities.y !== undefined && entities.z !== undefined) {
+        return { type: 'move_to', params: { x: entities.x, y: entities.y, z: entities.z } };
+      }
+      break;
+    case 'explore':
+      return { type: 'explore', params: { target: entities.target, radius: entities.radius || 50 } };
+    case 'mine_block':
+      return { type: 'mine', params: { name: entities.name, count: entities.count || 1 } };
+    case 'gather_wood':
+      return { type: 'gather_wood', params: { wood_type: entities.wood_type || 'oak', count: entities.count || 10 } };
+    case 'craft_item':
+      return { type: 'craft', params: { item: entities.item, count: entities.count || 1 } };
+    case 'follow':
+      return { type: 'follow', params: { target: entities.player } };
+    case 'check_inventory':
+      return { type: 'check_inventory', params: {} };
+    case 'get_status':
+      return { type: 'status', params: {} };
+    case 'stop_task':
+      return { type: 'stop', params: {} };
+    default:
+      return null;
+    }
+  }
+
+  // NLUタスクの実行
+  async executeNluTask(task) {
+    try {
+      switch (task.type) {
+      case 'move_to':
+        this.setGoal({ type: 'move_to', target: task.params, priority: 0 });
+        this.bot.chat(`座標(${task.params.x}, ${task.params.y}, ${task.params.z})に移動します`);
+        break;
+      case 'explore':
+        this.setGoal({ type: 'explore', target: task.params.target, priority: 0 });
+        this.bot.chat(`${task.params.target}の探索を開始します`);
+        break;
+      case 'mine':
+        this.setGoal({ type: 'mine', target: task.params.name, count: task.params.count, priority: 0 });
+        this.bot.chat(`${task.params.name}を${task.params.count}個採掘します`);
+        break;
+      case 'gather_wood':
+        this.setGoal({ type: 'gather_wood', wood_type: task.params.wood_type, count: task.params.count, priority: 0 });
+        this.bot.chat(`${task.params.wood_type}の木材を${task.params.count}個収集します`);
+        break;
+      case 'craft':
+        this.setGoal({ type: 'craft', item: task.params.item, count: task.params.count, priority: 0 });
+        this.bot.chat(`${task.params.item}を${task.params.count}個クラフトします`);
+        break;
+      case 'follow':
+        this.setGoal({ type: 'follow', target: task.params.target, priority: 0 });
+        this.bot.chat(`${task.params.target}を追跡します`);
+        break;
+      case 'check_inventory':
+        this.reportInventory();
+        break;
+      case 'status':
+        this.reportStatus();
+        break;
+      case 'stop':
+        this.currentTask = null;
+        this.bot.chat('現在のタスクを停止します');
+        break;
+      default:
+        this.bot.chat(`タスクタイプ「${task.type}」は実装されていません`);
+      }
+    } catch (error) {
+      console.error('[NLU Task Execution Error]', error);
+      this.bot.chat('タスクの実行中にエラーが発生しました');
+    }
+  }
+
+  // インベントリ状態を報告
+  reportInventory() {
+    try {
+      if (!this.bot?.inventory) {
+        this.bot.chat('インベントリ情報を取得できません');
+        return;
+      }
+
+      const items = this.bot.inventory.items();
+      if (items.length === 0) {
+        this.bot.chat('インベントリは空です');
+        return;
+      }
+
+      const itemList = items.slice(0, 10).map(item =>
+        `${item.displayName || item.name} x${item.count}`
+      ).join(', ');
+
+      this.bot.chat(`インベントリ: ${itemList}${items.length > 10 ? '...' : ''}`);
+    } catch (error) {
+      console.error('[Inventory Report Error]', error);
+      this.bot.chat('インベントリの表示中にエラーが発生しました');
     }
   }
 
