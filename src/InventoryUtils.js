@@ -14,7 +14,6 @@ class InventoryUtils {
    */
   static _safeCount(bot, predicate) {
     if (!bot || !bot.inventory) return 0;
-    
     try {
       // Try using bot.inventory.items() method for safer access
       const items = bot.inventory.items();

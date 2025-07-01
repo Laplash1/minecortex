@@ -287,7 +287,7 @@ class TaskPlanner {
         }
       };
     }
-    
+
     const woodCount = InventoryUtils.getWoodCount(this.bot);
     const stoneCount = InventoryUtils.getStoneCount(this.bot);
 
@@ -488,7 +488,7 @@ class TaskPlanner {
       console.warn('[タスクプランナー] checkWoodRequirements: botまたはinventoryが未定義です');
       return 10; // Default requirement when bot is not available
     }
-    
+
     const woodNeeded = InventoryUtils.calculateWoodRequirements(tools);
     const availablePlanks = InventoryUtils.getAvailablePlanks(this.bot);
 
@@ -529,7 +529,7 @@ class TaskPlanner {
       console.warn('[タスクプランナー] checkWoodGatheringComplete: botまたはinventoryが未定義です');
       return false; // Can't determine completion status
     }
-    
+
     const { amount } = task.params;
     const currentWood = InventoryUtils.getWoodCount(this.bot) +
                        (InventoryUtils.getPlanksCount(this.bot) / 4);
@@ -542,7 +542,7 @@ class TaskPlanner {
       console.warn('[タスクプランナー] checkToolCraftingComplete: botまたはinventoryが未定義です');
       return false; // Can't determine completion status
     }
-    
+
     const { tools } = task.params;
 
     return tools.every(tool => {
@@ -555,7 +555,7 @@ class TaskPlanner {
       console.warn('[タスクプランナー] checkFoodGatheringComplete: botが未定義です');
       return false; // Can't determine completion status
     }
-    
+
     const { minHunger } = task.params;
     return this.bot.food >= minHunger;
   }
@@ -565,7 +565,7 @@ class TaskPlanner {
       console.warn('[タスクプランナー] checkMovementComplete: botまたはpositionが未定義です');
       return false; // Can't determine completion status
     }
-    
+
     const { x, y, z } = task.params;
     const pos = this.bot.entity.position;
     const distance = Math.sqrt(
@@ -596,18 +596,18 @@ class TaskPlanner {
 
   planWorkbenchCrafting(goal) {
     console.log('[タスクプランナー] 作業台クラフトタスクを計画中...');
-    
+
     // Validate bot instance before proceeding
     if (!this.bot) {
       console.error('[タスクプランナー] エラー: botインスタンスが未定義です');
       return null;
     }
-    
+
     if (!this.bot.inventory) {
       console.error('[タスクプランナー] エラー: bot.inventoryが未定義です');
       return null;
     }
-    
+
     // Check if we already have a crafting table
     const hasCraftingTable = InventoryUtils.hasItem(this.bot, 'crafting_table');
 

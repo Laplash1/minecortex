@@ -15,7 +15,7 @@ class MineflayerRecipeTest {
 
   async runTests() {
     console.log('[MineflayerRecipeTest] Starting recipe API test...');
-    
+
     try {
       // Create offline bot for testing
       this.bot = mineflayer.createBot({
@@ -30,10 +30,10 @@ class MineflayerRecipeTest {
       const version = '1.21';
       const data = mcData(version);
       console.log(`[MineflayerRecipeTest] Testing with version: ${version}`);
-      
+
       // Manually set bot version for minecraft-data compatibility
       this.bot.version = version;
-      
+
       // Test critical recipes
       const criticalItems = [
         { name: 'crafting_table', id: data.itemsByName.crafting_table?.id },
@@ -50,7 +50,6 @@ class MineflayerRecipeTest {
 
       this.printResults();
       return this.testResults.every(r => r.passed);
-
     } catch (error) {
       console.error(`[MineflayerRecipeTest] Critical error: ${error.message}`);
       return false;
@@ -105,7 +104,6 @@ class MineflayerRecipeTest {
       } else {
         this.recordResult(item.name, false, `No recipes found for ${item.name} (id: ${item.id})`);
       }
-
     } catch (error) {
       this.recordResult(item.name, false, `Test error: ${error.message}`);
     }
@@ -114,20 +112,20 @@ class MineflayerRecipeTest {
   mockRecipesFor(data, itemId) {
     // Simulate mineflayer's recipesFor behavior
     const recipes = [];
-    
+
     // Search through minecraft-data recipes
     if (data.recipes) {
       for (const [recipeId, recipe] of Object.entries(data.recipes)) {
         if (recipe && typeof recipe === 'object') {
           // Handle different recipe formats
           let resultItemId = null;
-          
+
           if (recipe.result && recipe.result.id === itemId) {
             resultItemId = recipe.result.id;
           } else if (recipe.result === itemId) {
             resultItemId = recipe.result;
           }
-          
+
           if (resultItemId === itemId) {
             recipes.push({
               id: parseInt(recipeId),
@@ -145,10 +143,10 @@ class MineflayerRecipeTest {
 
   findRecipesInData(data, itemId) {
     const recipes = [];
-    
+
     // Check if minecraft-data has a different structure
     if (data.recipes) {
-      for (const [recipeId, recipe] of Object.entries(data.recipes)) {
+      for (const [, recipe] of Object.entries(data.recipes)) {
         if (recipe && recipe.result) {
           const resultId = typeof recipe.result === 'object' ? recipe.result.id : recipe.result;
           if (resultId === itemId) {
@@ -164,7 +162,7 @@ class MineflayerRecipeTest {
   recordResult(itemName, passed, message) {
     const result = { itemName, passed, message };
     this.testResults.push(result);
-    
+
     const status = passed ? '✓' : '✗';
     const color = passed ? '\x1b[32m' : '\x1b[31m';
     console.log(`${color}[MineflayerRecipeTest] ${status} ${itemName}: ${message}\x1b[0m`);
@@ -179,7 +177,7 @@ class MineflayerRecipeTest {
     console.log(`Total tests: ${total}`);
     console.log(`\x1b[32mPassed: ${passed}\x1b[0m`);
     console.log(`\x1b[31mFailed: ${failed}\x1b[0m`);
-    
+
     if (failed > 0) {
       console.log('\n[MineflayerRecipeTest] Failed tests:');
       this.testResults

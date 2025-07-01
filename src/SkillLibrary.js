@@ -10,15 +10,16 @@ class SkillLibrary {
   }
 
   /**
-   * Load item alias configuration
+   * Load item alias configuration asynchronously
    */
-  static loadAliasConfig() {
+  static async loadAliasConfig() {
     if (!SkillLibrary._aliasConfig) {
       try {
-        const fs = require('fs');
+        const fs = require('fs').promises;
         const path = require('path');
         const configPath = path.join(__dirname, '..', 'config', 'item-alias.json');
-        SkillLibrary._aliasConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const configData = await fs.readFile(configPath, 'utf8');
+        SkillLibrary._aliasConfig = JSON.parse(configData);
       } catch (error) {
         console.warn(`[レシピ検索] Alias config load failed: ${error.message}`);
         SkillLibrary._aliasConfig = { common_aliases: {}, material_variants: {} };
@@ -35,16 +36,16 @@ class SkillLibrary {
    * @param {Block|null} table - Crafting table block (null for inventory crafting)
    * @returns {Object|null} Recipe object or null if not found
    */
-  static getRecipeSafe(bot, itemIdentifier, count = 1, table = null) {
+  static async getRecipeSafe(bot, itemIdentifier, count = 1, table = null) {
     try {
       // Generate cache key
       const cacheKey = `${itemIdentifier}-${count}-${table ? 'table' : 'inventory'}`;
-      
+
       // Check cache first
       if (!SkillLibrary._recipeCache) {
         SkillLibrary._recipeCache = new Map();
       }
-      
+
       if (SkillLibrary._recipeCache.has(cacheKey)) {
         const cached = SkillLibrary._recipeCache.get(cacheKey);
         if (cached.timestamp > Date.now() - 300000) { // 5 minute cache
@@ -67,12 +68,12 @@ class SkillLibrary {
       }
 
       // Load alias configuration
-      const aliasConfig = SkillLibrary.loadAliasConfig();
+      const aliasConfig = await SkillLibrary.loadAliasConfig();
 
       // Handle both item ID and item name with alias support
       let itemId = itemIdentifier;
       let itemName = 'unknown';
-      
+
       if (typeof itemIdentifier === 'string') {
         // Check for aliases
         let resolvedName = itemIdentifier;
@@ -80,7 +81,7 @@ class SkillLibrary {
           resolvedName = aliasConfig.common_aliases[itemIdentifier];
           console.log(`[レシピ検索] Using alias: ${itemIdentifier} -> ${resolvedName}`);
         }
-        
+
         const item = mcData.itemsByName[resolvedName];
         if (!item) {
           console.warn(`[レシピ検索] Item '${resolvedName}' not found in minecraft-data`);
@@ -122,22 +123,22 @@ class SkillLibrary {
       if (!foundRecipe && mcData.recipes) {
         try {
           console.log(`[レシピ検索] minecraft-data直接検索を試行: ${itemName}(id:${itemId})`);
-          
+
           // minecraft-data 3.90.0の新構造: data.recipes[itemId] が配列
           const directRecipes = mcData.recipes[itemId];
           if (directRecipes && Array.isArray(directRecipes) && directRecipes.length > 0) {
             // 最初のレシピを変換
             const rawRecipe = directRecipes[0];
-            
+
             // Mineflayer形式に変換
             foundRecipe = {
               id: itemId, // レシピIDとしてitemIdを使用
-              result: rawRecipe.result || { id: itemId, count: count },
+              result: rawRecipe.result || { id: itemId, count },
               delta: [],
               inShape: rawRecipe.inShape || null,
               ingredients: rawRecipe.ingredients || null
             };
-            
+
             // 材料情報を変換
             if (rawRecipe.ingredients) {
               // shapeless recipe
@@ -155,9 +156,9 @@ class SkillLibrary {
               }));
               console.log(`[レシピ検索] Shaped recipe found for ${itemName}: shape ${JSON.stringify(rawRecipe.inShape)}`);
             }
-            
+
             console.log(`[レシピ検索] minecraft-data直接検索で${itemName}のレシピを発見`);
-            console.log(`[レシピ検索] 生成されたレシピ詳細:`, {
+            console.log('[レシピ検索] 生成されたレシピ詳細:', {
               id: foundRecipe.id,
               result: foundRecipe.result,
               deltaLength: foundRecipe.delta.length,
@@ -180,14 +181,14 @@ class SkillLibrary {
       if (!foundRecipe) {
         // Enhanced diagnostics for NO_RECIPE cases
         console.warn(`[レシピ検索] NO_RECIPE: ${itemName}(id:${itemId}) count:${count} table:${table ? 'table' : 'inventory'}`);
-        
+
         // Store failed recipe search for diagnostics
         if (!SkillLibrary._failedRecipes) {
           SkillLibrary._failedRecipes = new Set();
         }
         SkillLibrary._failedRecipes.add(itemName);
       }
-      
+
       return foundRecipe;
     } catch (error) {
       console.error(`[レシピ検索] エラー: ${error.message}`);
@@ -246,7 +247,7 @@ class Skill {
     this.description = description;
   }
 
-  async execute(bot, _params = {}) {
+  async execute(_bot, _params = {}) {
     throw new Error('execute method must be implemented');
   }
 }
@@ -1566,83 +1567,6 @@ class MineBlockSkill extends Skill {
     }
   }
 
-  // Handle out-of-sight blocks: approach and clear obstacles
-  async handleOutOfSightBlock(bot, targetBlock, _lineOfSightResult) {
-    try {
-      console.log(`[視界外対応] ${targetBlock.name}が視界外です。接近と障害物除去を試みます`);
-
-      // Step 1: Move closer to target (within 2 blocks)
-      const approachResult = await this.approachTarget(bot, targetBlock.position);
-      if (!approachResult.success) {
-        console.log(`[視界外対応] 接近に失敗: ${approachResult.error}`);
-        return { success: false, error: '接近失敗' };
-      }
-
-      // Step 2: Re-check line of sight after approaching
-      const newLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
-      if (newLineOfSight.clear) {
-        console.log('[視界外対応] 接近後に視界が確保されました');
-        return { success: true, approach: true };
-      }
-
-      // Step 3: Clear obstacles if still blocked
-      if (newLineOfSight.obstacleBlocks && newLineOfSight.obstacleBlocks.length > 0) {
-        console.log(`[視界外対応] ${newLineOfSight.obstacleBlocks.length}個の障害物を除去します`);
-
-        for (const obstacle of newLineOfSight.obstacleBlocks.slice(0, 3)) { // Limit to 3 blocks
-          const obstacleDistance = bot.entity.position.distanceTo(obstacle.position);
-
-          if (obstacleDistance <= 3.0) {
-            console.log(`[視界外対応] 障害物 ${obstacle.name} を除去中...`);
-
-            try {
-              // Equip appropriate tool for obstacle
-              await this.equipAppropriateToolForBlock(bot, obstacle.name);
-              await bot.dig(obstacle);
-
-              // Wait for obstacle removal
-              await new Promise(resolve => setTimeout(resolve, 500));
-              console.log(`[視界外対応] 障害物 ${obstacle.name} を除去しました`);
-            } catch (digError) {
-              console.log(`[視界外対応] 障害物除去失敗: ${digError.message}`);
-              continue; // Try next obstacle
-            }
-          }
-        }
-
-        // Final check after obstacle removal
-        const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
-        if (finalLineOfSight.clear) {
-          console.log('[視界外対応] 障害物除去後に視界が確保されました');
-          return { success: true, obstaclesCleared: true };
-        }
-      }
-
-      return { success: false, error: '視界確保に失敗' };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Approach target block within 2 blocks
-  async approachTarget(bot, targetPosition) {
-    try {
-      console.log(`[接近] 目標位置 ${targetPosition} に接近中...`);
-
-      // Use pathfinder if available
-      if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
-        const goal = new goals.GoalNear(targetPosition.x, targetPosition.y, targetPosition.z, 2.0);
-        await bot.pathfinder.goto(goal);
-        return { success: true };
-      } else {
-        console.log('[接近] Pathfinder利用不可、基本移動を使用');
-        return { success: true };
-      }
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
   // Move bot to optimal mining position
   async moveToMiningPosition(bot, block) {
     try {
@@ -2773,7 +2697,7 @@ class CraftWorkbenchSkill extends Skill {
   async execute(bot, _params) {
     try {
       console.log('[作業台スキル] 作業台の作成を開始します...');
-      
+
       const mcData = require('minecraft-data')(bot.version);
       const requiredPlanks = 4;
 
@@ -2803,9 +2727,9 @@ class CraftWorkbenchSkill extends Skill {
       if (currentPlanks < requiredPlanks) {
         const planksNeeded = requiredPlanks - currentPlanks;
         const logsToCraft = Math.ceil(planksNeeded / 4);
-        
+
         console.log(`[作業台スキル] 板材準備フェーズ: ${planksNeeded}個の板材が必要、${logsToCraft}個の原木を変換します`);
-        
+
         const plankCraftResult = await this.craftPlanksFromLogs(bot, logsToCraft);
         if (!plankCraftResult.success) {
           return { success: false, error: `板材の作成に失敗: ${plankCraftResult.error}` };
@@ -2814,7 +2738,7 @@ class CraftWorkbenchSkill extends Skill {
         // Verify we now have enough planks
         const updatedPlanks = this.countItemsInInventory(bot, 'planks');
         console.log(`[作業台スキル] 板材準備完了: ${updatedPlanks}個の板材を確保`);
-        
+
         if (updatedPlanks < requiredPlanks) {
           const message = `板材作成後も材料不足: 必要=${requiredPlanks}, 現在=${updatedPlanks}`;
           console.log(`[作業台スキル] ${message}`);
@@ -2824,7 +2748,7 @@ class CraftWorkbenchSkill extends Skill {
 
       // Phase 4: Workbench crafting
       console.log('[作業台スキル] 作業台作成フェーズ...');
-      const workbenchRecipe = SkillLibrary.getRecipeSafe(bot, 'crafting_table', 1, null);
+      const workbenchRecipe = await SkillLibrary.getRecipeSafe(bot, 'crafting_table', 1, null);
       if (!workbenchRecipe) {
         const message = '作業台のレシピが見つかりません';
         console.log(`[作業台スキル] ${message}`);
@@ -2866,7 +2790,6 @@ class CraftWorkbenchSkill extends Skill {
         InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-CraftError');
         return { success: false, error: message };
       }
-
     } catch (error) {
       const message = `予期せぬエラー: ${error.message}`;
       console.log(`[作業台スキル] ${message}`);
@@ -2878,8 +2801,8 @@ class CraftWorkbenchSkill extends Skill {
   async craftPlanksFromLogs(bot, logCount = 1) {
     try {
       console.log(`[作業台スキル] 原木から板材への変換を開始: ${logCount}個の原木を使用`);
-      
-      const plankRecipe = SkillLibrary.getRecipeSafe(bot, 'oak_planks', 1, null);
+
+      const plankRecipe = await SkillLibrary.getRecipeSafe(bot, 'oak_planks', 1, null);
       if (!plankRecipe) {
         return { success: false, error: '板材のレシピが見つかりません' };
       }
@@ -2894,7 +2817,6 @@ class CraftWorkbenchSkill extends Skill {
       const planksCreated = logCount * 4;
       console.log(`[作業台スキル] 板材作成成功: ${planksCreated}個の板材を作成`);
       return { success: true, planksCreated };
-      
     } catch (error) {
       console.log(`[作業台スキル] 板材作成エラー: ${error.message}`);
       return { success: false, error: error.message };
@@ -2925,7 +2847,6 @@ class CraftWorkbenchSkill extends Skill {
 
     return count;
   }
-
 }
 
 class CraftFurnaceSkill extends Skill {

@@ -91,7 +91,7 @@ describe('InventoryUtils', () => {
     test('should handle supported block types', () => {
       const bot = createMockBot('standard');
       const result = InventoryUtils.getBestToolForBlock(bot, 'stone');
-      
+
       expect(result.tool).toBeTruthy();
       expect(result.tool.name).toBe('iron_pickaxe');
       expect(result.efficiency).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ describe('InventoryUtils', () => {
     test('should handle unsupported block types gracefully', () => {
       const bot = createMockBot('standard');
       const result = InventoryUtils.getBestToolForBlock(bot, 'unknown_block');
-      
+
       expect(result.tool).toBeNull();
       expect(result.efficiency).toBe(0);
       expect(result.error).toContain('Unsupported block type');
@@ -113,7 +113,7 @@ describe('InventoryUtils', () => {
           items: () => []
         }
       };
-      
+
       const result = InventoryUtils.getBestToolForBlock(bot, 'stone');
       expect(result.tool).toBeNull();
       expect(result.efficiency).toBe(0);
@@ -129,7 +129,7 @@ describe('InventoryUtils', () => {
   describe('General robustness', () => {
     test('getInventorySummary should not crash with broken bot', () => {
       const result = InventoryUtils.getInventorySummary(null);
-      
+
       expect(result.wood).toBe(0);
       expect(result.stone).toBe(0);
       expect(result.planks).toBe(0);
@@ -138,7 +138,7 @@ describe('InventoryUtils', () => {
 
     test('hasTool should handle various input types', () => {
       const bot = createMockBot('standard');
-      
+
       expect(InventoryUtils.hasTool(bot, 'pickaxe')).toBe(true);
       expect(InventoryUtils.hasTool(bot, 'axe')).toBe(true);
       expect(InventoryUtils.hasTool(bot, 'sword')).toBe(false);
@@ -150,25 +150,25 @@ describe('InventoryUtils', () => {
 // Simple test runner if jest is not available
 if (typeof describe === 'undefined') {
   console.log('Running InventoryUtils tests...');
-  
+
   // Basic API compatibility test
   try {
     const bot = createMockBot('standard');
     const woodCount = InventoryUtils.getWoodCount(bot);
     console.log(`✓ Standard API - Wood count: ${woodCount}`);
-    
+
     const callbackBot = createMockBot('callback');
     const stoneCount = InventoryUtils.getStoneCount(callbackBot);
     console.log(`✓ Callback API - Stone count: ${stoneCount}`);
-    
+
     const brokenBot = createMockBot('broken');
     const errorCount = InventoryUtils.getPlanksCount(brokenBot);
     console.log(`✓ Error handling - Count: ${errorCount} (should be 0)`);
-    
+
     // Test unsupported block type
     const unsupportedResult = InventoryUtils.getBestToolForBlock(bot, 'unknown_block');
     console.log(`✓ Unsupported block - Error: ${unsupportedResult.error}`);
-    
+
     console.log('All tests passed! ✅');
   } catch (error) {
     console.error('Test failed:', error);

@@ -441,9 +441,13 @@ class MinecraftAI {
   setupComprehensiveEPIPEProtection() {
     // Conservative EPIPE protection - remove caching for real-time safety
 
+    // Store original methods for cleanup
+    this.originalMethods = new Map();
+
     // Protect chat function with real-time socket checks
     if (typeof this.bot.chat === 'function') {
       const originalChat = this.bot.chat.bind(this.bot);
+      this.originalMethods.set('chat', originalChat);
       this.bot.chat = (message) => {
         if (!this.isSocketSafe()) {
           if (this.debugMode) console.log('[SafeChat] Socket unsafe, suppressing chat');
@@ -468,6 +472,7 @@ class MinecraftAI {
     protectedMethods.forEach(method => {
       if (typeof this.bot[method] === 'function') {
         const original = this.bot[method].bind(this.bot);
+        this.originalMethods.set(method, original);
         this.bot[method] = (...args) => {
           if (!this.isSocketSafe()) {
             if (this.debugMode) console.log(`[Safe${method}] Socket unsafe, suppressing ${method}`);
@@ -809,8 +814,13 @@ class MinecraftAI {
     // Calculate dynamic timeout based on task complexity
     const dynamicTimeout = this.calculateSkillTimeout(this.currentTask);
 
-    // Execute the skill with dynamic timeout and proper error handling
-    return await this.executeSkillWithTimeout(skill, this.currentTask.params, dynamicTimeout);
+    try {
+      // Execute the skill with dynamic timeout and proper error handling
+      return await this.executeSkillWithTimeout(skill, this.currentTask.params, dynamicTimeout);
+    } catch (error) {
+      // Convert exceptions back to result objects for consistent error handling
+      return { success: false, error: error.message };
+    }
   }
 
   async processTaskResult(result, taskName) {
@@ -843,7 +853,8 @@ class MinecraftAI {
     if (result && result.success) {
       // Clear failure tracker for this target on success
       if (this.currentTask.params?.position) {
-        const targetKey = `${Math.round(this.currentTask.params.position.x)},${Math.round(this.currentTask.params.position.y)},${Math.round(this.currentTask.params.position.z)}`;
+        const pos = this.currentTask.params.position;
+        const targetKey = `${Math.round(pos.x)},${Math.round(pos.y)},${Math.round(pos.z)}`;
         this.failedTargets.delete(targetKey);
       }
       // Also reset generic task failure count on success
@@ -934,11 +945,16 @@ class MinecraftAI {
       skill.execute(this.bot, params)
         .then(result => {
           clearTimeout(timeoutId);
-          resolve(result);
+          // Check if result indicates failure and reject accordingly
+          if (result && typeof result === 'object' && result.success === false) {
+            reject(new Error(result.error || 'Skill execution failed'));
+          } else {
+            resolve(result);
+          }
         })
         .catch(error => {
           clearTimeout(timeoutId);
-          resolve({ success: false, error: error.message });
+          reject(error);
         });
     });
   }
@@ -1393,6 +1409,16 @@ class MinecraftAI {
     this.log(`Shutting down AI loop (${reason})`, 'warn');
     this.isInitialized = false;
 
+    // Cleanup wrapped methods to prevent memory leaks
+    if (this.originalMethods) {
+      this.originalMethods.forEach((originalMethod, methodName) => {
+        if (this.bot[methodName]) {
+          this.bot[methodName] = originalMethod;
+        }
+      });
+      this.originalMethods.clear();
+    }
+
     // Detach all bot listeners and ensure socket closed to avoid EPIPE
     try {
       this.bot.removeAllListeners();
@@ -1539,10 +1565,10 @@ class MinecraftAI {
         this.log('アイドル中: 短時間の探索を実行');
       } else {
         // Most of the time, just rest briefly
-      this.log('アイドル中: リソースが十分なため休憩');
-      // Log inventory summary during idle to monitor resource levels
-      InventoryUtils.logInventoryDetails(this.bot, 'アイドル時');
-      await this.sleep(2000);
+        this.log('アイドル中: リソースが十分なため休憩');
+        // Log inventory summary during idle to monitor resource levels
+        InventoryUtils.logInventoryDetails(this.bot, 'アイドル時');
+        await this.sleep(2000);
       }
     } catch (error) {
       this.log(`アイドル処理エラー: ${error.message}`);

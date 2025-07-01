@@ -138,7 +138,8 @@ class BotInstance {
     }
 
     this.reconnectAttempts++;
-    console.log(`[Instance ${this.instanceId}] Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
+    console.log(`[Instance ${this.instanceId}] Scheduling reconnect attempt ` +
+      `${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
 
     setTimeout(() => {
       this.start();

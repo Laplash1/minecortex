@@ -12,7 +12,7 @@ class RecipeVerificationTest {
 
   async runTests(version = '1.21') {
     console.log(`[RecipeTest] Starting recipe verification for Minecraft ${version}`);
-    
+
     try {
       const data = mcData(version);
       if (!data) {
@@ -20,10 +20,10 @@ class RecipeVerificationTest {
       }
 
       console.log(`[RecipeTest] mcData version: ${data.version.minecraftVersion}`);
-      
+
       // Debug: Check recipe structure
-      console.log(`[RecipeTest] Total recipes available:`, Object.keys(data.recipes || {}).length);
-      
+      console.log('[RecipeTest] Total recipes available:', Object.keys(data.recipes || {}).length);
+
       // Sample a few recipes to understand structure
       const sampleRecipeIds = Object.keys(data.recipes || {}).slice(0, 3);
       for (const recipeId of sampleRecipeIds) {
@@ -34,11 +34,11 @@ class RecipeVerificationTest {
           ingredients: recipe.ingredients ? recipe.ingredients.length : 'no ingredients'
         });
       }
-      
+
       // Test critical items
       const criticalItems = [
         'crafting_table',
-        'oak_planks', 
+        'oak_planks',
         'wooden_pickaxe',
         'wooden_axe',
         'furnace',
@@ -51,7 +51,6 @@ class RecipeVerificationTest {
 
       this.printResults();
       return this.testResults.every(r => r.passed);
-
     } catch (error) {
       console.error(`[RecipeTest] Critical error: ${error.message}`);
       return false;
@@ -76,10 +75,11 @@ class RecipeVerificationTest {
         if (Array.isArray(directRecipes) && directRecipes.length > 0) {
           recipeFound = true;
           const recipe = directRecipes[0];
-          const ingredientCount = recipe.ingredients ? recipe.ingredients.length : 
-                                 recipe.inShape ? recipe.inShape.flat().filter(x => x !== null && x !== undefined).length : 0;
+          const ingredientCount = recipe.ingredients
+            ? recipe.ingredients.length
+            : recipe.inShape ? recipe.inShape.flat().filter(x => x !== null && x !== undefined).length : 0;
           recipeDetails = `Direct lookup: ${directRecipes.length} recipe(s), ingredients: ${ingredientCount}`;
-          
+
           console.log(`[RecipeTest] ✓ Found recipe for ${itemName} via direct lookup:`, {
             recipeCount: directRecipes.length,
             hasIngredients: !!recipe.ingredients,
@@ -96,8 +96,9 @@ class RecipeVerificationTest {
             for (const recipe of recipeArray) {
               if (recipe.result && recipe.result.id === item.id) {
                 recipeFound = true;
-                const ingredientCount = recipe.ingredients ? recipe.ingredients.length : 
-                                       recipe.inShape ? recipe.inShape.flat().filter(x => x !== null && x !== undefined).length : 0;
+                const ingredientCount = recipe.ingredients
+                  ? recipe.ingredients.length
+                  : recipe.inShape ? recipe.inShape.flat().filter(x => x !== null && x !== undefined).length : 0;
                 recipeDetails = `Full scan: Recipe ID ${recipeId}, ingredients: ${ingredientCount}`;
                 break;
               }
@@ -111,11 +112,10 @@ class RecipeVerificationTest {
         this.recordResult(itemName, true, recipeDetails);
       } else {
         // Additional debug information
-        console.log(`[RecipeTest] Debug ${itemName}: item.id=${item.id}, recipe keys sample:`, 
-                   Object.keys(data.recipes || {}).slice(0, 5));
+        console.log(`[RecipeTest] Debug ${itemName}: item.id=${item.id}, recipe keys sample:`,
+          Object.keys(data.recipes || {}).slice(0, 5));
         this.recordResult(itemName, false, `No recipes found for ${itemName} (id: ${item.id})`);
       }
-
     } catch (error) {
       this.recordResult(itemName, false, `Test error: ${error.message}`);
     }
@@ -124,7 +124,7 @@ class RecipeVerificationTest {
   recordResult(itemName, passed, message) {
     const result = { itemName, passed, message };
     this.testResults.push(result);
-    
+
     const status = passed ? '✓' : '✗';
     const color = passed ? '\x1b[32m' : '\x1b[31m';
     console.log(`${color}[RecipeTest] ${status} ${itemName}: ${message}\x1b[0m`);
@@ -139,7 +139,7 @@ class RecipeVerificationTest {
     console.log(`Total tests: ${total}`);
     console.log(`\x1b[32mPassed: ${passed}\x1b[0m`);
     console.log(`\x1b[31mFailed: ${failed}\x1b[0m`);
-    
+
     if (failed > 0) {
       console.log('\n[RecipeTest] Failed tests:');
       this.testResults
