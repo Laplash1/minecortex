@@ -3,10 +3,11 @@ const { Vec3 } = require('vec3');
 const InventoryUtils = require('./InventoryUtils');
 
 class SkillLibrary {
-  constructor() {
+  constructor(pathfindingCache = null) {
     this.skills = new Map();
     this.recipeCache = new Map();
     this.aliasConfig = null;
+    this.pathfindingCache = pathfindingCache;
   }
 
   /**
@@ -197,8 +198,8 @@ class SkillLibrary {
   }
 
   loadBasicSkills() {
-    // Movement skills
-    this.registerSkill('move_to', new MoveToSkill());
+    // Movement skills with pathfinding cache support
+    this.registerSkill('move_to', new MoveToSkill(this.pathfindingCache));
     this.registerSkill('follow', new FollowSkill());
     this.registerSkill('explore', new ExploreSkill());
 
@@ -254,8 +255,9 @@ class Skill {
 
 // Movement Skills
 class MoveToSkill extends Skill {
-  constructor() {
+  constructor(pathfindingCache = null) {
     super('move_to', 'Move to a specific position');
+    this.pathfindingCache = pathfindingCache;
   }
 
   async execute(bot, params) {
@@ -354,7 +356,19 @@ class MoveToSkill extends Skill {
             goal = new goals.GoalNear(Math.floor(x), Math.floor(y), Math.floor(z), 1);
           }
 
+          const pathStartTime = Date.now();
           await bot.pathfinder.goto(goal, { timeout: 12000 }); // Extended timeout for complex terrain
+
+          // パス計算結果をキャッシュに保存
+          if (this.pathfindingCache && params.useCache !== false) {
+            const pathResult = {
+              path: [], // TODO: 実際のパスを取得
+              status: 'success',
+              time: Date.now() - pathStartTime
+            };
+            this.pathfindingCache.storePath(currentPos, { x, y, z }, pathResult, bot.username);
+          }
+
           return { success: true, message: '目的地に到着しました' };
         } catch (gotoErr) {
           console.log(`[移動スキル] goto失敗: ${gotoErr.message}`);

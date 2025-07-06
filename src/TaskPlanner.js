@@ -1,10 +1,16 @@
 const InventoryUtils = require('./InventoryUtils');
+const { PathfindingCache } = require('./PathfindingCache');
 
 class TaskPlanner {
-  constructor(bot) {
+  constructor(bot, pathfindingCache = null) {
     this.bot = bot;
+    this.pathfindingCache = pathfindingCache || new PathfindingCache();
     this.activeTasks = new Map();
     this.taskHistory = [];
+
+    if (!pathfindingCache) {
+      console.log('[TaskPlanner] 独自PathfindingCacheを初期化');
+    }
   }
 
   async planTask(goal) {
@@ -151,7 +157,8 @@ class TaskPlanner {
       params: target,
       priority: goal.priority || 1,
       timeout: Date.now() + 120000, // 2 minutes
-      prerequisites: []
+      prerequisites: [],
+      useCache: true // パスキャッシュを使用
     };
   }
 

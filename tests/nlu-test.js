@@ -59,9 +59,9 @@ async function testNLUProcessor() {
       const result = await nluProcessor.parse(testCase.input, testContext);
 
       if (result) {
-        console.log(`✅ 解析成功`);
+        console.log('✅ 解析成功');
         console.log(`Intent: ${result.intent}`);
-        console.log(`Entities:`, result.entities);
+        console.log('Entities:', result.entities);
 
         if (result.intent === testCase.expectedIntent) {
           console.log(`✅ 期待されるIntent "${testCase.expectedIntent}" と一致`);
@@ -69,7 +69,7 @@ async function testNLUProcessor() {
           console.log(`❌ Intent不一致 - 期待: ${testCase.expectedIntent}, 実際: ${result.intent}`);
         }
       } else {
-        console.log(`❌ 解析失敗 - null結果`);
+        console.log('❌ 解析失敗 - null結果');
       }
     } catch (error) {
       console.log(`❌ テストエラー: ${error.message}`);
@@ -105,12 +105,12 @@ async function testMinecraftAIIntegration() {
       };
       this._client = { socket: { on: () => {} } };
     }
-    
+
     chat(message) {
       console.log(`[Bot]: ${message}`);
     }
   }
-  
+
   const mockBot = new MockBot();
 
   const ai = new MinecraftAI(mockBot);

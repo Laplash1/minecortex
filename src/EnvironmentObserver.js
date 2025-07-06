@@ -1,6 +1,9 @@
 class EnvironmentObserver {
-  constructor(bot) {
+  constructor(bot, sharedEnvironment = null) {
     this.bot = bot;
+    this.sharedEnvironment = sharedEnvironment;
+    this.botId = bot.username || 'unknown';
+
     this.lastPosition = null;
     this.nearbyEntities = new Map();
     this.nearbyBlocks = new Map();
@@ -14,17 +17,28 @@ class EnvironmentObserver {
     // Observation history
     this.observationHistory = [];
     this.maxHistorySize = 1000;
+
+    // SharedEnvironment連携の設定
+    if (this.sharedEnvironment) {
+      this.sharedEnvironment.registerObserver(this.botId, this);
+      console.log(`[EnvironmentObserver] ボット ${this.botId} を SharedEnvironment に登録`);
+    }
   }
 
   update() {
-    this.updatePosition();
-    this.updateNearbyEntities();
-    this.updateNearbyBlocks();
-    this.updateInventory();
-    this.updatePlayerStats();
-    this.updateEnvironment();
-
-    this.recordObservation();
+    if (this.sharedEnvironment) {
+      // SharedEnvironment使用時は個別データのみ更新
+      this.sharedEnvironment.updateBotSpecificData(this);
+    } else {
+      // 従来通りの個別更新
+      this.updatePosition();
+      this.updateNearbyEntities();
+      this.updateNearbyBlocks();
+      this.updateInventory();
+      this.updatePlayerStats();
+      this.updateEnvironment();
+      this.recordObservation();
+    }
   }
 
   updatePosition() {
@@ -693,6 +707,22 @@ class EnvironmentObserver {
     if (baseScore <= 3) return 'moderate';
     if (baseScore <= 6) return 'difficult';
     return 'very_difficult';
+  }
+
+  /**
+   * EnvironmentObserver終了処理
+   */
+  shutdown() {
+    if (this.sharedEnvironment) {
+      this.sharedEnvironment.unregisterObserver(this.botId);
+      console.log(`[EnvironmentObserver] ボット ${this.botId} を SharedEnvironment から登録解除`);
+    }
+
+    // データクリア
+    this.nearbyEntities.clear();
+    this.nearbyBlocks.clear();
+    this.inventoryState.clear();
+    this.observationHistory = [];
   }
 }
 

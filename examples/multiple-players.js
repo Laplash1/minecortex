@@ -1,5 +1,8 @@
 const mineflayer = require('mineflayer');
 const { MinecraftAI } = require('../src/MinecraftAI');
+const { SharedEnvironment } = require('../src/SharedEnvironment');
+const { PathfindingCache } = require('../src/PathfindingCache');
+const { OpenAIRequestQueue } = require('../src/OpenAIRequestQueue');
 require('dotenv').config();
 
 // プレイヤー管理クラス
@@ -7,6 +10,33 @@ class MultiplePlayersManager {
   constructor() {
     this.players = new Map();
     this.isShuttingDown = false;
+
+    // Performance optimization components for multi-bot scenarios
+    const playerCount = parseInt(process.env.MULTIPLE_PLAYERS_COUNT) || 3;
+    this.sharedEnvironment = playerCount > 1
+      ? new SharedEnvironment()
+      : null;
+    this.pathfindingCache = playerCount > 1
+      ? new PathfindingCache({
+        maxCacheSize: 2000, // 多ボット環境では大きなキャッシュ
+        maxCacheAge: 600000, // 10分
+        hitRadius: 4
+      })
+      : null;
+    this.openAIRequestQueue = process.env.OPENAI_API_KEY ? new OpenAIRequestQueue({
+      maxConcurrentRequests: 2, // 多ボット環境では制限
+      requestsPerMinute: 30 // 控えめなレート設定
+    }) : null;
+
+    if (this.sharedEnvironment) {
+      console.log(`[MultiplePlayersManager] SharedEnvironment を初期化 (${playerCount}ボット用パフォーマンス最適化)`);
+    }
+    if (this.pathfindingCache) {
+      console.log(`[MultiplePlayersManager] PathfindingCache を初期化 (${playerCount}ボット用パス最適化)`);
+    }
+    if (this.openAIRequestQueue) {
+      console.log('[MultiplePlayersManager] OpenAIRequestQueue を初期化 (API制御システム)');
+    }
   }
 
   // ランダムユーザーネーム生成
@@ -86,7 +116,7 @@ class MultiplePlayersManager {
         coordinator.configureSyncStart(expectedPlayersCount, true);
       }
 
-      const ai = new MinecraftAI(bot, coordinator);
+      const ai = new MinecraftAI(bot, coordinator, this.sharedEnvironment, this.pathfindingCache);
 
       // プレイヤー情報を保存
       this.players.set(playerIndex, {
@@ -245,6 +275,20 @@ class MultiplePlayersManager {
         console.log(`プレイヤー${index}を停止中...`);
         playerInfo.bot.quit();
       }
+    }
+
+    // パフォーマンス最適化コンポーネントをシャットダウン
+    if (this.openAIRequestQueue) {
+      await this.openAIRequestQueue.shutdown();
+      console.log('[MultiplePlayersManager] OpenAIRequestQueue シャットダウン完了');
+    }
+    if (this.sharedEnvironment) {
+      this.sharedEnvironment.shutdown();
+      console.log('[MultiplePlayersManager] SharedEnvironment シャットダウン完了');
+    }
+    if (this.pathfindingCache) {
+      this.pathfindingCache.shutdown();
+      console.log('[MultiplePlayersManager] PathfindingCache シャットダウン完了');
     }
 
     this.players.clear();

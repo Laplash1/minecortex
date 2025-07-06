@@ -16,7 +16,7 @@ class PerformanceTestRunner {
 
   async runAllTests() {
     console.log('🔍 MineCortex パフォーマンステスト開始...');
-    
+
     // 出力ディレクトリ作成
     if (!fs.existsSync(this.outputDir)) {
       fs.mkdirSync(this.outputDir, { recursive: true });
@@ -40,7 +40,7 @@ class PerformanceTestRunner {
   async runSingleTest(testConfig) {
     const startTime = Date.now();
     const logFile = path.join(this.outputDir, `${testConfig.name.replace(/[^\w]/g, '_')}_${startTime}.log`);
-    
+
     console.log(`  コマンド: ${testConfig.command}`);
     console.log(`  テスト時間: ${this.testDuration / 1000}秒`);
     console.log(`  ログファイル: ${logFile}`);
@@ -49,8 +49,8 @@ class PerformanceTestRunner {
       // プロセス起動
       const child = spawn('bash', ['-c', testConfig.command], {
         cwd: path.join(__dirname, '..'),
-        env: { 
-          ...process.env, 
+        env: {
+          ...process.env,
           PERFORMANCE_MONITORING: 'true',
           PERF_LOG_INTERVAL: '5000',
           EVENT_LOOP_THRESHOLD: '30'
@@ -58,20 +58,20 @@ class PerformanceTestRunner {
       });
 
       let output = '';
-      let performanceData = [];
+      const performanceData = [];
 
       // 出力収集
       child.stdout.on('data', (data) => {
         const chunk = data.toString();
         output += chunk;
-        
+
         // パフォーマンス情報抽出
-        const perfLines = chunk.split('\n').filter(line => 
-          line.includes('[PerformanceMonitor]') || 
+        const perfLines = chunk.split('\n').filter(line =>
+          line.includes('[PerformanceMonitor]') ||
           line.includes('イベントループ遅延') ||
           line.includes('メモリ使用量')
         );
-        
+
         perfLines.forEach(line => {
           performanceData.push({
             timestamp: Date.now(),
@@ -92,12 +92,12 @@ class PerformanceTestRunner {
       // テスト時間経過後にプロセス終了
       setTimeout(() => {
         console.log(`  ⏰ ${testConfig.name}テスト時間満了、プロセス終了中...`);
-        
+
         child.kill('SIGTERM');
-        
+
         // 結果保存
         fs.writeFileSync(logFile, output);
-        
+
         const result = {
           testName: testConfig.name,
           botCount: testConfig.botCount,
@@ -108,15 +108,14 @@ class PerformanceTestRunner {
           performanceData,
           summary: this.analyzePerformanceData(performanceData)
         };
-        
+
         this.testResults.push(result);
-        
+
         console.log(`  ✅ ${testConfig.name}テスト完了`);
         console.log(`     パフォーマンスデータ: ${performanceData.length}件`);
-        
+
         // 少し待ってから次のテストへ
         setTimeout(resolve, 2000);
-        
       }, this.testDuration);
 
       child.on('error', (error) => {
@@ -129,14 +128,14 @@ class PerformanceTestRunner {
   analyzePerformanceData(performanceData) {
     const lagData = [];
     const memoryData = [];
-    
+
     performanceData.forEach(entry => {
       // イベントループ遅延抽出
       const lagMatch = entry.line.match(/平均\s+([\d.]+)ms/);
       if (lagMatch) {
         lagData.push(parseFloat(lagMatch[1]));
       }
-      
+
       // メモリ使用量抽出
       const memMatch = entry.line.match(/RSS\s+([\d.]+)MB/);
       if (memMatch) {
@@ -163,7 +162,7 @@ class PerformanceTestRunner {
   generateReport() {
     const reportTime = new Date().toISOString();
     const reportFile = path.join(this.outputDir, `performance_report_${Date.now()}.json`);
-    
+
     const report = {
       timestamp: reportTime,
       testDuration: this.testDuration,
@@ -172,10 +171,10 @@ class PerformanceTestRunner {
     };
 
     fs.writeFileSync(reportFile, JSON.stringify(report, null, 2));
-    
+
     console.log('\n📈 パフォーマンステスト結果レポート');
     console.log('='.repeat(50));
-    
+
     this.testResults.forEach(result => {
       console.log(`\n${result.testName} (${result.botCount}体)`);
       console.log(`  イベントループ遅延: 平均 ${result.summary.eventLoopLag.avg.toFixed(2)}ms (最大 ${result.summary.eventLoopLag.max.toFixed(2)}ms)`);
