@@ -39,6 +39,15 @@ class TaskPlanner {
     case 'craft_workbench':
       return this.planWorkbenchCrafting(goal);
 
+    case 'place_workbench':
+      return this.planWorkbenchPlacement(goal);
+
+    case 'craft_with_workbench':
+      return this.planAdvancedCrafting(goal);
+
+    case 'craft_stone_tools':
+      return this.planStoneToolCrafting(goal);
+
     case 'move_to':
       return this.planMovement(goal);
 
@@ -50,9 +59,6 @@ class TaskPlanner {
 
     case 'find_stone':
       return this.planStoneGathering(goal);
-
-    case 'craft_stone_tools':
-      return this.planStoneToolCrafting(goal);
 
     case 'build_shelter':
       return this.planShelterBuilding(goal);
@@ -215,17 +221,6 @@ class TaskPlanner {
     };
   }
 
-  planStoneToolCrafting(goal) {
-    const { tools = ['stone_pickaxe', 'stone_axe', 'stone_sword'] } = goal;
-
-    return {
-      type: 'craft_tools',
-      params: { tools },
-      priority: goal.priority || 4,
-      timeout: Date.now() + 600000, // 10 minutes
-      prerequisites: []
-    };
-  }
 
   planShelterBuilding(goal) {
     return {
@@ -646,6 +641,154 @@ class TaskPlanner {
       return false;
     }
     return InventoryUtils.getAvailablePlanks(this.bot) >= 4; // Need 4 planks for crafting table
+  }
+
+  planWorkbenchPlacement(goal) {
+    console.log('[タスクプランナー] 作業台設置タスクを計画中...');
+
+    // インベントリに作業台があるかチェック
+    const hasWorkbench = InventoryUtils.hasItem(this.bot, 'crafting_table');
+
+    if (!hasWorkbench) {
+      console.log('[タスクプランナー] 作業台が必要です');
+      return {
+        type: 'place_workbench',
+        params: {},
+        priority: goal.priority || 4,
+        timeout: Date.now() + 120000, // 2 minutes
+        prerequisites: [{
+          type: 'craft_workbench',
+          params: {}
+        }]
+      };
+    }
+
+    return {
+      type: 'place_workbench',
+      params: {},
+      priority: goal.priority || 4,
+      timeout: Date.now() + 120000, // 2 minutes
+      prerequisites: []
+    };
+  }
+
+  planAdvancedCrafting(goal) {
+    const { itemName, count = 1 } = goal;
+    console.log(`[タスクプランナー] 高度クラフトタスクを計画中: ${itemName}`);
+
+    // 近くに作業台があるかチェック（実際の実行時に確認されるが、計画段階でも考慮）
+    const task = {
+      type: 'craft_with_workbench',
+      params: { itemName, count },
+      priority: goal.priority || 4,
+      timeout: Date.now() + 600000, // 10 minutes
+      prerequisites: []
+    };
+
+    // 材料の前提条件を追加
+    if (itemName && itemName.includes('stone')) {
+      // 石ツールの場合、石材と棒が必要
+      const stoneCount = InventoryUtils.getStoneCount(this.bot);
+      const sticksCount = this.countSticksInInventory();
+
+      if (stoneCount < 3) {
+        task.prerequisites.push({
+          type: 'mine_block',
+          params: { blockType: 'stone', amount: 5 }
+        });
+      }
+
+      if (sticksCount < 2) {
+        task.prerequisites.push({
+          type: 'craft_tools',
+          params: { tools: ['stick'] }
+        });
+      }
+    }
+
+    return task;
+  }
+
+  planStoneToolCrafting(goal) {
+    const { tools = ['stone_pickaxe', 'stone_axe', 'stone_sword'] } = goal;
+    console.log(`[タスクプランナー] 石ツールクラフトタスクを計画中: ${tools.join(', ')}`);
+
+    // 作業台の存在チェック
+    const needsWorkbench = !this.hasNearbyWorkbench();
+    const needsWorkbenchItem = !InventoryUtils.hasItem(this.bot, 'crafting_table');
+
+    const task = {
+      type: 'craft_stone_tools',
+      params: { tools },
+      priority: goal.priority || 4,
+      timeout: Date.now() + 900000, // 15 minutes
+      prerequisites: []
+    };
+
+    // 作業台関連の前提条件
+    if (needsWorkbench) {
+      if (needsWorkbenchItem) {
+        task.prerequisites.push({
+          type: 'craft_workbench',
+          params: { autoPlace: true }
+        });
+      } else {
+        task.prerequisites.push({
+          type: 'place_workbench',
+          params: {}
+        });
+      }
+    }
+
+    // 材料の前提条件
+    const stoneCount = InventoryUtils.getStoneCount(this.bot);
+    if (stoneCount < tools.length * 3) {
+      task.prerequisites.push({
+        type: 'mine_block',
+        params: { blockType: 'stone', amount: tools.length * 3 }
+      });
+    }
+
+    const sticksNeeded = this.calculateSticksNeeded(tools);
+    const sticksAvailable = this.countSticksInInventory();
+    if (sticksAvailable < sticksNeeded) {
+      task.prerequisites.push({
+        type: 'gather_wood',
+        params: { amount: Math.ceil((sticksNeeded - sticksAvailable) / 4) }
+      });
+    }
+
+    return task;
+  }
+
+  hasNearbyWorkbench() {
+    if (!this.bot) return false;
+    try {
+      const workbench = this.bot.findBlock({
+        matching: (block) => block && block.name === 'crafting_table',
+        maxDistance: 10
+      });
+      return !!workbench;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  countSticksInInventory() {
+    if (!this.bot || !this.bot.inventory) return 0;
+    return this.bot.inventory.count(this.bot.registry.itemsByName.stick.id);
+  }
+
+  calculateSticksNeeded(tools) {
+    let sticksNeeded = 0;
+    for (const tool of tools) {
+      if (tool.includes('pickaxe') || tool.includes('axe')) {
+        sticksNeeded += 2; // ピッケルと斧は棒2本
+      } else if (tool.includes('sword')) {
+        sticksNeeded += 1; // 剣は棒1本
+      }
+    }
+    return sticksNeeded;
   }
 }
 

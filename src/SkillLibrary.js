@@ -220,6 +220,8 @@ class SkillLibrary {
     // Crafting skills
     this.registerSkill('craft_tools', new CraftToolsSkill());
     this.registerSkill('craft_workbench', new CraftWorkbenchSkill());
+    this.registerSkill('place_workbench', new PlaceWorkbenchSkill());
+    this.registerSkill('craft_with_workbench', new CraftWithWorkbenchSkill());
     this.registerSkill('craft_furnace', new CraftFurnaceSkill());
 
     // Building skills
@@ -1143,7 +1145,7 @@ class MineBlockSkill extends Skill {
 
         // 視線が遮られている場合、障害物除去を試行
         if (reachabilityCheck.reason.includes('視線が遮られています')) {
-          console.log(`[マイニング] 視線を遮る障害物の除去を試みます...`);
+          console.log('[マイニング] 視線を遮る障害物の除去を試みます...');
           const clearResult = await this.handleOutOfSightBlock(bot, block, reachabilityCheck);
           if (clearResult.success) {
             console.log('[マイニング] 障害物除去成功、再試行します。');
@@ -2573,8 +2575,7 @@ class CraftToolsSkill extends Skill {
     console.log(`[ツールスキル] ${tools.join(', ')}の作成を開始します...`);
 
     // Ensure we have a crafting table nearby or in inventory
-    const workbenchSkill = new CraftWorkbenchSkill();
-    const workbenchResult = await workbenchSkill.ensureWorkbench(bot);
+    const workbenchResult = await this.ensureWorkbench(bot);
 
     if (!workbenchResult.success) {
       console.log(`[ツールスキル] 作業台の確保に失敗: ${workbenchResult.error}`);
@@ -2841,6 +2842,24 @@ class CraftWorkbenchSkill extends Skill {
         console.log('[作業台スキル] 作業台のクラフトに成功しました！');
         bot.chat('作業台をクラフトしました！');
         InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-Success');
+
+        // 自動設置を試行（オプション機能）
+        if (_params.autoPlace !== false) {
+          console.log('[作業台スキル] 自動設置を試行します...');
+          const placeResult = await this.tryAutoPlace(bot);
+          if (placeResult.success) {
+            return {
+              success: true,
+              crafted: 'crafting_table',
+              placed: true,
+              workbenchPosition: placeResult.workbenchPosition,
+              message: '作業台のクラフトと設置に成功'
+            };
+          } else {
+            console.log(`[作業台スキル] 自動設置失敗: ${placeResult.error}`);
+          }
+        }
+
         return { success: true, crafted: 'crafting_table', message: '作業台のクラフトに成功' };
       } catch (error) {
         const message = `作業台クラフト実行エラー: ${error.message}`;
@@ -2904,6 +2923,62 @@ class CraftWorkbenchSkill extends Skill {
     }
 
     return count;
+  }
+
+  // 自動設置を試行するヘルパーメソッド
+  async tryAutoPlace(bot) {
+    try {
+      // PlaceWorkbenchSkillの簡略版ロジック
+      const workbenchItem = bot.inventory.items().find(item =>
+        item && item.name === 'crafting_table'
+      );
+
+      if (!workbenchItem) {
+        return { success: false, error: 'インベントリに作業台がありません' };
+      }
+
+      // 近くに既に作業台があるかチェック
+      const existingWorkbench = bot.findBlock({
+        matching: (block) => block && block.name === 'crafting_table',
+        maxDistance: 8
+      });
+
+      if (existingWorkbench) {
+        return {
+          success: true,
+          message: '近くに既に作業台があります',
+          workbenchPosition: existingWorkbench.position
+        };
+      }
+
+      // 簡単な設置場所を探す（足元）
+      const botPos = bot.entity.position;
+      const groundBlock = bot.blockAt(botPos.floored().plus(new Vec3(0, -1, 0)));
+
+      if (groundBlock && groundBlock.name !== 'air') {
+        const aboveGround = botPos.floored();
+        const aboveGroundBlock = bot.blockAt(aboveGround);
+
+        if (aboveGroundBlock && aboveGroundBlock.name === 'air') {
+          await bot.equip(workbenchItem, 'hand');
+          await bot.placeBlock(groundBlock, new Vec3(0, 1, 0));
+          const placedPosition = groundBlock.position.plus(new Vec3(0, 1, 0));
+
+          console.log(`[作業台スキル] 自動設置成功: ${placedPosition}`);
+          bot.chat('作業台を設置しました！');
+
+          return {
+            success: true,
+            workbenchPosition: placedPosition,
+            message: '作業台の自動設置に成功'
+          };
+        }
+      }
+
+      return { success: false, error: '適切な設置場所が見つかりません' };
+    } catch (error) {
+      return { success: false, error: `自動設置エラー: ${error.message}` };
+    }
   }
 }
 
@@ -3145,6 +3220,257 @@ class ExploreSkill extends Skill {
   }
 }
 
+// 作業台設置スキル
+class PlaceWorkbenchSkill extends Skill {
+  constructor() {
+    super('place_workbench', '作業台を近くの適切な場所に設置します');
+  }
+
+  async execute(bot, _params) {
+    try {
+      console.log('[作業台設置] 作業台の設置を開始します...');
+
+      // 1. インベントリから作業台を探す
+      const workbenchItem = bot.inventory.items().find(item =>
+        item && item.name === 'crafting_table'
+      );
+
+      if (!workbenchItem) {
+        return {
+          success: false,
+          reason: 'NO_WORKBENCH',
+          error: 'インベントリに作業台がありません'
+        };
+      }
+
+      // 2. 近くに既に作業台があるかチェック
+      const existingWorkbench = bot.findBlock({
+        matching: (block) => block && block.name === 'crafting_table',
+        maxDistance: 8
+      });
+
+      if (existingWorkbench) {
+        console.log('[作業台設置] 近くに既に作業台があります');
+        return {
+          success: true,
+          message: '近くに既に作業台があります',
+          workbenchPosition: existingWorkbench.position
+        };
+      }
+
+      // 3. 設置場所を探す
+      const placementResult = await this.findPlacementLocation(bot);
+      if (!placementResult.success) {
+        return placementResult;
+      }
+
+      const { referenceBlock, face } = placementResult;
+
+      // 4. 作業台を手に持つ
+      await bot.equip(workbenchItem, 'hand');
+      console.log('[作業台設置] 作業台を手に持ちました');
+
+      // 5. 設置実行
+      await bot.placeBlock(referenceBlock, face);
+      const placedPosition = referenceBlock.position.plus(face);
+
+      console.log(`[作業台設置] 作業台を ${placedPosition} に設置しました`);
+      bot.chat('作業台を設置しました！');
+
+      return {
+        success: true,
+        result: '作業台の設置に成功しました',
+        workbenchPosition: placedPosition
+      };
+    } catch (error) {
+      const errorMessage = `作業台の設置に失敗: ${error.message}`;
+      console.error(`[作業台設置] ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  async findPlacementLocation(bot) {
+    try {
+      const botPos = bot.entity.position;
+
+      // 設置可能な場所を探す（ボットの周りを確認）
+      const directions = [
+        new Vec3(1, 0, 0), // 東
+        new Vec3(-1, 0, 0), // 西
+        new Vec3(0, 0, 1), // 南
+        new Vec3(0, 0, -1), // 北
+        new Vec3(1, 0, 1), // 南東
+        new Vec3(-1, 0, 1), // 南西
+        new Vec3(1, 0, -1), // 北東
+        new Vec3(-1, 0, -1) // 北西
+      ];
+
+      for (const direction of directions) {
+        const checkPos = botPos.floored().plus(direction);
+        const referenceBlock = bot.blockAt(checkPos);
+
+        if (!referenceBlock || referenceBlock.name === 'air') continue;
+
+        // 上に空間があるかチェック
+        const abovePos = checkPos.plus(new Vec3(0, 1, 0));
+        const aboveBlock = bot.blockAt(abovePos);
+
+        if (aboveBlock && aboveBlock.name === 'air') {
+          console.log(`[作業台設置] 設置場所発見: ${checkPos} の上`);
+          return {
+            success: true,
+            referenceBlock,
+            face: new Vec3(0, 1, 0)
+          };
+        }
+      }
+
+      // 足元に設置を試行
+      const groundBlock = bot.blockAt(botPos.floored().plus(new Vec3(0, -1, 0)));
+      if (groundBlock && groundBlock.name !== 'air') {
+        const aboveGround = botPos.floored();
+        const aboveGroundBlock = bot.blockAt(aboveGround);
+
+        if (aboveGroundBlock && aboveGroundBlock.name === 'air') {
+          console.log('[作業台設置] 足元に設置');
+          return {
+            success: true,
+            referenceBlock: groundBlock,
+            face: new Vec3(0, 1, 0)
+          };
+        }
+      }
+
+      return {
+        success: false,
+        error: '作業台を設置できる適切な場所が見つかりません'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `設置場所の検索中にエラー: ${error.message}`
+      };
+    }
+  }
+}
+
+// 作業台を使ったクラフトスキル
+class CraftWithWorkbenchSkill extends Skill {
+  constructor() {
+    super('craft_with_workbench', '作業台を使ってアイテムをクラフトします');
+  }
+
+  async execute(bot, params) {
+    const { itemName, count = 1 } = params;
+
+    if (!itemName) {
+      return {
+        success: false,
+        error: 'クラフトするアイテム名が指定されていません'
+      };
+    }
+
+    try {
+      console.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトを開始...`);
+
+      // 1. 近くの作業台を探す
+      const workbenchBlock = bot.findBlock({
+        matching: (block) => block && block.name === 'crafting_table',
+        maxDistance: 10
+      });
+
+      if (!workbenchBlock) {
+        return {
+          success: false,
+          reason: 'NO_WORKBENCH_NEARBY',
+          error: '近くに作業台が見つかりません'
+        };
+      }
+
+      console.log(`[作業台クラフト] 作業台発見: ${workbenchBlock.position}`);
+
+      // 2. アイテムのレシピを取得（作業台必須のレシピ）
+      const recipe = await SkillLibrary.getRecipeSafe(bot, itemName, count, workbenchBlock);
+
+      if (!recipe) {
+        return {
+          success: false,
+          reason: 'NO_RECIPE',
+          error: `${itemName} の作業台レシピが見つかりません`
+        };
+      }
+
+      console.log(`[作業台クラフト] レシピ取得成功: ${itemName}`);
+
+      // 3. 材料チェック
+      const materialCheck = await this.checkMaterials(bot, recipe);
+      if (!materialCheck.success) {
+        return materialCheck;
+      }
+
+      // 4. 作業台に近づく
+      const distance = bot.entity.position.distanceTo(workbenchBlock.position);
+      if (distance > 4) {
+        console.log('[作業台クラフト] 作業台に近づいています...');
+        if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
+          const { goals } = require('mineflayer-pathfinder');
+          const goal = new goals.GoalNear(workbenchBlock.position.x, workbenchBlock.position.y, workbenchBlock.position.z, 2);
+          await bot.pathfinder.goto(goal);
+        }
+      }
+
+      // 5. クラフト実行
+      await bot.craft(recipe, count, workbenchBlock);
+
+      console.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトしました`);
+      bot.chat(`${itemName} を ${count} 個クラフトしました！`);
+
+      return {
+        success: true,
+        result: `${itemName} を ${count} 個クラフトしました`,
+        crafted: { item: itemName, count }
+      };
+    } catch (error) {
+      const errorMessage = `${itemName} のクラフトに失敗: ${error.message}`;
+      console.error(`[作業台クラフト] ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  async checkMaterials(bot, recipe) {
+    try {
+      const mcData = require('minecraft-data')(bot.version);
+
+      for (const ingredient of recipe.delta) {
+        if (ingredient.count < 0) { // 入力材料（負の数）
+          const requiredCount = Math.abs(ingredient.count);
+          const item = mcData.items[ingredient.id];
+          const itemName = item ? item.name : `id_${ingredient.id}`;
+
+          const available = bot.inventory.count(ingredient.id, ingredient.metadata);
+
+          if (available < requiredCount) {
+            return {
+              success: false,
+              reason: 'INSUFFICIENT_MATERIALS',
+              error: `材料不足: ${itemName} (必要=${requiredCount}, 所持=${available})`
+            };
+          }
+
+          console.log(`[作業台クラフト] 材料確認OK: ${itemName} (必要=${requiredCount}, 所持=${available})`);
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: `材料チェック中にエラー: ${error.message}`
+      };
+    }
+  }
+}
+
 module.exports = {
   SkillLibrary,
   Skill,
@@ -3162,5 +3488,7 @@ module.exports = {
   CraftWorkbenchSkill,
   CraftFurnaceSkill,
   PlaceBlocksSkill,
-  ExploreSkill
+  ExploreSkill,
+  PlaceWorkbenchSkill,
+  CraftWithWorkbenchSkill
 };
