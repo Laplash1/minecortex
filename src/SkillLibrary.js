@@ -1099,6 +1099,7 @@ class MineBlockSkill extends Skill {
     let successfulMines = 0;
     const targetAmount = amount;
     let consecutiveFailures = 0;
+    const blacklist = new Set(); // 失敗ブロックのブラックリスト
 
     // Check initial inventory to track collected items
     const initialItems = this.countItemsInInventory(bot, blockType);
@@ -1118,8 +1119,8 @@ class MineBlockSkill extends Skill {
           return { success: false, reason: 'TARGET_NOT_FOUND', details: { type: blockType, position } };
         }
       } else {
-        // Stage 1: Find block nearby with progressive search
-        block = this.findBlockWithProgressiveSearch(bot, blockType);
+        // Stage 1: Find block nearby with progressive search using blacklist
+        block = this.findBlockWithProgressiveSearch(bot, blockType, blacklist);
       }
 
       if (!block) {
@@ -1140,10 +1141,29 @@ class MineBlockSkill extends Skill {
       if (!reachabilityCheck.canReach) {
         console.log(`[マイニング] ${block.name}は採掘可能範囲外: ${reachabilityCheck.reason}`);
 
+        // 視線が遮られている場合、障害物除去を試行
+        if (reachabilityCheck.reason.includes('視線が遮られています')) {
+          console.log(`[マイニング] 視線を遮る障害物の除去を試みます...`);
+          const clearResult = await this.handleOutOfSightBlock(bot, block, reachabilityCheck);
+          if (clearResult.success) {
+            console.log('[マイニング] 障害物除去成功、再試行します。');
+            continue; // 同じブロックで再試行
+          } else {
+            console.log('[マイニング] 障害物除去失敗、このブロックは諦めます。');
+            if (block && block.position) {
+              blacklist.add(block.position.toString());
+            }
+            continue;
+          }
+        }
+
         // Try to move closer to the block
         const moveResult = await this.moveToMiningPosition(bot, block);
         if (!moveResult.success) {
           console.log(`[マイニング] 移動失敗、次のブロックを探します: ${moveResult.error}`);
+          if (block && block.position) {
+            blacklist.add(block.position.toString()); // 移動失敗でもブラックリストへ
+          }
           consecutiveFailures++;
           if (consecutiveFailures > 3) {
             this.bot.chat('同じ場所でスタックしました。探索します。');
@@ -1156,6 +1176,9 @@ class MineBlockSkill extends Skill {
         const recheckResult = await this.checkBlockReachability(bot, block);
         if (!recheckResult.canReach) {
           console.log(`[マイニング] 移動後も採掘不可、次のブロックを探します: ${recheckResult.reason}`);
+          if (block && block.position) {
+            blacklist.add(block.position.toString()); // 再チェック失敗でもブラックリストへ
+          }
           continue; // Try next block instead of failing completely
         }
       }
@@ -1164,6 +1187,9 @@ class MineBlockSkill extends Skill {
       const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
       if (!finalLineOfSight.clear) {
         console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}`);
+        if (block && block.position) {
+          blacklist.add(block.position.toString()); // 最終チェック失敗でもブラックリストへ
+        }
         continue;
       }
 
@@ -1183,6 +1209,9 @@ class MineBlockSkill extends Skill {
         const finalDistance = bot.entity.position.distanceTo(block.position);
         if (finalDistance >= 3.0) {
           console.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+          if (block && block.position) {
+            blacklist.add(block.position.toString());
+          }
           continue; // Try next block instead of failing completely
         }
 
@@ -1229,6 +1258,7 @@ class MineBlockSkill extends Skill {
         }
 
         successfulMines++;
+        consecutiveFailures = 0; // 成功したらリセット
         console.log(`[マイニング] 採掘成功! 進捗: ${successfulMines}/${targetAmount}個`);
 
         // Check if we have enough items in inventory (more accurate than just counting mines)
@@ -1244,6 +1274,9 @@ class MineBlockSkill extends Skill {
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         console.log(`[マイニング] 採掘に失敗: ${error.message}`);
+        if (block && block.position) {
+          blacklist.add(block.position.toString()); // 採掘失敗でもブラックリストへ
+        }
         // Don't return here, continue to next iteration or exit loop
         continue;
       }
@@ -1318,7 +1351,7 @@ class MineBlockSkill extends Skill {
     return { success: false, error: `地下探索でも${blockType}が見つかりません` };
   }
 
-  findBlockWithProgressiveSearch(bot, blockType) {
+  findBlockWithProgressiveSearch(bot, blockType, blacklist = new Set()) {
     console.log(`[マイニング] ${blockType}の段階的探索を開始...`);
 
     // Start with close-range search and expand for better coverage
@@ -1330,6 +1363,11 @@ class MineBlockSkill extends Skill {
       const block = bot.findBlock({
         matching: (candidate) => {
           if (!candidate || !candidate.name) return false;
+
+          // ブラックリストに含まれていれば除外
+          if (blacklist.has(candidate.position.toString())) {
+            return false;
+          }
 
           if (typeof blockType === 'string') {
             // Enhanced string matching for better block detection
@@ -1378,7 +1416,7 @@ class MineBlockSkill extends Skill {
     console.log('[マイニング] 標準探索失敗、特殊検索開始...');
 
     if (typeof blockType === 'string') {
-      const fallbackBlock = this.findSimilarBlocks(bot, blockType);
+      const fallbackBlock = this.findSimilarBlocks(bot, blockType, blacklist);
       if (fallbackBlock) {
         console.log(`[マイニング] 代替ブロック発見: ${fallbackBlock.name}`);
         return fallbackBlock;
@@ -1389,7 +1427,7 @@ class MineBlockSkill extends Skill {
     return null;
   }
 
-  findSimilarBlocks(bot, blockType) {
+  findSimilarBlocks(bot, blockType, blacklist = new Set()) {
     const blockTypeLower = blockType.toLowerCase();
 
     // Define similar block groups
@@ -1422,6 +1460,12 @@ class MineBlockSkill extends Skill {
       const block = bot.findBlock({
         matching: (candidate) => {
           if (!candidate || !candidate.name) return false;
+
+          // ブラックリストに含まれていれば除外
+          if (blacklist.has(candidate.position.toString())) {
+            return false;
+          }
+
           const candidateName = candidate.name.toLowerCase();
           return targetGroup.some(groupBlock =>
             candidateName === groupBlock || candidateName.includes(groupBlock)
