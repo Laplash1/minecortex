@@ -1208,6 +1208,10 @@ class MineBlockSkill extends Skill {
 
       try {
         // Final distance check before mining - prevent mining from 3+ blocks away
+        if (!block || !block.position) {
+          console.log('[マイニング] ブロックまたはポジションが無効です');
+          continue;
+        }
         const finalDistance = bot.entity.position.distanceTo(block.position);
         if (finalDistance >= 3.0) {
           console.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
@@ -1364,10 +1368,16 @@ class MineBlockSkill extends Skill {
 
       const block = bot.findBlock({
         matching: (candidate) => {
-          if (!candidate || !candidate.name) return false;
+          if (!candidate || !candidate.name || !candidate.position) return false;
 
           // ブラックリストに含まれていれば除外
-          if (blacklist.has(candidate.position.toString())) {
+          try {
+            if (blacklist.has(candidate.position.toString())) {
+              return false;
+            }
+          } catch (positionError) {
+            // position.toString()でエラーが発生した場合は除外
+            console.log(`[マイニング] ポジション参照エラー: ${positionError.message}`);
             return false;
           }
 
@@ -1461,10 +1471,16 @@ class MineBlockSkill extends Skill {
     for (const radius of [32, 64, 96]) {
       const block = bot.findBlock({
         matching: (candidate) => {
-          if (!candidate || !candidate.name) return false;
+          if (!candidate || !candidate.name || !candidate.position) return false;
 
           // ブラックリストに含まれていれば除外
-          if (blacklist.has(candidate.position.toString())) {
+          try {
+            if (blacklist.has(candidate.position.toString())) {
+              return false;
+            }
+          } catch (positionError) {
+            // position.toString()でエラーが発生した場合は除外
+            console.log(`[マイニング] ポジション参照エラー: ${positionError.message}`);
             return false;
           }
 
@@ -1769,6 +1785,7 @@ class MineBlockSkill extends Skill {
 
         // Sort items by distance for efficient collection
         droppedItems.sort((a, b) => {
+          if (!a.position || !b.position) return 0;
           const distA = bot.entity.position.distanceTo(a.position);
           const distB = bot.entity.position.distanceTo(b.position);
           return distA - distB;
@@ -1777,6 +1794,10 @@ class MineBlockSkill extends Skill {
         // Move to each dropped item and collect it
         for (const itemEntity of droppedItems) {
           try {
+            if (!itemEntity || !itemEntity.position) {
+              console.log('[マイニング] アイテムエンティティまたはポジションが無効です');
+              continue;
+            }
             const distance = bot.entity.position.distanceTo(itemEntity.position);
             console.log(`[マイニング] アイテムまでの距離: ${distance.toFixed(2)}ブロック`);
 
@@ -1984,7 +2005,26 @@ class MineBlockSkill extends Skill {
     const workbenchResult = await this.ensureWorkbench(bot);
     if (!workbenchResult.success) {
       console.log(`[ツール作成] 作業台の確保に失敗: ${workbenchResult.error}`);
-      return { success: false, error: `作業台不足: ${workbenchResult.error}` };
+      
+      // Try to gather materials automatically
+      if (workbenchResult.error.includes('材料不足')) {
+        console.log('[ツール作成] 材料不足のため自動収集を試みます...');
+        const gatherResult = await this.simpleWoodGathering(bot);
+        
+        if (gatherResult.success) {
+          console.log('[ツール作成] 材料収集成功、作業台確保を再試行...');
+          const retryWorkbenchResult = await this.ensureWorkbench(bot);
+          if (retryWorkbenchResult.success) {
+            console.log('[ツール作成] 材料収集後の作業台確保成功');
+          } else {
+            return { success: false, error: `材料収集後も作業台確保失敗: ${retryWorkbenchResult.error}` };
+          }
+        } else {
+          return { success: false, error: `材料収集失敗: ${gatherResult.error}` };
+        }
+      } else {
+        return { success: false, error: `作業台不足: ${workbenchResult.error}` };
+      }
     }
 
     const inventory = bot.inventory.items();
@@ -2281,8 +2321,22 @@ class MineBlockSkill extends Skill {
     });
 
     if (!tree) {
-      console.log('[木材収集] 近くに木が見つかりません');
-      return { success: false, error: '木が見つかりません' };
+      console.log('[木材収集] 近くに木が見つかりません。探索を試みます...');
+      // Try to explore to find trees
+      const exploreResult = await this.exploreForTrees(bot);
+      if (!exploreResult.success) {
+        return { success: false, error: '木が見つかりません（探索後）' };
+      }
+      
+      // Search again after exploration
+      const treeAfterExplore = bot.findBlock({
+        matching: (block) => block && block.name.includes('_log'),
+        maxDistance: 64
+      });
+      
+      if (!treeAfterExplore) {
+        return { success: false, error: '探索後も木が見つかりません' };
+      }
     }
 
     // Mine the tree
@@ -2294,6 +2348,60 @@ class MineBlockSkill extends Skill {
       console.log(`[木材収集] 木材収集に失敗: ${error.message}`);
       return { success: false, error: `木材収集失敗: ${error.message}` };
     }
+  }
+
+  // Explore to find trees
+  async exploreForTrees(bot) {
+    console.log('[探索] 木材探索を開始...');
+    
+    const originalPosition = bot.entity.position.clone();
+    const searchDirections = [
+      { x: 0, z: 16 },  // North
+      { x: 16, z: 0 },  // East
+      { x: 0, z: -16 }, // South
+      { x: -16, z: 0 }  // West
+    ];
+    
+    for (const direction of searchDirections) {
+      const targetPos = originalPosition.offset(direction.x, 0, direction.z);
+      console.log(`[探索] ${direction.x}, ${direction.z}方向を探索中...`);
+      
+      try {
+        // Basic movement toward the direction
+        await bot.lookAt(targetPos);
+        
+        // Move forward for exploration
+        bot.setControlState('forward', true);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        bot.setControlState('forward', false);
+        
+        // Search for trees in new area
+        const tree = bot.findBlock({
+          matching: (block) => block && block.name.includes('_log'),
+          maxDistance: 32
+        });
+        
+        if (tree) {
+          console.log(`[探索] 木材を発見: ${tree.position}`);
+          return { success: true, tree };
+        }
+      } catch (error) {
+        console.log(`[探索] 探索エラー: ${error.message}`);
+        continue;
+      }
+    }
+    
+    // Return to original position
+    try {
+      await bot.lookAt(originalPosition);
+      bot.setControlState('forward', true);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      bot.setControlState('forward', false);
+    } catch (error) {
+      console.log(`[探索] 復帰エラー: ${error.message}`);
+    }
+    
+    return { success: false, error: '探索でも木材が見つかりませんでした' };
   }
 
   // Craft planks from logs
@@ -2491,10 +2599,23 @@ class SimpleGatherWoodSkill extends Skill {
           return { success: false, error: 'No new trees found nearby' };
         }
         if (!bot.pathfinder) {
-          return { success: false, error: 'Pathfinder not available' };
+          console.log('[木材収集] パスファインダーが利用不可。基本移動を使用します');
+          // 基本移動で対応
+          const distance = bot.entity.position.distanceTo(tree.position);
+          if (distance > 4) {
+            try {
+              await bot.lookAt(tree.position);
+              await bot.setControlState('forward', true);
+              await new Promise(resolve => setTimeout(resolve, Math.min(distance * 500, 3000)));
+              await bot.setControlState('forward', false);
+            } catch (moveError) {
+              console.log(`[木材収集] 基本移動エラー: ${moveError.message}`);
+              return { success: false, error: `移動に失敗: ${moveError.message}` };
+            }
+          }
+        } else {
+          await bot.pathfinder.goto(new goals.GoalNear(tree.position.x, tree.position.y, tree.position.z, 1));
         }
-
-        await bot.pathfinder.goto(new goals.GoalNear(tree.position.x, tree.position.y, tree.position.z, 1));
         await bot.dig(tree);
         collected++;
       }
@@ -2579,7 +2700,27 @@ class CraftToolsSkill extends Skill {
 
     if (!workbenchResult.success) {
       console.log(`[ツールスキル] 作業台の確保に失敗: ${workbenchResult.error}`);
-      return { success: false, reason: 'CRAFTING_TABLE_MISSING', details: { error: workbenchResult.error } };
+      
+      // Try to gather materials automatically
+      if (workbenchResult.error.includes('材料不足')) {
+        console.log('[ツールスキル] 材料不足のため自動収集を試みます...');
+        // Use a simple wood gathering approach
+        const gatherResult = await this.simpleWoodGathering(bot);
+        
+        if (gatherResult.success) {
+          console.log('[ツールスキル] 材料収集成功、作業台確保を再試行...');
+          const retryWorkbenchResult = await this.ensureWorkbench(bot);
+          if (retryWorkbenchResult.success) {
+            console.log('[ツールスキル] 材料収集後の作業台確保成功');
+          } else {
+            return { success: false, error: `材料収集後も作業台確保失敗: ${retryWorkbenchResult.error}` };
+          }
+        } else {
+          return { success: false, error: `材料収集失敗: ${gatherResult.error}` };
+        }
+      } else {
+        return { success: false, reason: 'CRAFTING_TABLE_MISSING', details: { error: workbenchResult.error } };
+      }
     }
 
     const craftingTable = workbenchResult.workbench;
@@ -2601,15 +2742,25 @@ class CraftToolsSkill extends Skill {
         continue;
       }
 
-      const recipe = bot.recipesFor(toolItem.id, null, 1, craftingTable)[0];
+      // Use getRecipeSafe for better recipe handling
+      const recipe = await SkillLibrary.getRecipeSafe(bot, toolName, 1, craftingTable);
       if (!recipe) {
         console.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
-        bot.chat(`${toolName}のレシピが見つかりません`);
-        return {
-          success: false,
-          reason: 'NO_RECIPE',
-          details: { tool: toolName, message: 'レシピが見つかりません' }
-        };
+        
+        // Try alternative recipes or wait for materials
+        const alternativeRecipe = await SkillLibrary.getRecipeSafe(bot, toolItem.id, 1, craftingTable);
+        if (!alternativeRecipe) {
+          console.log(`[ツールスキル] ${toolName}の代替レシピも見つかりません`);
+          bot.chat(`${toolName}のレシピが見つかりません`);
+          return {
+            success: false,
+            reason: 'NO_RECIPE',
+            details: { tool: toolName, message: 'レシピが見つかりません' }
+          };
+        } else {
+          console.log(`[ツールスキル] ${toolName}の代替レシピを使用します`);
+          recipe = alternativeRecipe;
+        }
       }
 
       // Check for sufficient materials now that we have a valid recipe
@@ -2715,35 +2866,123 @@ class CraftToolsSkill extends Skill {
 
   async placeCraftingTable(bot) {
     console.log('[ツールスキル] 作業台の設置場所を探しています...');
-    const refBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0)); // Block below bot
+    
+    // Multiple placement attempts with different positions
+    const placementPositions = [
+      new Vec3(0, -1, 0), // Below bot
+      new Vec3(1, -1, 0), // Below bot + east
+      new Vec3(-1, -1, 0), // Below bot + west
+      new Vec3(0, -1, 1), // Below bot + south
+      new Vec3(0, -1, -1), // Below bot + north
+    ];
+    
+    for (const offset of placementPositions) {
+      const refBlock = bot.blockAt(bot.entity.position.offset(offset.x, offset.y, offset.z));
+      
+      if (!refBlock || refBlock.name === 'air') {
+        continue; // Skip invalid reference blocks
+      }
+      
+      // Check if target position is free
+      const targetPos = refBlock.position.offset(0, 1, 0);
+      const targetBlock = bot.blockAt(targetPos);
+      if (targetBlock && targetBlock.name !== 'air') {
+        continue; // Position already occupied
+      }
+      
+      try {
+        const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
+        if (!craftingTableItem) {
+          console.log('[ツールスキル] インベントリに作業台がありません。');
+          return { success: false, error: 'インベントリに作業台がありません' };
+        }
 
-    if (!refBlock) {
-      console.log('[ツールスキル] 設置基準ブロックが見つかりません。');
-      return { success: false, error: '設置基準ブロックが見つかりません' };
+        await bot.equip(craftingTableItem, 'hand');
+        
+        // Retry mechanism for blockUpdate timeout
+        let placementSuccess = false;
+        let lastError = null;
+        
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`[ツールスキル] 作業台設置試行 ${attempt}/3 at ${targetPos}`);
+            await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
+            
+            // Wait for block update confirmation
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Verify placement
+            const placedBlock = bot.blockAt(targetPos);
+            if (placedBlock && placedBlock.name === 'crafting_table') {
+              console.log('[ツールスキル] 作業台を正常に設置しました！');
+              return { success: true, workbench: placedBlock };
+            }
+          } catch (error) {
+            lastError = error;
+            console.log(`[ツールスキル] 設置試行 ${attempt} 失敗: ${error.message}`);
+            
+            // Wait before retry
+            if (attempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        }
+        
+        // If all retries failed, try next position
+        console.log(`[ツールスキル] 位置 ${targetPos} での設置に失敗、次の位置を試行...`);
+        
+      } catch (error) {
+        console.log(`[ツールスキル] 設置準備エラー: ${error.message}`);
+        continue;
+      }
     }
+    
+    return { 
+      success: false, 
+      error: '全ての設置位置で作業台の設置に失敗しました' 
+    };
+  }
 
+  // Simple wood gathering method for CraftToolsSkill
+  async simpleWoodGathering(bot) {
+    console.log('[材料収集] 木材の自動収集を開始...');
+    
     try {
-      const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
-      if (!craftingTableItem) {
-        console.log('[ツールスキル] インベントリに作業台がありません。');
-        return { success: false, error: 'インベントリに作業台がありません' };
+      // Find a nearby tree
+      const tree = bot.findBlock({
+        matching: (block) => block && block.name.includes('_log'),
+        maxDistance: 64
+      });
+
+      if (!tree) {
+        console.log('[材料収集] 近くに木が見つかりません');
+        return { success: false, error: '木が見つかりません' };
       }
 
-      await bot.equip(craftingTableItem, 'hand');
-      await bot.placeBlock(refBlock, new Vec3(0, 1, 0)); // Place on top of the block below
-
-      // Verify placement
-      const placedBlock = bot.blockAt(refBlock.position.offset(0, 1, 0));
-      if (placedBlock && placedBlock.name === 'crafting_table') {
-        console.log('[ツールスキル] 作業台を正常に設置しました！');
-        return { success: true, workbench: placedBlock };
-      } else {
-        console.log('[ツールスキル] 作業台の設置を確認できませんでした。');
-        return { success: false, error: '作業台の設置を確認できませんでした' };
+      console.log(`[材料収集] 木材を発見: ${tree.position}`);
+      
+      // Basic movement to the tree
+      try {
+        await bot.lookAt(tree.position);
+        const distance = bot.entity.position.distanceTo(tree.position);
+        
+        if (distance > 4) {
+          bot.setControlState('forward', true);
+          await new Promise(resolve => setTimeout(resolve, Math.min(distance * 500, 3000)));
+          bot.setControlState('forward', false);
+        }
+        
+        // Mine the tree
+        await bot.dig(tree);
+        console.log(`[材料収集] ${tree.name}を収集しました`);
+        return { success: true };
+      } catch (error) {
+        console.log(`[材料収集] 木材収集に失敗: ${error.message}`);
+        return { success: false, error: `木材収集失敗: ${error.message}` };
       }
     } catch (error) {
-      console.log(`[ツールスキル] 作業台の設置中にエラー: ${error.message}`);
-      return { success: false, error: `作業台の設置中にエラー: ${error.message}` };
+      console.log(`[材料収集] 木材収集中にエラー: ${error.message}`);
+      return { success: false, error: `収集エラー: ${error.message}` };
     }
   }
 }

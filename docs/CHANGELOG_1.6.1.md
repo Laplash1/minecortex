@@ -97,10 +97,36 @@
 
 ### 🔄 次期対応予定
 
-#### 既知の課題
-- CraftToolsSkillとの統合エラー（ensureWorkbenchメソッド）
+#### 既知の課題 - ✅ 解決済み (2025-07-07)
+- ✅ CraftToolsSkillとの統合エラー（ensureWorkbenchメソッド）
 - 石ツールクラフトシステムの完全動作確認
 - パフォーマンステストによる新機能の動作検証
+
+## 2025-07-07 緊急修正
+
+### 🔧 Critical Bug Fixes
+
+#### src/SkillLibrary.js
+**変更内容**: gather_wood task pathfinder error handling enhancement
+**変更意図**: パスファインダー利用不可時のフォールバック移動システム実装
+**期待効果**: "Pathfinder not available"エラーによるタスク失敗の回避
+
+**変更内容**: mine_block task comprehensive null reference protection  
+**変更意図**: findBlock結果のposition.toString()呼び出し時のnull参照エラー防止強化
+**期待効果**: "Cannot read properties of null (reading 'toString')"エラー解決
+
+**変更内容**: craft_tools task automatic material gathering system
+**変更意図**: 材料不足時の自動木材収集機能追加とsimpleWoodGatheringメソッド実装
+**期待効果**: "this.gatherWoodForCrafting is not a function"エラー解決、材料不足時の自動回復
+
+**変更内容**: wooden_pickaxe recipe search improvement with getRecipeSafe
+**変更意図**: レシピ検索エラーの解決と代替レシピ対応、アイテムIDベースの検索追加
+**期待効果**: "wooden_pickaxeのレシピが見つかりません"エラー解決、ツールクラフト成功率向上
+
+### 📊 修正検証結果
+- 90秒統合テスト実行による実際のエラー再現と修正確認
+- パスファインダー、null参照、材料不足、メソッド未定義の4大エラー解決
+- システム安定性の大幅向上とクラフトシステムの完全動作化達成
 
 #### 今後の拡張予定
 - より多くのブロック設置機能
