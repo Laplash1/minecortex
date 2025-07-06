@@ -6,6 +6,7 @@ const { VoyagerAI } = require('./VoyagerAI');
 const { StateManager } = require('./StateManager');
 const InventoryUtils = require('./InventoryUtils');
 const { NLUProcessor } = require('./NLUProcessor');
+const PerformanceMonitor = require('./PerformanceMonitor');
 
 class MinecraftAI {
   constructor(bot, coordinator = null) {
@@ -17,6 +18,11 @@ class MinecraftAI {
     this.voyagerAI = new VoyagerAI(bot);
     this.coordinator = coordinator; // Multi-player coordinator (optional)
     this.nluProcessor = new NLUProcessor(); // Natural Language Understanding processor
+    this.performanceMonitor = new PerformanceMonitor({
+      enabled: process.env.PERFORMANCE_MONITORING !== 'false',
+      logInterval: parseInt(process.env.PERF_LOG_INTERVAL) || 10000, // 10秒間隔
+      eventLoopThreshold: parseInt(process.env.EVENT_LOOP_THRESHOLD) || 50 // 50ms閾値
+    });
 
     // Legacy properties for backward compatibility
     this.currentTask = null;
@@ -689,11 +695,18 @@ class MinecraftAI {
 
   async mainLoopIteration() {
     try {
+      // パフォーマンス測定開始
+      this.performanceMonitor.startMeasure('mainLoopIteration');
+      
       // Synchronize state with bot
+      this.performanceMonitor.startMeasure('stateSync');
       this.stateManager.syncWithBot();
+      this.performanceMonitor.endMeasure('stateSync');
 
       // Update observations with safety checks
+      this.performanceMonitor.startMeasure('observerUpdate');
       this.observer.updatePosition();
+      this.performanceMonitor.endMeasure('observerUpdate');
 
       // Update coordinator with current status
       if (this.coordinator) {
@@ -774,8 +787,13 @@ class MinecraftAI {
         // Idle behavior - resource-focused activities instead of exploration
         await this.performResourceFocusedIdle();
       }
+      
+      // パフォーマンス測定終了
+      this.performanceMonitor.endMeasure('mainLoopIteration');
     } catch (error) {
       this.log(`メインループエラー: ${error.message}`);
+      // パフォーマンス測定終了（エラー時）
+      this.performanceMonitor.endMeasure('mainLoopIteration');
       // Add delay to prevent rapid error loops
       await this.sleep(5000);
     }
@@ -908,9 +926,13 @@ class MinecraftAI {
   }
 
   async executeCurrentTask() {
+    // パフォーマンス測定開始
+    this.performanceMonitor.startMeasure('executeCurrentTask');
+    
     // Enhanced validation to prevent null reference errors
     if (!this.currentTask || typeof this.currentTask !== 'object') {
       this.log('executeCurrentTask: 無効なタスク', 'warn');
+      this.performanceMonitor.endMeasure('executeCurrentTask');
       return;
     }
 
@@ -918,6 +940,7 @@ class MinecraftAI {
       this.log('executeCurrentTask: タスクタイプが空です', 'warn');
       this.currentTask = null;
       this.stateManager.setCurrentTask(null);
+      this.performanceMonitor.endMeasure('executeCurrentTask');
       return;
     }
 
@@ -958,6 +981,9 @@ class MinecraftAI {
     // Always clear the current task when done
     this.currentTask = null;
     this.stateManager.setCurrentTask(null);
+    
+    // パフォーマンス測定終了
+    this.performanceMonitor.endMeasure('executeCurrentTask');
   }
 
   async getOrGenerateSkill(taskName) {
@@ -1577,6 +1603,11 @@ class MinecraftAI {
     if (!this.isInitialized) return;
     this.log(`Shutting down AI loop (${reason})`, 'warn');
     this.isInitialized = false;
+
+    // パフォーマンス監視停止
+    if (this.performanceMonitor) {
+      this.performanceMonitor.stopMonitoring();
+    }
 
     // Cleanup wrapped methods to prevent memory leaks
     if (this.originalMethods) {

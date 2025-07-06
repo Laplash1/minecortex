@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node examples/multiple-players.js",
-    "test": "node tests/test-config.js", 
+    "test": "node tests/test-config.js",
     "test:ai": "node tests/ai_training_verification.js",
     "dev": "cross-env DEBUG_MODE=true node examples/multiple-players.js",
     "multi-players": "node examples/multiple-players.js",
@@ -16,21 +16,34 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "profile:flame": "clinic flame -- node examples/multiple-players.js",
+    "profile:doctor": "clinic doctor -- node examples/multiple-players.js",
+    "profile:squad": "clinic flame -- cross-env MULTIPLE_PLAYERS_COUNT=5 node examples/multiple-players.js",
+    "test:performance": "node scripts/performance-test.js"
   },
-  "keywords": ["minecraft", "ai", "bot", "mineflyer", "voyager"],
+  "keywords": [
+    "minecraft",
+    "ai",
+    "bot",
+    "mineflyer",
+    "voyager"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.0.0",
+    "minecraft-data": "^3.90.0",
     "mineflayer": "^4.29.0",
     "mineflayer-pathfinder": "^2.4.0",
-    "minecraft-data": "^3.90.0",
     "openai": "^4.0.0",
-    "vec3": "^0.1.8",
-    "dotenv": "^16.0.0",
-    "cross-env": "^7.0.3"
+    "vec3": "^0.1.8"
   },
   "devDependencies": {
+    "@clinic/doctor": "^11.0.0",
+    "@clinic/flame": "^13.0.0",
+    "clinic": "^13.0.0",
     "eslint": "^8.55.0",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.29.0",
