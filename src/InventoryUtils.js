@@ -9,6 +9,67 @@ const { Logger } = require('./utils/Logger');
 
 class InventoryUtils {
   /**
+   * Wood compatibility table for recipe crafting
+   * Maps specific plank types to their compatible log types
+   */
+  static WOOD_COMPATIBILITY = {
+    oak_planks: ['oak_log'],
+    birch_planks: ['birch_log'],
+    cherry_planks: ['cherry_log'],
+    spruce_planks: ['spruce_log'],
+    jungle_planks: ['jungle_log'],
+    acacia_planks: ['acacia_log'],
+    dark_oak_planks: ['dark_oak_log'],
+    mangrove_planks: ['mangrove_log'],
+    bamboo_planks: ['bamboo_block'],
+    planks: [
+      'oak_log', 'birch_log', 'cherry_log', 'spruce_log', 
+      'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log'
+    ]
+  };
+
+  /**
+   * Get compatible log types for a specific plank type
+   * @param {string} plankType - The plank type to check
+   * @returns {Array<string>} Array of compatible log types
+   */
+  static getCompatibleLogs(plankType) {
+    return this.WOOD_COMPATIBILITY[plankType] || [];
+  }
+
+  /**
+   * Check if a log type can be converted to a specific plank type
+   * @param {string} logType - The log type to check
+   * @param {string} plankType - The target plank type
+   * @returns {boolean} True if conversion is possible
+   */
+  static canConvertLogToPlank(logType, plankType) {
+    const compatibleLogs = this.getCompatibleLogs(plankType);
+    return compatibleLogs.includes(logType);
+  }
+
+  /**
+   * Find best available log for a specific plank type
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {string} plankType - The required plank type
+   * @returns {Object|null} Best matching log item or null
+   */
+  static findBestLogForPlank(bot, plankType) {
+    const compatibleLogs = this.getCompatibleLogs(plankType);
+    const availableLogs = this.getAllItems(bot).filter(item =>
+      item.name && item.name.includes('_log') && compatibleLogs.includes(item.name)
+    );
+
+    if (availableLogs.length === 0) {
+      return null;
+    }
+
+    return availableLogs.reduce((best, current) =>
+      current.count > best.count ? current : best
+    );
+  }
+
+  /**
    * Safe count method that handles both Mineflayer v3 standard API and callback extensions
    * @param {Bot} bot - Mineflayer bot instance
    * @param {Function} predicate - Filter function for items
@@ -90,7 +151,13 @@ class InventoryUtils {
    */
   static getPlanksCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return this._safeCount(bot, item => item.name === 'oak_planks' || item.name === 'planks');
+    return this._safeCount(bot, item =>
+      item.name === 'oak_planks' || item.name === 'planks' ||
+      item.name === 'birch_planks' || item.name === 'cherry_planks' ||
+      item.name === 'spruce_planks' || item.name === 'jungle_planks' ||
+      item.name === 'acacia_planks' || item.name === 'dark_oak_planks' ||
+      item.name === 'mangrove_planks' || item.name === 'bamboo_planks'
+    );
   }
 
   /**

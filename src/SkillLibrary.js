@@ -2984,16 +2984,37 @@ class CraftToolsSkill extends Skill {
     for (const offset of placementPositions) {
       const refBlock = bot.blockAt(bot.entity.position.offset(offset.x, offset.y, offset.z));
 
-      if (!refBlock || refBlock.name === 'air') {
+      // Enhanced reference block validation
+      if (!refBlock || refBlock.name === 'air' || refBlock.name === 'water' || refBlock.name === 'lava') {
         continue; // Skip invalid reference blocks
       }
 
-      // Check if target position is free
+      // Check if reference block is solid and can support placement
+      if (!refBlock.boundingBox || refBlock.boundingBox === 'empty') {
+        continue; // Skip non-solid blocks
+      }
+
+      // Check if target position is free and accessible
       const targetPos = refBlock.position.offset(0, 1, 0);
       const targetBlock = bot.blockAt(targetPos);
       if (targetBlock && targetBlock.name !== 'air') {
         continue; // Position already occupied
       }
+
+      // Additional check for space above (2 blocks high clearance)
+      const aboveTarget = bot.blockAt(targetPos.offset(0, 1, 0));
+      if (aboveTarget && aboveTarget.name !== 'air') {
+        continue; // Need clearance above
+      }
+
+      // Check if bot can reach the placement position
+      const distanceToTarget = bot.entity.position.distanceTo(targetPos);
+      if (distanceToTarget > 5) {
+        continue; // Too far to place
+      }
+
+      console.log(`[ツールスキル] 設置候補位置を検証: ${targetPos.toString()}, 距離: ${distanceToTarget.toFixed(2)}`);
+      console.log(`[ツールスキル] 参照ブロック: ${refBlock.name} at ${refBlock.position.toString()}`);
 
       try {
         const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
@@ -3004,43 +3025,97 @@ class CraftToolsSkill extends Skill {
 
         await bot.equip(craftingTableItem, 'hand');
 
-        // Retry mechanism for blockUpdate timeout
+        // Retry mechanism for blockUpdate timeout with proper event waiting
 
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             console.log(`[ツールスキル] 作業台設置試行 ${attempt}/3 at ${targetPos}`);
+
+            // Wait for blockUpdate event with timeout
+            const blockUpdatePromise = new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                bot.removeListener('blockUpdate', onBlockUpdate);
+                reject(new Error('blockUpdate timeout'));
+              }, 8000); // Increased timeout to 8 seconds
+
+              const onBlockUpdate = (oldBlock, newBlock) => {
+                if (newBlock && newBlock.position.equals(targetPos) && newBlock.name === 'crafting_table') {
+                  clearTimeout(timeout);
+                  bot.removeListener('blockUpdate', onBlockUpdate);
+                  resolve(newBlock);
+                }
+              };
+
+              bot.on('blockUpdate', onBlockUpdate);
+            });
+
+            // Place the block
             await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
 
-            // Wait for block update confirmation
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Verify placement
-            const placedBlock = bot.blockAt(targetPos);
-            if (placedBlock && placedBlock.name === 'crafting_table') {
+            // Wait for either blockUpdate event or timeout
+            try {
+              const updatedBlock = await blockUpdatePromise;
               console.log('[ツールスキル] 作業台を正常に設置しました！');
-              return { success: true, workbench: placedBlock };
+              return { success: true, workbench: updatedBlock };
+            } catch (eventError) {
+              console.log(`[ツールスキル] blockUpdate待機エラー: ${eventError.message}`);
+
+              // Fallback: Direct verification after short delay
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              const placedBlock = bot.blockAt(targetPos);
+              if (placedBlock && placedBlock.name === 'crafting_table') {
+                console.log('[ツールスキル] 作業台設置を直接確認で検証成功！');
+                return { success: true, workbench: placedBlock };
+              }
             }
           } catch (error) {
             console.log(`[ツールスキル] 設置試行 ${attempt} 失敗: ${error.message}`);
 
             // Wait before retry
             if (attempt < 3) {
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise(resolve => setTimeout(resolve, 1500));
             }
           }
         }
 
         // If all retries failed, try next position
-        console.log(`[ツールスキル] 位置 ${targetPos} での設置に失敗、次の位置を試行...`);
+        console.log(`[ツールスキル] 位置 ${targetPos.toString()} での設置に失敗、次の位置を試行...`);
       } catch (error) {
-        console.log(`[ツールスキル] 設置準備エラー: ${error.message}`);
+        console.log(`[ツールスキル] 設置準備エラー at ${targetPos ? targetPos.toString() : 'unknown'}: ${error.message}`);
+        console.log(`[ツールスキル] エラースタック: ${error.stack}`);
         continue;
       }
     }
 
+    // Enhanced error reporting
+    const botPos = bot.entity.position;
+    const inventoryItems = bot.inventory.items().map(item => item.name).join(', ');
+
+    console.log('[ツールスキル] 作業台設置失敗の詳細情報:');
+    console.log(`[ツールスキル] - ボット位置: ${botPos.toString()}`);
+    console.log(`[ツールスキル] - 試行した位置数: ${placementPositions.length}`);
+    console.log('[ツールスキル] - インベントリ:', inventoryItems);
+    console.log('[ツールスキル] - 周辺ブロック情報:');
+
+    for (let i = 0; i < placementPositions.length; i++) {
+      const offset = placementPositions[i];
+      const refBlock = bot.blockAt(botPos.offset(offset.x, offset.y, offset.z));
+      const targetPos = refBlock ? refBlock.position.offset(0, 1, 0) : null;
+      const targetBlock = targetPos ? bot.blockAt(targetPos) : null;
+
+      const refName = refBlock ? refBlock.name : 'null';
+      const targetName = targetBlock ? targetBlock.name : 'null';
+      console.log(`[ツールスキル]   位置${i + 1}: 参照=${refName}, ターゲット=${targetName}`);
+    }
+
     return {
       success: false,
-      error: '全ての設置位置で作業台の設置に失敗しました'
+      error: '全ての設置位置で作業台の設置に失敗しました',
+      details: {
+        botPosition: botPos.toString(),
+        attemptedPositions: placementPositions.length,
+        inventoryItems
+      }
     };
   }
 
