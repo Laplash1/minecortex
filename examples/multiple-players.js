@@ -275,7 +275,14 @@ class MultiplePlayersManager {
     for (const [index, playerInfo] of this.players.entries()) {
       if (playerInfo.bot) {
         console.log(`プレイヤー${index}を停止中...`);
-        playerInfo.bot.quit();
+
+        if (playerInfo.ai) {
+          playerInfo.ai.shutdown('manager_shutdown');
+        }
+
+        if (typeof playerInfo.bot.quit === 'function') {
+          playerInfo.bot.quit('manager_shutdown');
+        }
       }
     }
 
