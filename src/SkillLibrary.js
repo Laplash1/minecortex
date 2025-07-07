@@ -3050,6 +3050,13 @@ class CraftToolsSkill extends Skill {
           console.log('[ツールスキル] 生成されたingredients:', recipe.ingredients);
         }
 
+        // Fix delta/inShape ID inconsistency that causes crafting errors
+        if (recipe.delta && recipe.inShape) {
+          console.log(`[ツールスキル] ${toolName}のdelta/inShape不整合をチェックします`);
+          recipe.delta = this.fixDeltaFromInShape(recipe.delta, recipe.inShape);
+          console.log('[ツールスキル] 修正されたdelta:', recipe.delta);
+        }
+
         await bot.craft(recipe, 1, craftingTable);
         console.log(`[ツールスキル] ${toolName}をクラフトしました！`);
         bot.chat(`${toolName}をクラフトしました！ 🔨`);
@@ -3106,6 +3113,42 @@ class CraftToolsSkill extends Skill {
     }
 
     return ingredients;
+  }
+
+  /**
+   * Fix delta field to match inShape for recipe consistency
+   * @param {Array} delta - Original delta array
+   * @param {Array} inShape - 3x3 crafting grid shape
+   * @returns {Array} corrected delta array
+   */
+  fixDeltaFromInShape(delta, inShape) {
+    if (!delta || !inShape || !Array.isArray(delta) || !Array.isArray(inShape)) {
+      return delta;
+    }
+
+    // Count items in inShape
+    const itemCounts = new Map();
+    for (const row of inShape) {
+      if (Array.isArray(row)) {
+        for (const item of row) {
+          if (item !== null && typeof item === 'number') {
+            itemCounts.set(item, (itemCounts.get(item) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    // Create corrected delta based on inShape
+    const correctedDelta = [];
+    for (const [itemId, count] of itemCounts) {
+      correctedDelta.push({
+        id: itemId,
+        count: -count // Negative because it's consumption
+      });
+    }
+
+    console.log(`[レシピ修正] inShape分析: ${Array.from(itemCounts.entries()).map(([id, count]) => `ID:${id}×${count}`).join(', ')}`);
+    return correctedDelta;
   }
 
   async getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
