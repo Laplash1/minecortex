@@ -23,7 +23,7 @@ class InventoryUtils {
     mangrove_planks: ['mangrove_log'],
     bamboo_planks: ['bamboo_block'],
     planks: [
-      'oak_log', 'birch_log', 'cherry_log', 'spruce_log', 
+      'oak_log', 'birch_log', 'cherry_log', 'spruce_log',
       'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log'
     ]
   };
@@ -568,6 +568,101 @@ class InventoryUtils {
       console.error('[InventoryUtils] getAllItems error:', error.message);
       return [];
     }
+  }
+
+  /**
+   * Check if an item is a wood plank type
+   * @param {string} itemName - Item name to check
+   * @returns {boolean} True if item is a wood plank
+   */
+  static isWoodPlank(itemName) {
+    if (!itemName || typeof itemName !== 'string') return false;
+    return itemName.includes('_planks') || itemName === 'planks';
+  }
+
+  /**
+   * Get available wood planks (any type) that can be used for crafting
+   * @param {Bot} bot - Mineflayer bot instance
+   * @returns {Object} Object with total count and breakdown by type
+   */
+  static getAvailableWoodPlanks(bot) {
+    if (!bot || !bot.inventory) return { total: 0, breakdown: {} };
+
+    const items = bot.inventory.items();
+    const woodPlanks = items.filter(item => this.isWoodPlank(item.name));
+
+    const breakdown = {};
+    let total = 0;
+
+    woodPlanks.forEach(item => {
+      breakdown[item.name] = item.count;
+      total += item.count;
+    });
+
+    return { total, breakdown };
+  }
+
+  /**
+   * Check if we have enough wood planks (any type) for a recipe
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {number} requiredCount - Required plank count
+   * @returns {boolean} True if we have enough planks
+   */
+  static hasEnoughWoodPlanks(bot, requiredCount) {
+    const { total } = this.getAvailableWoodPlanks(bot);
+    return total >= requiredCount;
+  }
+
+  /**
+   * Get the best available wood plank type for crafting
+   * @param {Bot} bot - Mineflayer bot instance
+   * @returns {string|null} Best available plank type or null if none available
+   */
+  static getBestAvailableWoodPlank(bot) {
+    const { breakdown } = this.getAvailableWoodPlanks(bot);
+    const plankTypes = Object.keys(breakdown);
+
+    if (plankTypes.length === 0) return null;
+
+    // Return the type with the most quantity
+    return plankTypes.reduce((best, current) =>
+      breakdown[current] > breakdown[best] ? current : best
+    );
+  }
+
+  /**
+   * Check if a material can be substituted with available materials
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {string} requiredMaterial - Required material name
+   * @param {number} requiredCount - Required count
+   * @returns {Object} Substitution information
+   */
+  static canSubstituteMaterial(bot, requiredMaterial, requiredCount) {
+    // Check for wood plank substitution
+    if (this.isWoodPlank(requiredMaterial)) {
+      const { total, breakdown } = this.getAvailableWoodPlanks(bot);
+      const available = total >= requiredCount;
+
+      return {
+        canSubstitute: available,
+        substitutionType: 'wood_plank',
+        availableCount: total,
+        requiredCount,
+        substitutes: breakdown,
+        bestSubstitute: available ? this.getBestAvailableWoodPlank(bot) : null
+      };
+    }
+
+    // For non-wood materials, check exact match
+    const exactCount = this.getItemCount(bot, requiredMaterial);
+    return {
+      canSubstitute: exactCount >= requiredCount,
+      substitutionType: 'exact_match',
+      availableCount: exactCount,
+      requiredCount,
+      substitutes: { [requiredMaterial]: exactCount },
+      bestSubstitute: exactCount >= requiredCount ? requiredMaterial : null
+    };
   }
 
   /**

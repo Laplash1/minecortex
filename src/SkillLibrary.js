@@ -96,6 +96,20 @@ class SkillLibrary {
         itemName = mcData.items[itemId]?.name || 'unknown';
       }
 
+      // Special handling for wooden tools: try to find a recipe with available wood
+      if (itemName && itemName.includes('wooden_')) {
+        const optimizedRecipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, itemName, count, table);
+        if (optimizedRecipe) {
+          console.log(`[レシピ検索] 木材最適化レシピを使用: ${itemName}`);
+          // Cache the optimized recipe
+          SkillLibrary._recipeCache.set(cacheKey, {
+            recipe: optimizedRecipe,
+            timestamp: Date.now()
+          });
+          return optimizedRecipe;
+        }
+      }
+
       // Multiple fallback strategies for recipe search
       const searchStrategies = [
         () => bot.recipesFor(itemId, null, count, table),
@@ -203,6 +217,124 @@ class SkillLibrary {
       return foundRecipe;
     } catch (error) {
       console.error(`[レシピ検索] エラー: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get optimized wooden tool recipe using available wood planks
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {string} toolName - Wooden tool name (e.g., 'wooden_pickaxe')
+   * @param {number} count - Number of tools to craft
+   * @param {Block|null} table - Crafting table block
+   * @returns {Object|null} Optimized recipe or null
+   */
+  static async getOptimizedWoodenToolRecipe(bot, toolName, count = 1, table = null) {
+    const mcData = require('minecraft-data')(bot.version);
+    const InventoryUtils = require('./InventoryUtils');
+
+    if (!mcData) {
+      console.error(`[木材レシピ最適化] minecraft-data for version ${bot.version} not found`);
+      return null;
+    }
+
+    // Check if we have any wood planks available
+    const { total, breakdown } = InventoryUtils.getAvailableWoodPlanks(bot);
+    if (total === 0) {
+      console.log(`[木材レシピ最適化] 利用可能な木材がありません: ${toolName}`);
+      return null;
+    }
+
+    // Find the best available wood type
+    const bestWoodType = InventoryUtils.getBestAvailableWoodPlank(bot);
+    if (!bestWoodType) {
+      console.log(`[木材レシピ最適化] 最適な木材タイプが見つかりません: ${toolName}`);
+      return null;
+    }
+
+    console.log(`[木材レシピ最適化] 使用する木材: ${bestWoodType} (${breakdown[bestWoodType]}個) for ${toolName}`);
+
+    // Get the standard recipe for the wooden tool
+    const toolItem = mcData.itemsByName[toolName];
+    if (!toolItem) {
+      console.warn(`[木材レシピ最適化] Tool ${toolName} not found in minecraft-data`);
+      return null;
+    }
+
+    // Try to get the original recipe first
+    let originalRecipe = null;
+    try {
+      const recipes = bot.recipesFor(toolItem.id, null, count, table);
+      if (recipes.length > 0) {
+        originalRecipe = recipes[0];
+      }
+    } catch (error) {
+      console.log(`[木材レシピ最適化] bot.recipesFor failed: ${error.message}`);
+    }
+
+    // If bot.recipesFor failed, try minecraft-data direct search
+    if (!originalRecipe && mcData.recipes) {
+      const directRecipes = mcData.recipes[toolItem.id];
+      if (directRecipes && Array.isArray(directRecipes) && directRecipes.length > 0) {
+        const rawRecipe = directRecipes[0];
+        originalRecipe = {
+          id: toolItem.id,
+          result: rawRecipe.result || { id: toolItem.id, count },
+          delta: [],
+          inShape: rawRecipe.inShape || null,
+          ingredients: rawRecipe.ingredients || null
+        };
+
+        // Convert materials to delta format
+        if (rawRecipe.ingredients) {
+          originalRecipe.delta = rawRecipe.ingredients.map(ingredientId => ({
+            id: ingredientId,
+            count: -1
+          }));
+        } else if (rawRecipe.inShape) {
+          const flatIngredients = rawRecipe.inShape.flat().filter(id => id !== null && id !== undefined);
+          originalRecipe.delta = flatIngredients.map(ingredientId => ({
+            id: ingredientId,
+            count: -1
+          }));
+        }
+      }
+    }
+
+    if (!originalRecipe) {
+      console.log(`[木材レシピ最適化] No original recipe found for ${toolName}`);
+      return null;
+    }
+
+    // Create an optimized recipe by replacing any wood plank requirement with the best available wood type
+    const optimizedRecipe = JSON.parse(JSON.stringify(originalRecipe)); // Deep copy
+    const bestWoodItem = mcData.itemsByName[bestWoodType];
+
+    if (!bestWoodItem) {
+      console.warn(`[木材レシピ最適化] Best wood type ${bestWoodType} not found in minecraft-data`);
+      return null;
+    }
+
+    // Replace wood plank materials in the recipe
+    let replacedCount = 0;
+    if (optimizedRecipe.delta) {
+      for (const ingredient of optimizedRecipe.delta) {
+        if (ingredient.count < 0) {
+          const itemName = mcData.items[ingredient.id]?.name || mcData.blocks[ingredient.id]?.name;
+          if (itemName && InventoryUtils.isWoodPlank(itemName)) {
+            console.log(`[木材レシピ最適化] 材料置換: ${itemName} -> ${bestWoodType}`);
+            ingredient.id = bestWoodItem.id;
+            replacedCount++;
+          }
+        }
+      }
+    }
+
+    if (replacedCount > 0) {
+      console.log(`[木材レシピ最適化] ${replacedCount}個の材料を${bestWoodType}に置換しました`);
+      return optimizedRecipe;
+    } else {
+      console.log(`[木材レシピ最適化] 置換可能な木材材料が見つかりませんでした: ${toolName}`);
       return null;
     }
   }
@@ -2860,6 +2992,7 @@ class CraftToolsSkill extends Skill {
 
   getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
     const mcData = require('minecraft-data')(bot.version);
+    const InventoryUtils = require('./InventoryUtils');
 
     // Try to get recipe using enhanced getRecipeSafe method
     let recipe = null;
@@ -2913,10 +3046,23 @@ class CraftToolsSkill extends Skill {
       if (ingredient.count < 0) {
         // Negative count means required material
         const needed = Math.abs(ingredient.count);
-        const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id);
-        if (available < needed) {
-          const itemName = mcData.items[ingredient.id]?.name || mcData.blocks[ingredient.id]?.name || `item_${ingredient.id}`;
-          missing.push({ item: itemName, needed: needed - available, have: available });
+        const itemName = mcData.items[ingredient.id]?.name || mcData.blocks[ingredient.id]?.name || `item_${ingredient.id}`;
+
+        // Check if we can substitute this material (especially for wood planks)
+        const substitutionInfo = InventoryUtils.canSubstituteMaterial(bot, itemName, needed);
+
+        if (!substitutionInfo.canSubstitute) {
+          missing.push({
+            item: itemName,
+            needed: needed - substitutionInfo.availableCount,
+            have: substitutionInfo.availableCount,
+            substitutionType: substitutionInfo.substitutionType,
+            possibleSubstitutes: substitutionInfo.substitutes
+          });
+        } else if (substitutionInfo.substitutionType === 'wood_plank') {
+          // Log successful wood plank substitution
+          console.log(`[材料チェック] 木材代替可能: ${itemName} (必要:${needed}) -> 利用可能合計:${substitutionInfo.availableCount}`);
+          console.log(`[材料チェック] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
         }
       }
     }
@@ -4326,6 +4472,7 @@ class CraftWithWorkbenchSkill extends Skill {
   async checkMaterials(bot, recipe) {
     try {
       const mcData = require('minecraft-data')(bot.version);
+      const InventoryUtils = require('./InventoryUtils');
 
       for (const ingredient of recipe.delta) {
         if (ingredient.count < 0) { // 入力材料（負の数）
@@ -4333,17 +4480,22 @@ class CraftWithWorkbenchSkill extends Skill {
           const item = mcData.items[ingredient.id];
           const itemName = item ? item.name : `id_${ingredient.id}`;
 
-          const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id && (ingredient.metadata === undefined || item.metadata === ingredient.metadata));
+          // Check if we can substitute this material (especially for wood planks)
+          const substitutionInfo = InventoryUtils.canSubstituteMaterial(bot, itemName, requiredCount);
 
-          if (available < requiredCount) {
+          if (!substitutionInfo.canSubstitute) {
             return {
               success: false,
               reason: 'INSUFFICIENT_MATERIALS',
-              error: `材料不足: ${itemName} (必要=${requiredCount}, 所持=${available})`
+              error: `材料不足: ${itemName} (必要=${requiredCount}, 所持=${substitutionInfo.availableCount})`
             };
+          } else if (substitutionInfo.substitutionType === 'wood_plank') {
+            // Log successful wood plank substitution
+            console.log(`[作業台クラフト] 木材代替OK: ${itemName} (必要=${requiredCount}) -> 利用可能合計:${substitutionInfo.availableCount}`);
+            console.log(`[作業台クラフト] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
           }
 
-          console.log(`[作業台クラフト] 材料確認OK: ${itemName} (必要=${requiredCount}, 所持=${available})`);
+          console.log(`[作業台クラフト] 材料確認OK: ${itemName} (必要=${requiredCount}, 所持=${substitutionInfo.availableCount})`);
         }
       }
 
