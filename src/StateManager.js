@@ -54,6 +54,61 @@ class StateManager {
     this.maxHistorySize = 100;
     this.lastSync = Date.now();
     this.syncInterval = 1000; // 1 second
+    
+    // Setup real-time inventory updates for immediate cache invalidation
+    this.setupInventoryEventListeners();
+  }
+
+  // Setup inventory event listeners for real-time cache invalidation
+  setupInventoryEventListeners() {
+    if (!this.bot) return;
+
+    // Listen for inventory updates to ensure real-time synchronization
+    this.bot.on('inventoryUpdate', (slot, oldItem, newItem) => {
+      try {
+        console.log(`[StateManager] インベントリ更新検出: slot=${slot}, old=${oldItem?.name}, new=${newItem?.name}`);
+        
+        // Force immediate inventory sync to avoid cache issues
+        const inventoryUpdates = this.syncInventory();
+        if (Object.keys(inventoryUpdates).length > 0) {
+          this.updateState(inventoryUpdates, 'inventory-event');
+        }
+      } catch (error) {
+        console.error(`[StateManager] inventoryUpdate event error: ${error.message}`);
+      }
+    });
+
+    // Listen for held item changes
+    this.bot.on('heldItemChanged', (heldItem) => {
+      try {
+        console.log(`[StateManager] 手持ちアイテム変更: ${heldItem?.name || 'null'}`);
+        this.updateState({ 
+          equippedItems: { ...this.state.equippedItems, hand: heldItem } 
+        }, 'held-item-event');
+      } catch (error) {
+        console.error(`[StateManager] heldItemChanged event error: ${error.message}`);
+      }
+    });
+
+    // Listen for window open/close (crafting table access)
+    this.bot.on('windowOpen', (window) => {
+      try {
+        console.log(`[StateManager] ウィンドウ開始: ${window.type}`);
+        // Force inventory sync when opening crafting interfaces
+        if (window.type === 'minecraft:crafting' || window.type === 'generic_3x3') {
+          setTimeout(() => {
+            const inventoryUpdates = this.syncInventory();
+            if (Object.keys(inventoryUpdates).length > 0) {
+              this.updateState(inventoryUpdates, 'window-open-event');
+            }
+          }, 100); // Small delay to ensure window is fully loaded
+        }
+      } catch (error) {
+        console.error(`[StateManager] windowOpen event error: ${error.message}`);
+      }
+    });
+
+    console.log('[StateManager] リアルタイムインベントリ監視を開始しました');
   }
 
   // Subscribe to state changes

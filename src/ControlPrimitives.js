@@ -251,7 +251,8 @@ class ControlPrimitives {
       }
 
       try {
-        const available = this.bot.inventory.count(ingredient.id);
+        const InventoryUtils = require('./InventoryUtils');
+        const available = InventoryUtils._safeCount(this.bot, item => item.id === ingredient.id);
         if (available < needed) {
           const itemName = this.mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
           missing.push(`${itemName} (need ${needed}, have ${available})`);

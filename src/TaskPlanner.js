@@ -776,7 +776,8 @@ class TaskPlanner {
 
   countSticksInInventory() {
     if (!this.bot || !this.bot.inventory) return 0;
-    return this.bot.inventory.count(this.bot.registry.itemsByName.stick.id);
+    const InventoryUtils = require('./InventoryUtils');
+    return InventoryUtils._safeCount(this.bot, item => item.name === 'stick');
   }
 
   calculateSticksNeeded(tools) {

@@ -2809,7 +2809,7 @@ class CraftToolsSkill extends Skill {
 
     for (const ingredient of recipe.ingredients) {
       const needed = ingredient.count;
-      const available = bot.inventory.count(ingredient.id);
+      const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id);
       if (available < needed) {
         const itemName = mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
         missing.push({ item: itemName, needed: needed - available, have: available });
@@ -3877,7 +3877,7 @@ class CraftWithWorkbenchSkill extends Skill {
           const item = mcData.items[ingredient.id];
           const itemName = item ? item.name : `id_${ingredient.id}`;
 
-          const available = bot.inventory.count(ingredient.id, ingredient.metadata);
+          const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id && (ingredient.metadata === undefined || item.metadata === ingredient.metadata));
 
           if (available < requiredCount) {
             return {
