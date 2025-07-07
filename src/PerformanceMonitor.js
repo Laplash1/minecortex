@@ -11,8 +11,8 @@ class PerformanceMonitor {
   constructor(options = {}) {
     this.enabled = options.enabled !== false;
     this.logger = Logger.createLogger('PerformanceMonitor');
-    this.logInterval = options.logInterval || 5000; // 5秒間隔
-    this.eventLoopThreshold = options.eventLoopThreshold || 50; // 50ms以上で警告
+    this.logInterval = options.logInterval || 10000; // 10秒間隔（CPU負荷軽減）
+    this.eventLoopThreshold = options.eventLoopThreshold || 75; // 75ms以上で警告（閾値緩和）
 
     // メトリクス収集
     this.metrics = {
