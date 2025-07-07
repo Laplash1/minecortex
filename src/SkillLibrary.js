@@ -3186,6 +3186,130 @@ class CraftToolsSkill extends Skill {
       return { success: false, error: `変換エラー: ${error.message}` };
     }
   }
+
+  async convertLogsToPlanksDynamic(bot, planksNeeded) {
+    console.log(`[動的変換] ${planksNeeded}個の板材が必要、原木から変換します`);
+
+    try {
+      const mcData = require('minecraft-data')(bot.version);
+
+      // Find the first log type in inventory
+      const logItem = bot.inventory.items().find(item =>
+        item && item.name && item.name.includes('_log')
+      );
+
+      if (!logItem) {
+        return { success: false, error: 'インベントリに原木がありません' };
+      }
+
+      // Get corresponding plank name
+      const plankName = logItem.name.replace('_log', '_planks');
+      const plankItem = mcData.itemsByName[plankName];
+
+      if (!plankItem) {
+        return { success: false, error: `対応する板材(${plankName})が見つかりません` };
+      }
+
+      // Get recipe for planks
+      const plankRecipe = await SkillLibrary.getRecipeSafe(bot, plankItem.id, 1, null);
+      if (!plankRecipe) {
+        return { success: false, error: `${plankName}のレシピが見つかりません` };
+      }
+
+      // Calculate how many logs we need (1 log = 4 planks)
+      const logsNeeded = Math.ceil(planksNeeded / 4);
+      const totalConversions = Math.min(logsNeeded, logItem.count);
+
+      let totalPlanksConverted = 0;
+      for (let i = 0; i < totalConversions; i++) {
+        try {
+          await bot.craft(plankRecipe, 1, null);
+          totalPlanksConverted += 4; // Each log produces 4 planks
+          console.log(`[動的変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
+
+          // Check if we have enough planks now
+          if (totalPlanksConverted >= planksNeeded) {
+            break;
+          }
+        } catch (craftError) {
+          console.log(`[動的変換] クラフトエラー: ${craftError.message}`);
+          if (i === 0) {
+            return { success: false, error: `クラフト失敗: ${craftError.message}` };
+          }
+          break;
+        }
+      }
+
+      console.log(`[動的変換] 変換完了: ${totalPlanksConverted}個の板材を作成`);
+      return { success: true, converted: totalPlanksConverted };
+    } catch (error) {
+      console.log(`[動的変換] エラー: ${error.message}`);
+      return { success: false, error: `変換エラー: ${error.message}` };
+    }
+  }
+
+  async createStickFromPlanks(bot, sticksNeeded) {
+    console.log(`[スティック作成] ${sticksNeeded}本のスティックが必要、板材から作成します`);
+
+    try {
+      const mcData = require('minecraft-data')(bot.version);
+
+      // Find planks in inventory
+      const plankItems = bot.inventory.items().filter(item =>
+        item && item.name && item.name.includes('_planks')
+      );
+
+      if (plankItems.length === 0) {
+        return { success: false, error: 'インベントリに板材がありません' };
+      }
+
+      const stickItem = mcData.itemsByName.stick;
+      if (!stickItem) {
+        return { success: false, error: 'スティックアイテムが見つかりません' };
+      }
+
+      const stickRecipe = await SkillLibrary.getRecipeSafe(bot, stickItem.id, 1, null);
+      if (!stickRecipe) {
+        return { success: false, error: 'スティックのレシピが見つかりません' };
+      }
+
+      // Calculate how many crafting operations we need (1 craft = 4 sticks, needs 2 planks)
+      const craftsNeeded = Math.ceil(sticksNeeded / 4);
+      const planksNeeded = craftsNeeded * 2;
+
+      // Check if we have enough planks
+      const totalPlanks = plankItems.reduce((sum, item) => sum + item.count, 0);
+      if (totalPlanks < planksNeeded) {
+        return { success: false, error: `板材不足: 必要${planksNeeded}個, 所持${totalPlanks}個` };
+      }
+
+      let totalSticksCreated = 0;
+      for (let i = 0; i < craftsNeeded; i++) {
+        try {
+          await bot.craft(stickRecipe, 1, null);
+          totalSticksCreated += 4; // Each craft produces 4 sticks
+          console.log(`[スティック作成] 板材 → スティック (${i + 1}/${craftsNeeded})`);
+
+          // Check if we have enough sticks now
+          if (totalSticksCreated >= sticksNeeded) {
+            break;
+          }
+        } catch (craftError) {
+          console.log(`[スティック作成] クラフトエラー: ${craftError.message}`);
+          if (i === 0) {
+            return { success: false, error: `クラフト失敗: ${craftError.message}` };
+          }
+          break;
+        }
+      }
+
+      console.log(`[スティック作成] 作成完了: ${totalSticksCreated}本のスティックを作成`);
+      return { success: true, created: totalSticksCreated };
+    } catch (error) {
+      console.log(`[スティック作成] エラー: ${error.message}`);
+      return { success: false, error: `作成エラー: ${error.message}` };
+    }
+  }
 }
 
 class CraftWorkbenchSkill extends Skill {
