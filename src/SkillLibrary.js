@@ -308,7 +308,7 @@ class SkillLibrary {
 
     // Create an optimized recipe by replacing any wood plank requirement with the best available wood type
     const optimizedRecipe = JSON.parse(JSON.stringify(originalRecipe)); // Deep copy
-    
+
     // Try to find the wood item with multiple naming patterns
     let bestWoodItem = null;
     const searchNames = [
@@ -329,10 +329,10 @@ class SkillLibrary {
     if (!bestWoodItem) {
       console.warn(`[木材レシピ最適化] Best wood type ${bestWoodType} not found in minecraft-data with any naming pattern`);
       console.warn(`[木材レシピ最適化] 試行した名前: ${searchNames.join(', ')}`);
-      
+
       // Debug: Show available wood-related items
       if (mcData.itemsByName) {
-        const availableWoodItems = Object.keys(mcData.itemsByName).filter(name => 
+        const availableWoodItems = Object.keys(mcData.itemsByName).filter(name =>
           name.includes('plank') || name.includes('wood')
         );
         console.warn(`[木材レシピ最適化] 利用可能な木材関連アイテム: ${availableWoodItems.slice(0, 10).join(', ')}`);
@@ -2956,13 +2956,35 @@ class CraftToolsSkill extends Skill {
           } else if (missing.item === 'stick') {
             // Check if this is a stick material and we have planks
             console.log(`[ツールスキル] スティック不足検出: ${missing.needed}個`);
-            const stickResult = await this.createStickFromPlanks(bot, missing.needed);
-            if (stickResult.success) {
-              console.log(`[ツールスキル] スティック作成成功: ${stickResult.created}個`);
+
+            // Check if we can use the new substitution system
+            const stickSubstitution = InventoryUtils.canSubstituteMaterial(bot, 'stick', missing.needed);
+
+            if (stickSubstitution.substitutionType === 'stick_from_planks') {
+              console.log(`[ツールスキル] 板材からスティック作成を試みます: 必要 ${missing.needed}個`);
+              const stickResult = await this.createStickFromPlanks(bot, missing.needed);
+              if (stickResult.success) {
+                console.log(`[ツールスキル] スティック作成成功: ${stickResult.created}個`);
+                materialConverted = true;
+                break;
+              } else {
+                console.log(`[ツールスキル] スティック作成失敗: ${stickResult.error}`);
+              }
+            } else if (stickSubstitution.substitutionType === 'exact_match') {
+              console.log(`[ツールスキル] 十分なスティックが既に利用可能: ${stickSubstitution.availableCount}個`);
               materialConverted = true;
               break;
             } else {
-              console.log(`[ツールスキル] スティック作成失敗: ${stickResult.error}`);
+              console.log(`[ツールスキル] スティック作成不可: ${stickSubstitution.substitutionType}`);
+              // Try anyway with the old method as fallback
+              const stickResult = await this.createStickFromPlanks(bot, missing.needed);
+              if (stickResult.success) {
+                console.log(`[ツールスキル] フォールバック方式でスティック作成成功: ${stickResult.created}個`);
+                materialConverted = true;
+                break;
+              } else {
+                console.log(`[ツールスキル] フォールバック方式でもスティック作成失敗: ${stickResult.error}`);
+              }
             }
           }
         }
@@ -3073,7 +3095,7 @@ class CraftToolsSkill extends Skill {
         const needed = Math.abs(ingredient.count);
         const itemName = mcData.items[ingredient.id]?.name || mcData.blocks[ingredient.id]?.name || `item_${ingredient.id}`;
 
-        // Check if we can substitute this material (especially for wood planks)
+        // Check if we can substitute this material (especially for wood planks and sticks)
         const substitutionInfo = InventoryUtils.canSubstituteMaterial(bot, itemName, needed);
 
         if (!substitutionInfo.canSubstitute) {
@@ -3088,6 +3110,13 @@ class CraftToolsSkill extends Skill {
           // Log successful wood plank substitution
           console.log(`[材料チェック] 木材代替可能: ${itemName} (必要:${needed}) -> 利用可能合計:${substitutionInfo.availableCount}`);
           console.log(`[材料チェック] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
+        } else if (substitutionInfo.substitutionType === 'stick_from_planks') {
+          // Log successful stick substitution using planks
+          console.log(`[材料チェック] スティック代替可能: ${itemName} (必要:${needed}) -> 現在のスティック:${substitutionInfo.substitutes.stick}, 板材から作成可能`);
+          console.log(`[材料チェック] 板材利用可能: ${substitutionInfo.substitutes.planks_available}個, 必要: ${substitutionInfo.substitutes.planks_needed}個`);
+        } else if (substitutionInfo.substitutionType === 'exact_match') {
+          // Log successful exact match
+          console.log(`[材料チェック] 材料十分: ${itemName} (必要:${needed}) -> 利用可能:${substitutionInfo.availableCount}`);
         }
       }
     }

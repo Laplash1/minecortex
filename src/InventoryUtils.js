@@ -653,6 +653,57 @@ class InventoryUtils {
       };
     }
 
+    // Check for stick substitution - sticks can be crafted from planks
+    if (requiredMaterial === 'stick') {
+      const stickCount = this.getItemCount(bot, 'stick');
+
+      // Check if we have enough sticks directly
+      if (stickCount >= requiredCount) {
+        return {
+          canSubstitute: true,
+          substitutionType: 'exact_match',
+          availableCount: stickCount,
+          requiredCount,
+          substitutes: { stick: stickCount },
+          bestSubstitute: 'stick'
+        };
+      }
+
+      // Check if we have enough planks to craft sticks
+      const { total: totalPlanks } = this.getAvailableWoodPlanks(bot);
+      // 2 planks -> 4 sticks, so we need (requiredCount - stickCount) additional sticks
+      const additionalSticksNeeded = requiredCount - stickCount;
+      const planksNeededForSticks = Math.ceil(additionalSticksNeeded / 4) * 2;
+
+      if (totalPlanks >= planksNeededForSticks) {
+        return {
+          canSubstitute: true,
+          substitutionType: 'stick_from_planks',
+          availableCount: stickCount + Math.floor(totalPlanks / 2) * 4,
+          requiredCount,
+          substitutes: {
+            stick: stickCount,
+            planks_available: totalPlanks,
+            planks_needed: planksNeededForSticks
+          },
+          bestSubstitute: 'stick'
+        };
+      }
+
+      return {
+        canSubstitute: false,
+        substitutionType: 'stick_insufficient',
+        availableCount: stickCount,
+        requiredCount,
+        substitutes: {
+          stick: stickCount,
+          planks_available: totalPlanks,
+          planks_needed: planksNeededForSticks
+        },
+        bestSubstitute: null
+      };
+    }
+
     // For non-wood materials, check exact match
     const exactCount = this.getItemCount(bot, requiredMaterial);
     return {
