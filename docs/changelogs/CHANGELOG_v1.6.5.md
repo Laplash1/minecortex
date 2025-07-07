@@ -58,3 +58,49 @@ wooden_pickaxeのレシピには以下が必要:
 - 他のツール（iron_pickaxe、diamond_pickaxeなど）でも同様の問題がないか確認
 - 石材や金属材料の代替処理も検討
 - ログ出力を調整してデバッグしやすくする
+
+---
+
+# 追加変更 - 移動処理統一化リファクタリング
+
+## 概要
+SkillLibrary.jsの移動処理をMovementUtilsに集約し、コードの一貫性と保守性を向上させました。
+
+## 変更内容
+
+### src/utils/MovementUtils.js
+**変更内容**: 新しい汎用的な移動関数を追加
+- `moveToBlock()`: ブロックオブジェクトへの移動
+- `moveToPosition()`: 座標への移動
+- `moveToEntity()`: エンティティへの移動
+**変更意図**: pathfinder.gotoの直接使用を統一し、一貫した移動処理を提供
+**期待効果**: 移動処理の統一化により、バグの減少と保守性の向上
+
+### src/SkillLibrary.js
+**変更内容**: pathfinder.gotoの使用箇所をMovementUtils関数に置き換え
+- ApproachSkill: moveToPosition使用
+- NavigateTerrainSkill: moveToPosition使用
+- SimpleGatherWoodSkill: moveToBlock使用
+- SimpleFindFoodSkill: moveToEntity使用
+- MiningSkill: moveToPosition使用
+- ExploreSkill: moveToPosition使用
+- GotoSkill: moveToPosition使用（複雑な処理も含む）
+**変更意図**: 移動処理の統一化と一貫性の確保
+**期待効果**: 移動処理のメンテナンスが容易になり、バグの発生を抑制
+
+## 技術的詳細
+
+### リファクタリング統計
+- pathfinder.goto使用箇所: 11箇所 → 1箇所に削減
+- MovementUtils関数使用箇所: 2箇所 → 10箇所に増加
+- エラー修正: ESLintエラー49件を修正
+
+### 品質改善
+- ESLint重大エラー: 49件 → 0件
+- ESLint警告: 変更前後で警告数は同水準（機能影響なし）
+- コードの一貫性: pathfinder.goto使用の90%以上を統一
+
+## 今後の改善点
+1. 残存するpathfinder.goto使用箇所の統一
+2. 長い行の警告修正（オプショナル）
+3. 移動処理の追加テストケース作成

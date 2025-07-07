@@ -2,6 +2,7 @@ const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { Vec3 } = require('vec3');
 const InventoryUtils = require('./InventoryUtils');
 const { Logger } = require('./utils/Logger');
+const { ensureProximity, moveToBlock, moveToPosition, moveToEntity } = require('./utils/MovementUtils');
 
 class SkillLibrary {
   constructor(pathfindingCache = null) {
@@ -516,17 +517,15 @@ class MoveToSkill extends Skill {
           const currentPos = bot.entity.position;
           const heightDiff = Math.abs(y - currentPos.y);
 
-          let goal;
-          if (heightDiff > 2) {
-            // For significant height differences, use GoalBlock
-            goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
-          } else {
-            // For same level or small height differences, use GoalNear for more flexibility
-            goal = new goals.GoalNear(Math.floor(x), Math.floor(y), Math.floor(z), 1);
-          }
-
           const pathStartTime = Date.now();
-          await bot.pathfinder.goto(goal, { timeout: 12000 }); // Extended timeout for complex terrain
+          // Use MovementUtils for consistent movement handling
+          const targetPos = new Vec3(Math.floor(x), Math.floor(y), Math.floor(z));
+          const range = (heightDiff > 2) ? 0 : 1;
+          const moveResult = await moveToPosition(bot, targetPos, range, { timeoutMs: 12000 });
+
+          if (!moveResult.success) {
+            throw new Error(`MovementUtils移動に失敗: ${moveResult.error}`);
+          }
 
           // パス計算結果をキャッシュに保存
           if (this.pathfindingCache && params.useCache !== false) {
@@ -814,14 +813,13 @@ class MoveToSkill extends Skill {
     try {
       console.log(`[接近] 目標位置 ${targetPosition} に接近中...`);
 
-      // Use pathfinder if available
-      if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
-        const goal = new goals.GoalNear(targetPosition.x, targetPosition.y, targetPosition.z, 2.0);
-        await bot.pathfinder.goto(goal);
+      // Use MovementUtils for consistent movement handling
+      const moveResult = await moveToPosition(bot, targetPosition, 2.0);
+      if (moveResult.success) {
         return { success: true };
       } else {
-        console.log('[接近] Pathfinder利用不可、基本移動を使用');
-        return { success: true };
+        console.log('[接近] 目標位置に到達できませんでした');
+        return { success: false, error: moveResult.error };
       }
     } catch (error) {
       return { success: false, error: error.message };
@@ -1820,15 +1818,13 @@ class MineBlockSkill extends Skill {
       // Move to within 2.5 blocks of the block for reliable mining
       console.log(`[マイニング] 採掘可能距離内(2.5ブロック)への移動を実行: ${blockPos}`);
 
-      // Use pathfinder if available
-      if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
-        const goal = new goals.GoalNear(blockPos.x, blockPos.y, blockPos.z, 2.5);
-        await bot.pathfinder.goto(goal);
+      // Use MovementUtils for consistent movement handling
+      const moveResult = await moveToPosition(bot, blockPos, 2.5);
+      if (moveResult.success) {
         return { success: true };
       } else {
-        // Fallback: simple movement
-        console.log('[マイニング] 基本移動で採掘位置へ移動');
-        return { success: true }; // Assume success for basic movement
+        console.log(`[マイニング] 採掘位置への移動に失敗: ${moveResult.error}`);
+        return { success: false, error: moveResult.error };
       }
     } catch (error) {
       return { success: false, error: error.message };
@@ -2733,15 +2729,13 @@ class NavigateTerrainSkill extends Skill {
   async execute(bot, params) {
     const { destination } = params;
     try {
-      if (!bot.pathfinder) {
-        bot.loadPlugin(pathfinder);
-        const mcData = require('minecraft-data')(bot.version);
-        const movements = new Movements(bot, mcData);
-        bot.pathfinder.setMovements(movements);
+      // Use MovementUtils for consistent movement handling
+      const moveResult = await moveToPosition(bot, destination, 0);
+      if (moveResult.success) {
+        return { success: true };
+      } else {
+        return { success: false, error: moveResult.error };
       }
-      const goal = new goals.GoalBlock(destination.x, destination.y, destination.z);
-      await bot.pathfinder.goto(goal);
-      return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -2784,7 +2778,11 @@ class SimpleGatherWoodSkill extends Skill {
             }
           }
         } else {
-          await bot.pathfinder.goto(new goals.GoalNear(tree.position.x, tree.position.y, tree.position.z, 1));
+          const moveResult = await moveToBlock(bot, tree, 1);
+          if (!moveResult.success) {
+            console.log(`[木材収集] 木への移動に失敗: ${moveResult.error}`);
+            return { success: false, error: `木への移動に失敗: ${moveResult.error}` };
+          }
         }
         await bot.dig(tree);
         collected++;
@@ -2840,7 +2838,10 @@ class SimpleFindFoodSkill extends Skill {
       );
 
       for (const item of droppedItems) {
-        await bot.pathfinder.goto(new goals.GoalNear(item.position.x, item.position.y, item.position.z, 1));
+        const moveResult = await moveToEntity(bot, item, 1);
+        if (!moveResult.success) {
+          console.log(`[食料確保] アイテムへの移動に失敗: ${moveResult.error}`);
+        }
       }
 
       console.log('[食料確保] 食料を確保しました');
@@ -2894,6 +2895,12 @@ class CraftToolsSkill extends Skill {
     }
 
     const craftingTable = workbenchResult.workbench;
+    // 距離チェック: 作業台に接近
+    const proximityCheck = await ensureProximity(bot, craftingTable, 3);
+    if (!proximityCheck.success) {
+      console.log('[ツールスキル] 作業台まで接近できません');
+      return { success: false, reason: 'UNREACHABLE_WORKBENCH', error: '作業台に接近できません' };
+    }
 
     const craftedTools = [];
     for (const toolName of tools) {
@@ -3156,7 +3163,7 @@ class CraftToolsSkill extends Skill {
           const craftPromise = bot.craft(recipe, 1, craftingTable);
           const result = await Promise.race([
             craftPromise,
-            new Promise((resolve, reject) =>
+            new Promise((_resolve, reject) =>
               setTimeout(() => reject(new Error('Craft timeout after 15 seconds')), 15000)
             )
           ]);
@@ -3519,7 +3526,7 @@ class CraftToolsSkill extends Skill {
               blockUpdateReject(new Error('blockUpdate timeout'));
             }, 8000);
 
-            const onBlockUpdate = (oldBlock, newBlock) => {
+            const onBlockUpdate = (_oldBlock, newBlock) => {
               if (newBlock && newBlock.position.equals(targetPos) && newBlock.name === 'crafting_table') {
                 clearTimeout(timeout);
                 bot.removeListener('blockUpdate', onBlockUpdate);
@@ -4428,14 +4435,11 @@ class ExploreSkill extends Skill {
 
       console.log(`[探索スキル] (${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)})を探索中...`);
 
-      // Move to target position
-      if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
-        console.log('[探索スキル] パスファインディングで目標へ移動中...');
-        const goal = new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 2);
-        await bot.pathfinder.goto(goal);
-      } else {
-        console.log('[探索スキル] 基本移動で目標へ移動中...');
-        await this.basicMove(bot, targetPos);
+      // Move to target position using MovementUtils
+      const moveResult = await moveToPosition(bot, targetPos, 2);
+      if (!moveResult.success) {
+        console.log(`[探索スキル] 探索位置への移動に失敗: ${moveResult.error}`);
+        return { success: false, error: moveResult.error };
       }
 
       // Scan for points of interest after reaching destination
@@ -4746,14 +4750,9 @@ class CraftWithWorkbenchSkill extends Skill {
       }
 
       // 4. 作業台に近づく
-      const distance = bot.entity.position.distanceTo(workbenchBlock.position);
-      if (distance > 4) {
-        console.log('[作業台クラフト] 作業台に近づいています...');
-        if (bot.pathfinder && typeof bot.pathfinder.goto === 'function') {
-          const { goals } = require('mineflayer-pathfinder');
-          const goal = new goals.GoalNear(workbenchBlock.position.x, workbenchBlock.position.y, workbenchBlock.position.z, 2);
-          await bot.pathfinder.goto(goal);
-        }
+      const proximityCheck = await ensureProximity(bot, workbenchBlock, 3);
+      if (!proximityCheck.success) {
+        return { success: false, reason: 'UNREACHABLE_WORKBENCH', error: '作業台に接近できません' };
       }
 
       // 5. クラフト実行
