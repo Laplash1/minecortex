@@ -2931,7 +2931,7 @@ class CraftToolsSkill extends Skill {
       }
 
       // Check for sufficient materials now that we have a valid recipe
-      const missingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+      const missingMaterials = await this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
       if (missingMaterials && missingMaterials.length > 0) {
         console.log(`[ツールスキル] ${toolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
 
@@ -2999,7 +2999,7 @@ class CraftToolsSkill extends Skill {
         }
 
         // Re-check materials after conversion
-        const updatedMissingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+        const updatedMissingMaterials = await this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
         if (updatedMissingMaterials && updatedMissingMaterials.length > 0) {
           console.log(`[ツールスキル] 材料変換後も不足: ${updatedMissingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
           bot.chat(`${toolName}の材料が不足しています`);
@@ -3037,19 +3037,30 @@ class CraftToolsSkill extends Skill {
     }
   }
 
-  getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
+  async getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
     const mcData = require('minecraft-data')(bot.version);
     const InventoryUtils = require('./InventoryUtils');
 
-    // Try to get recipe using enhanced getRecipeSafe method
+    const itemName = mcData.items[itemId]?.name || 'unknown';
+
+    // Special handling for wooden tools: use optimized recipe
     let recipe = null;
-    try {
-      const recipes = bot.recipesFor(itemId, null, 1, craftingTable);
-      if (recipes.length > 0) {
-        recipe = recipes[0];
+    if (itemName && itemName.includes('wooden_')) {
+      recipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, itemName, 1, craftingTable);
+      if (recipe) {
+        console.log(`[材料チェック] 木材最適化レシピを使用: ${itemName}`);
       }
-    } catch (error) {
-      console.log(`[材料チェック] bot.recipesFor failed: ${error.message}`);
+    }
+
+    if (!recipe) {
+      try {
+        const recipes = bot.recipesFor(itemId, null, 1, craftingTable);
+        if (recipes.length > 0) {
+          recipe = recipes[0];
+        }
+      } catch (error) {
+        console.log(`[材料チェック] bot.recipesFor failed: ${error.message}`);
+      }
     }
 
     // If bot.recipesFor failed, use minecraft-data direct search
