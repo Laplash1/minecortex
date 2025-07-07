@@ -45,7 +45,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/minecortex.git
+git clone https://github.com/Laplash1/minecortex.git
 cd minecortex
 
 # Install dependencies
