@@ -26,7 +26,7 @@ async function ensureProximity(bot, block, maxDist = 3, opts = {}) {
   const distance = bot.entity.position.distanceTo(block.position);
   if (distance <= maxDist) return { success: true };
 
-  logger.info(`approaching block ${block.name} (dist=${distance.toFixed(1)})`);
+  logger.log(`approaching block ${block.name} (dist=${distance.toFixed(1)})`);
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -54,7 +54,7 @@ async function ensureProximity(bot, block, maxDist = 3, opts = {}) {
 
       const newDist = bot.entity.position.distanceTo(block.position);
       if (newDist <= maxDist) {
-        logger.info(`reached proximity (dist=${newDist.toFixed(1)})`);
+        logger.log(`reached proximity (dist=${newDist.toFixed(1)})`);
         return { success: true };
       }
 
@@ -87,7 +87,7 @@ async function moveToBlock(bot, block, range = 1, opts = {}) {
   const distance = bot.entity.position.distanceTo(block.position);
   if (distance <= range) return { success: true };
 
-  logger.info(`moving to block ${block.name} at ${block.position} (dist=${distance.toFixed(1)})`);
+  logger.log(`moving to block ${block.name} at ${block.position} (dist=${distance.toFixed(1)})`);
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -113,7 +113,7 @@ async function moveToBlock(bot, block, range = 1, opts = {}) {
 
       const newDist = bot.entity.position.distanceTo(block.position);
       if (newDist <= range) {
-        logger.info(`reached block (dist=${newDist.toFixed(1)})`);
+        logger.log(`reached block (dist=${newDist.toFixed(1)})`);
         return { success: true };
       }
 
@@ -145,7 +145,7 @@ async function moveToPosition(bot, position, range = 0, opts = {}) {
   const distance = bot.entity.position.distanceTo(position);
   if (distance <= range) return { success: true };
 
-  logger.info(`moving to position ${position} (dist=${distance.toFixed(1)})`);
+  logger.log(`moving to position ${position} (dist=${distance.toFixed(1)})`);
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -169,7 +169,7 @@ async function moveToPosition(bot, position, range = 0, opts = {}) {
 
       const newDist = bot.entity.position.distanceTo(position);
       if (newDist <= range) {
-        logger.info(`reached position (dist=${newDist.toFixed(1)})`);
+        logger.log(`reached position (dist=${newDist.toFixed(1)})`);
         return { success: true };
       }
 
@@ -201,7 +201,7 @@ async function moveToEntity(bot, entity, range = 1, opts = {}) {
   const distance = bot.entity.position.distanceTo(entity.position);
   if (distance <= range) return { success: true };
 
-  logger.info(`moving to entity ${entity.name || entity.type} (dist=${distance.toFixed(1)})`);
+  logger.log(`moving to entity ${entity.name || entity.type} (dist=${distance.toFixed(1)})`);
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -228,7 +228,7 @@ async function moveToEntity(bot, entity, range = 1, opts = {}) {
 
       const newDist = bot.entity.position.distanceTo(entity.position);
       if (newDist <= range) {
-        logger.info(`reached entity (dist=${newDist.toFixed(1)})`);
+        logger.log(`reached entity (dist=${newDist.toFixed(1)})`);
         return { success: true };
       }
 
