@@ -2972,45 +2972,74 @@ class CraftToolsSkill extends Skill {
   async placeCraftingTable(bot) {
     console.log('[ツールスキル] 作業台の設置場所を探しています...');
 
-    // Multiple placement attempts with different positions
-    const placementPositions = [
-      new Vec3(0, -1, 0), // Below bot
-      new Vec3(1, -1, 0), // Below bot + east
-      new Vec3(-1, -1, 0), // Below bot + west
-      new Vec3(0, -1, 1), // Below bot + south
-      new Vec3(0, -1, -1) // Below bot + north
+    // Blocks that should be avoided as reference blocks (jungle biome problematic blocks)
+    const avoidableBlocks = [
+      'vine', 'jungle_log', 'oak_log', 'spruce_log', 'birch_log', 'acacia_log', 'dark_oak_log',
+      'mangrove_log', 'cherry_log', 'jungle_leaves', 'oak_leaves', 'spruce_leaves', 'birch_leaves',
+      'acacia_leaves', 'dark_oak_leaves', 'mangrove_leaves', 'cherry_leaves', 'azalea_leaves',
+      'flowering_azalea_leaves', 'grass', 'tall_grass', 'fern', 'large_fern', 'dead_bush',
+      'seagrass', 'tall_seagrass', 'kelp', 'bamboo', 'sugar_cane', 'cactus', 'cocoa'
     ];
 
+    // Generate more placement positions with extended search range
+    const placementPositions = [];
+
+    // Close positions (radius 1-2)
+    for (let x = -2; x <= 2; x++) {
+      for (let z = -2; z <= 2; z++) {
+        if (x === 0 && z === 0) continue; // Skip bot's position
+        placementPositions.push(new Vec3(x, -1, z)); // Below bot level
+        placementPositions.push(new Vec3(x, 0, z)); // Same level as bot
+      }
+    }
+
+    // Extended positions (radius 3-4) for difficult situations
+    for (let x = -4; x <= 4; x++) {
+      for (let z = -4; z <= 4; z++) {
+        if (Math.abs(x) < 3 && Math.abs(z) < 3) continue; // Skip already covered positions
+        placementPositions.push(new Vec3(x, -1, z)); // Below bot level
+        placementPositions.push(new Vec3(x, 0, z)); // Same level as bot
+      }
+    }
+
+    console.log(`[ツールスキル] 設置候補位置を生成: ${placementPositions.length}個`);
+
+    // Try to find suitable placement location
     for (const offset of placementPositions) {
       const refBlock = bot.blockAt(bot.entity.position.offset(offset.x, offset.y, offset.z));
 
-      // Enhanced reference block validation
+      // Skip invalid reference blocks
       if (!refBlock || refBlock.name === 'air' || refBlock.name === 'water' || refBlock.name === 'lava') {
-        continue; // Skip invalid reference blocks
+        continue;
+      }
+
+      // Skip problematic blocks (vine, logs, leaves, etc.)
+      if (avoidableBlocks.includes(refBlock.name)) {
+        continue;
       }
 
       // Check if reference block is solid and can support placement
       if (!refBlock.boundingBox || refBlock.boundingBox === 'empty') {
-        continue; // Skip non-solid blocks
+        continue;
       }
 
       // Check if target position is free and accessible
       const targetPos = refBlock.position.offset(0, 1, 0);
       const targetBlock = bot.blockAt(targetPos);
       if (targetBlock && targetBlock.name !== 'air') {
-        continue; // Position already occupied
+        continue;
       }
 
       // Additional check for space above (2 blocks high clearance)
       const aboveTarget = bot.blockAt(targetPos.offset(0, 1, 0));
       if (aboveTarget && aboveTarget.name !== 'air') {
-        continue; // Need clearance above
+        continue;
       }
 
       // Check if bot can reach the placement position
       const distanceToTarget = bot.entity.position.distanceTo(targetPos);
-      if (distanceToTarget > 5) {
-        continue; // Too far to place
+      if (distanceToTarget > 6) {
+        continue;
       }
 
       console.log(`[ツールスキル] 設置候補位置を検証: ${targetPos.toString()}, 距離: ${distanceToTarget.toFixed(2)}`);
@@ -3026,38 +3055,46 @@ class CraftToolsSkill extends Skill {
         await bot.equip(craftingTableItem, 'hand');
 
         // Retry mechanism for blockUpdate timeout with proper event waiting
-
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             console.log(`[ツールスキル] 作業台設置試行 ${attempt}/3 at ${targetPos}`);
 
-            // Wait for blockUpdate event with timeout
+            // Create blockUpdate promise BEFORE placing block
+            let blockUpdateResolve, blockUpdateReject;
             const blockUpdatePromise = new Promise((resolve, reject) => {
-              const timeout = setTimeout(() => {
-                bot.removeListener('blockUpdate', onBlockUpdate);
-                reject(new Error('blockUpdate timeout'));
-              }, 8000); // Increased timeout to 8 seconds
-
-              const onBlockUpdate = (oldBlock, newBlock) => {
-                if (newBlock && newBlock.position.equals(targetPos) && newBlock.name === 'crafting_table') {
-                  clearTimeout(timeout);
-                  bot.removeListener('blockUpdate', onBlockUpdate);
-                  resolve(newBlock);
-                }
-              };
-
-              bot.on('blockUpdate', onBlockUpdate);
+              blockUpdateResolve = resolve;
+              blockUpdateReject = reject;
             });
 
-            // Place the block
-            await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
+            const timeout = setTimeout(() => {
+              bot.removeListener('blockUpdate', onBlockUpdate);
+              blockUpdateReject(new Error('blockUpdate timeout'));
+            }, 8000);
 
-            // Wait for either blockUpdate event or timeout
+            const onBlockUpdate = (oldBlock, newBlock) => {
+              if (newBlock && newBlock.position.equals(targetPos) && newBlock.name === 'crafting_table') {
+                clearTimeout(timeout);
+                bot.removeListener('blockUpdate', onBlockUpdate);
+                blockUpdateResolve(newBlock);
+              }
+            };
+
+            // Set up listener BEFORE placing block
+            bot.on('blockUpdate', onBlockUpdate);
+
             try {
+              // Place the block
+              await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
+
+              // Wait for either blockUpdate event or timeout
               const updatedBlock = await blockUpdatePromise;
               console.log('[ツールスキル] 作業台を正常に設置しました！');
               return { success: true, workbench: updatedBlock };
             } catch (eventError) {
+              // Clean up listener on error
+              clearTimeout(timeout);
+              bot.removeListener('blockUpdate', onBlockUpdate);
+
               console.log(`[ツールスキル] blockUpdate待機エラー: ${eventError.message}`);
 
               // Fallback: Direct verification after short delay
@@ -3087,6 +3124,13 @@ class CraftToolsSkill extends Skill {
       }
     }
 
+    // If standard placement failed, try terrain modification approach
+    console.log('[ツールスキル] 通常の設置位置が見つかりませんでした。地形を整備して設置場所を作成します...');
+    const terrainResult = await this.createCraftingTableSpot(bot);
+    if (terrainResult.success) {
+      return terrainResult;
+    }
+
     // Enhanced error reporting
     const botPos = bot.entity.position;
     const inventoryItems = bot.inventory.items().map(item => item.name).join(', ');
@@ -3097,7 +3141,8 @@ class CraftToolsSkill extends Skill {
     console.log('[ツールスキル] - インベントリ:', inventoryItems);
     console.log('[ツールスキル] - 周辺ブロック情報:');
 
-    for (let i = 0; i < placementPositions.length; i++) {
+    // Show first 10 positions for debugging
+    for (let i = 0; i < Math.min(10, placementPositions.length); i++) {
       const offset = placementPositions[i];
       const refBlock = bot.blockAt(botPos.offset(offset.x, offset.y, offset.z));
       const targetPos = refBlock ? refBlock.position.offset(0, 1, 0) : null;
@@ -3117,6 +3162,119 @@ class CraftToolsSkill extends Skill {
         inventoryItems
       }
     };
+  }
+
+  // New method to create a crafting table spot by modifying terrain
+  async createCraftingTableSpot(bot) {
+    console.log('[ツールスキル] 地形を整備して作業台設置場所を作成します...');
+
+    const botPos = bot.entity.position;
+    const candidatePositions = [
+      new Vec3(2, 0, 0), // East of bot
+      new Vec3(-2, 0, 0), // West of bot
+      new Vec3(0, 0, 2), // South of bot
+      new Vec3(0, 0, -2), // North of bot
+      new Vec3(2, 0, 2), // Southeast
+      new Vec3(-2, 0, 2), // Southwest
+      new Vec3(2, 0, -2), // Northeast
+      new Vec3(-2, 0, -2) // Northwest
+    ];
+
+    for (const offset of candidatePositions) {
+      const targetPos = botPos.offset(offset.x, offset.y, offset.z);
+      const groundPos = targetPos.offset(0, -1, 0);
+
+      console.log(`[ツールスキル] 地形整備候補位置: ${targetPos.toString()}`);
+
+      try {
+        // Check if position is reachable
+        const distance = botPos.distanceTo(targetPos);
+        if (distance > 6) {
+          continue;
+        }
+
+        // Check what's at the target position
+        const targetBlock = bot.blockAt(targetPos);
+        const groundBlock = bot.blockAt(groundPos);
+        const aboveBlock = bot.blockAt(targetPos.offset(0, 1, 0));
+
+        console.log(`[ツールスキル] 地形状況: 地面=${groundBlock?.name || 'null'}, 設置位置=${targetBlock?.name || 'null'}, 上方=${aboveBlock?.name || 'null'}`);
+
+        // If target position is blocked, try to clear it
+        if (targetBlock && targetBlock.name !== 'air') {
+          console.log(`[ツールスキル] 設置位置をクリア: ${targetBlock.name}`);
+          try {
+            await bot.dig(targetBlock);
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for dig to complete
+          } catch (digError) {
+            console.log(`[ツールスキル] ブロック除去失敗: ${digError.message}`);
+            continue;
+          }
+        }
+
+        // If above position is blocked, try to clear it
+        if (aboveBlock && aboveBlock.name !== 'air') {
+          console.log(`[ツールスキル] 上方スペースをクリア: ${aboveBlock.name}`);
+          try {
+            await bot.dig(aboveBlock);
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for dig to complete
+          } catch (digError) {
+            console.log(`[ツールスキル] 上方ブロック除去失敗: ${digError.message}`);
+            continue;
+          }
+        }
+
+        // If no ground block, try to create one with dirt if available
+        if (!groundBlock || groundBlock.name === 'air') {
+          console.log('[ツールスキル] 地面ブロックがありません。土ブロックで地面を作成します...');
+          const dirtItem = bot.inventory.items().find(item => item && item.name === 'dirt');
+          if (dirtItem) {
+            try {
+              await bot.equip(dirtItem, 'hand');
+              // Find a reference block to place dirt against
+              const refBlock = bot.blockAt(groundPos.offset(0, -1, 0));
+              if (refBlock && refBlock.name !== 'air') {
+                await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
+                console.log('[ツールスキル] 土ブロックで地面を作成しました');
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+            } catch (placeError) {
+              console.log(`[ツールスキル] 地面作成失敗: ${placeError.message}`);
+            }
+          }
+        }
+
+        // Now try to place the crafting table
+        const finalGroundBlock = bot.blockAt(groundPos);
+        if (finalGroundBlock && finalGroundBlock.name !== 'air') {
+          try {
+            const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
+            if (!craftingTableItem) {
+              return { success: false, error: 'インベントリに作業台がありません' };
+            }
+
+            await bot.equip(craftingTableItem, 'hand');
+            await bot.placeBlock(finalGroundBlock, new Vec3(0, 1, 0));
+
+            // Verify placement
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const placedBlock = bot.blockAt(targetPos);
+            if (placedBlock && placedBlock.name === 'crafting_table') {
+              console.log('[ツールスキル] 地形整備後の作業台設置に成功しました！');
+              return { success: true, workbench: placedBlock };
+            }
+          } catch (placeError) {
+            console.log(`[ツールスキル] 地形整備後の設置失敗: ${placeError.message}`);
+            continue;
+          }
+        }
+      } catch (error) {
+        console.log(`[ツールスキル] 地形整備エラー: ${error.message}`);
+        continue;
+      }
+    }
+
+    return { success: false, error: '地形整備による設置場所作成に失敗しました' };
   }
 
   // Simple wood gathering method for CraftToolsSkill
