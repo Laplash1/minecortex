@@ -347,9 +347,28 @@ class SkillLibrary {
       for (const ingredient of optimizedRecipe.delta) {
         if (ingredient.count < 0) {
           const itemName = mcData.items[ingredient.id]?.name || mcData.blocks[ingredient.id]?.name;
-          if (itemName && InventoryUtils.isWoodPlank(itemName)) {
-            console.log(`[木材レシピ最適化] 材料置換: ${itemName} -> ${bestWoodType}`);
+
+          // Check if this is a wood plank item OR id 41 (which often represents generic planks in recipes)
+          const isWoodPlank = itemName && InventoryUtils.isWoodPlank(itemName);
+          const isGenericPlank = ingredient.id === 41; // gold_block ID often used as generic plank placeholder
+
+          if (isWoodPlank || isGenericPlank) {
+            console.log(`[木材レシピ最適化] 材料置換: ${itemName || 'generic_plank'} (ID:${ingredient.id}) -> ${bestWoodType} (ID:${bestWoodItem.id})`);
             ingredient.id = bestWoodItem.id;
+            replacedCount++;
+          }
+        }
+      }
+    }
+
+    // Also replace in inShape if it exists
+    if (optimizedRecipe.inShape) {
+      for (let i = 0; i < optimizedRecipe.inShape.length; i++) {
+        for (let j = 0; j < optimizedRecipe.inShape[i].length; j++) {
+          const itemId = optimizedRecipe.inShape[i][j];
+          if (itemId === 41) { // Replace generic plank ID with actual available plank
+            console.log(`[木材レシピ最適化] inShape置換: ID:${itemId} -> ${bestWoodType} (ID:${bestWoodItem.id})`);
+            optimizedRecipe.inShape[i][j] = bestWoodItem.id;
             replacedCount++;
           }
         }
@@ -358,6 +377,14 @@ class SkillLibrary {
 
     if (replacedCount > 0) {
       console.log(`[木材レシピ最適化] ${replacedCount}個の材料を${bestWoodType}に置換しました`);
+
+      // Regenerate ingredients from the corrected inShape to ensure consistency
+      if (optimizedRecipe.inShape) {
+        const dummyCraftSkill = new CraftToolsSkill();
+        optimizedRecipe.ingredients = dummyCraftSkill.generateIngredientsFromInShape(optimizedRecipe.inShape);
+        console.log(`[木材レシピ最適化] 更新されたingredients: ${JSON.stringify(optimizedRecipe.ingredients)}`);
+      }
+
       return optimizedRecipe;
     } else {
       console.log(`[木材レシピ最適化] 置換可能な木材材料が見つかりませんでした: ${toolName}`);
