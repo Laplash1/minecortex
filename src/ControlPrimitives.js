@@ -221,6 +221,12 @@ class ControlPrimitives {
 
     try {
       this.logger.log(`Crafting ${name} x${count}`);
+
+      if (craftingTable && !this.bot.currentWindow) {
+        await this.bot.activateBlock(craftingTable);
+        this.logger.log('Opened crafting table');
+      }
+
       await this.bot.craft(recipe, count, craftingTable);
       this.bot.chat(`Successfully crafted ${name} x${count}`);
       this.craftItemFailCount = 0; // Reset fail count on success

@@ -2613,6 +2613,9 @@ class MineBlockSkill extends Skill {
       if (pickaxeItem) {
         const pickaxeRecipes = bot.recipesFor(pickaxeItem.id, null, 1, workbench);
         if (pickaxeRecipes.length > 0) {
+          if (workbench && !bot.currentWindow) {
+            await bot.activateBlock(workbench);
+          }
           await bot.craft(pickaxeRecipes[0], 1, workbench);
           console.log('[ツール作成] 木製のピッケルを作成しました');
           return { success: true, toolName: 'wooden_pickaxe' };
@@ -3106,9 +3109,17 @@ class CraftToolsSkill extends Skill {
             throw new Error('Crafting table is no longer available');
           }
 
-          // currentWindowがNULLの場合、windowOpenイベントを待機
+          // currentWindowがNULLの場合、まず作業台を開いてからwindowOpenイベントを待機
           if (!bot.currentWindow) {
-            console.log('[ツールスキル] currentWindowがNULL - windowOpenイベントを待機中...');
+            console.log('[ツールスキル] currentWindowがNULL - 作業台を開いてwindowOpenイベントを待機中...');
+
+            try {
+              await bot.activateBlock(craftingTable);
+              console.log('[ツールスキル] 作業台を開きました');
+            } catch (activateError) {
+              throw new Error(`作業台の開放に失敗: ${activateError.message}`);
+            }
+
             await new Promise((resolve, reject) => {
               const timeout = setTimeout(() => {
                 bot.removeListener('windowOpen', onWindowOpen);
@@ -4323,6 +4334,9 @@ class CraftFurnaceSkill extends Skill {
       }
 
       // Craft the furnace
+      if (workbench && !bot.currentWindow) {
+        await bot.activateBlock(workbench);
+      }
       await bot.craft(recipe, 1, workbench);
       return { success: true };
     } catch (error) {
@@ -4723,6 +4737,9 @@ class CraftWithWorkbenchSkill extends Skill {
       }
 
       // 5. クラフト実行
+      if (workbenchBlock && !bot.currentWindow) {
+        await bot.activateBlock(workbenchBlock);
+      }
       await bot.craft(recipe, count, workbenchBlock);
 
       console.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトしました`);
