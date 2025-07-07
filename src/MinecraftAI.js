@@ -463,8 +463,8 @@ class MinecraftAI {
           lastPerformanceReport = Date.now();
         }
 
-        // Memory cleanup every 100 iterations
-        if (loopCount % 100 === 0) {
+        // Memory cleanup every 200 iterations (reduced CPU load)
+        if (loopCount % 200 === 0) {
           this.performMaintenanceCleanup();
         }
       } catch (error) {
@@ -490,30 +490,30 @@ class MinecraftAI {
   }
 
   calculateAdaptiveSleep() {
-    const baseSleep = 300; // Reduced from 1000ms to 300ms for better responsiveness
+    const baseSleep = 200; // Reduced from 300ms to 200ms for better responsiveness
 
     // Adjust based on current situation
     let multiplier = 1.0;
 
     // Sleep less when in danger
     if (this.observer.isDangerous()) {
-      multiplier = 0.3; // Reduced from 0.5 for faster danger response
+      multiplier = 0.2; // Reduced from 0.3 for faster danger response
     }
 
     // Sleep more when idle to prevent high CPU usage from rapid task planning loops
     if (!this.currentTask) {
-      multiplier = 3.0; // Increased from 1.5 to provide a longer cooldown
+      multiplier = 2.0; // Reduced from 3.0 for better balance
     }
 
     // Sleep less when low on health/food
     if (this.bot.health < 10 || this.bot.food < 10) {
-      multiplier = 0.2; // Reduced from 0.7 for urgent response
+      multiplier = 0.2; // Keep urgent response
     }
 
     // Sleep more at night (if not urgent tasks)
     const state = this.stateManager.getState(['timeOfDay']);
     if (state.timeOfDay === 'night' && !this.hasUrgentTasks()) {
-      multiplier = 1.2; // Reduced from 1.5 for better nighttime responsiveness
+      multiplier = 1.2; // Keep nighttime responsiveness
     }
 
     return Math.floor(baseSleep * multiplier);
@@ -1356,17 +1356,17 @@ class MinecraftAI {
 
     // Task-specific timeout multipliers - reduced for better performance
     const timeoutMultipliers = {
-      explore: 1.2, // Reduced from 1.5
-      gather_wood: 1.5, // Reduced from 2.0
-      craft_tools: 2.0, // Reduced from 3.0
-      mine_block: 1.8, // Reduced from 2.5
-      build_shelter: 2.5, // Reduced from 4.0
-      move_to: 0.8, // Reduced from 1.0
-      follow: 2.0, // Reduced from 5.0
-      find_food: 1.3 // Reduced from 2.0
+      explore: 0.8, // Further reduced for faster exploration
+      gather_wood: 0.6, // Reduced for quicker resource gathering
+      craft_tools: 1.5, // Reduced but still generous for crafting
+      mine_block: 0.8, // Reduced for quicker mining
+      build_shelter: 1.2, // Reduced but adequate for building
+      move_to: 0.4, // Reduced for faster movement
+      follow: 0.8, // Reduced for more responsive following
+      find_food: 0.8 // Reduced for faster food gathering
     };
 
-    let multiplier = timeoutMultipliers[taskType] || 1.5; // Reduced default from 2.0
+    let multiplier = timeoutMultipliers[taskType] || 1.0; // Further reduced default for better performance
 
     // Adjust based on parameters
     if (params.amount && params.amount > 10) {
