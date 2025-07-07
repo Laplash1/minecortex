@@ -47,7 +47,24 @@ class InventoryUtils {
    */
   static getWoodCount(bot) {
     if (!bot || !bot.inventory) return 0;
-    return this._safeCount(bot, item => item.name === 'oak_log' || item.name === 'log');
+    
+    // Enhanced log detection for all log types
+    const logPattern = item => {
+      if (!item || !item.name) return false;
+      return item.name.includes('_log') || item.name === 'log';
+    };
+    
+    const count = this._safeCount(bot, logPattern);
+    
+    // Debug: Log all wood items found
+    const allItems = bot.inventory.items();
+    const woodItems = allItems.filter(logPattern);
+    console.log(`[InventoryUtils] 木材検出: 総数=${count}`);
+    woodItems.forEach(item => {
+      console.log(`[InventoryUtils] - ${item.name}: ${item.count}個`);
+    });
+    
+    return count;
   }
 
   /**

@@ -2975,6 +2975,17 @@ class CraftToolsSkill extends Skill {
         // Mine the tree
         await bot.dig(tree);
         console.log(`[材料収集] ${tree.name}を収集しました`);
+        
+        // Wait for inventory update to sync
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Verify collection with detailed logging
+        const postCollectionInventory = bot.inventory.items();
+        console.log(`[材料収集] 収集後インベントリ検査: ${postCollectionInventory.length}個のアイテム`);
+        postCollectionInventory.forEach(item => {
+          console.log(`[材料収集] - ${item.name}: ${item.count}個`);
+        });
+        
         return { success: true };
       } catch (error) {
         console.log(`[材料収集] 木材収集に失敗: ${error.message}`);
@@ -2985,11 +2996,191 @@ class CraftToolsSkill extends Skill {
       return { success: false, error: `収集エラー: ${error.message}` };
     }
   }
+
+  // Improved inventory detection methods
+  countPlankItems(bot) {
+    // Use InventoryUtils for consistent detection
+    const totalPlanks = InventoryUtils.getPlanksCount(bot);
+    console.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
+    
+    // Debug: Show all plank items found
+    const plankItems = InventoryUtils.findItemsByPattern(bot, '_planks');
+    plankItems.forEach(item => {
+      console.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
+    });
+    
+    return totalPlanks;
+  }
+  
+  countLogItems(bot) {
+    // Use InventoryUtils for consistent detection
+    const totalLogs = InventoryUtils.getWoodCount(bot);
+    console.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
+    
+    // Debug: Show all log items found
+    const logItems = InventoryUtils.findItemsByPattern(bot, '_log');
+    logItems.forEach(item => {
+      console.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
+    });
+    
+    return totalLogs;
+  }
+  
+  countItemsInInventoryByName(bot, itemName) {
+    // Use InventoryUtils for consistent detection
+    return InventoryUtils.getItemCount(bot, itemName);
+  }
+  
+  // On-demand log to plank conversion
+  async convertLogsToPlanksDemand(bot, logsToCraft) {
+    console.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
+    
+    try {
+      const mcData = require('minecraft-data')(bot.version);
+      
+      // Find the first log type in inventory
+      const logItem = bot.inventory.items().find(item => 
+        item && item.name && item.name.includes('_log')
+      );
+      
+      if (!logItem) {
+        return { success: false, error: 'インベントリに原木がありません' };
+      }
+      
+      // Get corresponding plank name
+      const plankName = logItem.name.replace('_log', '_planks');
+      const plankItem = mcData.itemsByName[plankName];
+      
+      if (!plankItem) {
+        return { success: false, error: `対応する板材(${plankName})が見つかりません` };
+      }
+      
+      // Get recipe for planks
+      const plankRecipe = await SkillLibrary.getRecipeSafe(bot, plankItem.id, 1, null);
+      if (!plankRecipe) {
+        return { success: false, error: `${plankName}のレシピが見つかりません` };
+      }
+      
+      // Convert logs to planks (one log = 4 planks)
+      const totalConversions = Math.min(logsToCraft, logItem.count);
+      
+      for (let i = 0; i < totalConversions; i++) {
+        try {
+          await bot.craft(plankRecipe, 1, null);
+          console.log(`[オンデマンド変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
+        } catch (craftError) {
+          console.log(`[オンデマンド変換] クラフトエラー: ${craftError.message}`);
+          if (i === 0) {
+            return { success: false, error: `クラフト失敗: ${craftError.message}` };
+          }
+          break;
+        }
+      }
+      
+      const convertedPlanks = this.countPlankItems(bot);
+      console.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
+      return { success: true, planksConverted: convertedPlanks };
+      
+    } catch (error) {
+      console.log(`[オンデマンド変換] エラー: ${error.message}`);
+      return { success: false, error: `変換エラー: ${error.message}` };
+    }
+  }
 }
 
 class CraftWorkbenchSkill extends Skill {
   constructor() {
     super('craft_workbench', 'Crafts a crafting table from planks, with automatic log-to-plank conversion');
+  }
+  
+  // Improved inventory detection methods for CraftWorkbenchSkill
+  countPlankItems(bot) {
+    // Use InventoryUtils for consistent detection
+    const totalPlanks = InventoryUtils.getPlanksCount(bot);
+    console.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
+    
+    // Debug: Show all plank items found
+    const plankItems = InventoryUtils.findItemsByPattern(bot, '_planks');
+    plankItems.forEach(item => {
+      console.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
+    });
+    
+    return totalPlanks;
+  }
+  
+  countLogItems(bot) {
+    // Use InventoryUtils for consistent detection
+    const totalLogs = InventoryUtils.getWoodCount(bot);
+    console.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
+    
+    // Debug: Show all log items found
+    const logItems = InventoryUtils.findItemsByPattern(bot, '_log');
+    logItems.forEach(item => {
+      console.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
+    });
+    
+    return totalLogs;
+  }
+  
+  countItemsInInventoryByName(bot, itemName) {
+    // Use InventoryUtils for consistent detection
+    return InventoryUtils.getItemCount(bot, itemName);
+  }
+  
+  // On-demand log to plank conversion for CraftWorkbenchSkill
+  async convertLogsToPlanksDemand(bot, logsToCraft) {
+    console.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
+    
+    try {
+      const mcData = require('minecraft-data')(bot.version);
+      
+      // Find the first log type in inventory
+      const logItem = bot.inventory.items().find(item => 
+        item && item.name && item.name.includes('_log')
+      );
+      
+      if (!logItem) {
+        return { success: false, error: 'インベントリに原木がありません' };
+      }
+      
+      // Get corresponding plank name
+      const plankName = logItem.name.replace('_log', '_planks');
+      const plankItem = mcData.itemsByName[plankName];
+      
+      if (!plankItem) {
+        return { success: false, error: `対応する板材(${plankName})が見つかりません` };
+      }
+      
+      // Get recipe for planks
+      const plankRecipe = await SkillLibrary.getRecipeSafe(bot, plankItem.id, 1, null);
+      if (!plankRecipe) {
+        return { success: false, error: `${plankName}のレシピが見つかりません` };
+      }
+      
+      // Convert logs to planks (one log = 4 planks)
+      const totalConversions = Math.min(logsToCraft, logItem.count);
+      
+      for (let i = 0; i < totalConversions; i++) {
+        try {
+          await bot.craft(plankRecipe, 1, null);
+          console.log(`[オンデマンド変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
+        } catch (craftError) {
+          console.log(`[オンデマンド変換] クラフトエラー: ${craftError.message}`);
+          if (i === 0) {
+            return { success: false, error: `クラフト失敗: ${craftError.message}` };
+          }
+          break;
+        }
+      }
+      
+      const convertedPlanks = this.countPlankItems(bot);
+      console.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
+      return { success: true, planksConverted: convertedPlanks };
+      
+    } catch (error) {
+      console.log(`[オンデマンド変換] エラー: ${error.message}`);
+      return { success: false, error: `変換エラー: ${error.message}` };
+    }
   }
 
   async execute(bot, _params) {
@@ -3005,12 +3196,12 @@ class CraftWorkbenchSkill extends Skill {
         return { success: true, message: 'インベントリに作業台が既にあります' };
       }
 
-      // Phase 2: Material assessment
+      // Phase 2: Material assessment (improved inventory detection)
       console.log('[作業台スキル] 材料評価フェーズ...');
       InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-Start');
 
-      const currentPlanks = this.countItemsInInventory(bot, 'planks');
-      const currentLogs = this.countItemsInInventory(bot, 'log');
+      const currentPlanks = this.countPlankItems(bot);
+      const currentLogs = this.countLogItems(bot);
       const totalAvailablePlanks = currentPlanks + (currentLogs * 4);
 
       console.log(`[作業台スキル] 材料状況: 板材=${currentPlanks}, 原木=${currentLogs}, 総利用可能板材=${totalAvailablePlanks}`);
@@ -3021,21 +3212,21 @@ class CraftWorkbenchSkill extends Skill {
         return { success: false, reason: 'INSUFFICIENT_MATERIALS', error: message };
       }
 
-      // Phase 3: Plank preparation (convert logs to planks if needed)
+      // Phase 3: On-demand plank conversion (only when needed)
       if (currentPlanks < requiredPlanks) {
         const planksNeeded = requiredPlanks - currentPlanks;
         const logsToCraft = Math.ceil(planksNeeded / 4);
 
-        console.log(`[作業台スキル] 板材準備フェーズ: ${planksNeeded}個の板材が必要、${logsToCraft}個の原木を変換します`);
+        console.log(`[作業台スキル] オンデマンド板材変換: ${planksNeeded}個の板材が必要、${logsToCraft}個の原木を変換します`);
 
-        const plankCraftResult = await this.craftPlanksFromLogs(bot, logsToCraft);
+        const plankCraftResult = await this.convertLogsToPlanksDemand(bot, logsToCraft);
         if (!plankCraftResult.success) {
           return { success: false, error: `板材の作成に失敗: ${plankCraftResult.error}` };
         }
 
         // Verify we now have enough planks
-        const updatedPlanks = this.countItemsInInventory(bot, 'planks');
-        console.log(`[作業台スキル] 板材準備完了: ${updatedPlanks}個の板材を確保`);
+        const updatedPlanks = this.countPlankItems(bot);
+        console.log(`[作業台スキル] オンデマンド変換完了: ${updatedPlanks}個の板材を確保`);
 
         if (updatedPlanks < requiredPlanks) {
           const message = `板材作成後も材料不足: 必要=${requiredPlanks}, 現在=${updatedPlanks}`;
@@ -3064,7 +3255,7 @@ class CraftWorkbenchSkill extends Skill {
         if (ingredient.count < 0) { // Only check input materials (negative counts)
           const requiredCount = Math.abs(ingredient.count);
           const ingredientName = mcData.items[ingredient.id]?.name || `id_${ingredient.id}`;
-          const available = this.countItemsInInventory(bot, ingredientName);
+          const available = this.countItemsInInventoryByName(bot, ingredientName);
           if (available < requiredCount) {
             const message = `最終確認で材料不足: ${ingredientName} (必要=${requiredCount}, 所持=${available})`;
             console.log(`[作業台スキル] ${message}`);
