@@ -3043,6 +3043,13 @@ class CraftToolsSkill extends Skill {
           return { success: false, error: `Invalid recipe format for ${toolName}` };
         }
 
+        // Fix missing ingredients field by generating from inShape
+        if (!recipe.ingredients && recipe.inShape) {
+          console.log(`[ツールスキル] ${toolName}のingredientsがnullのため、inShapeから生成します`);
+          recipe.ingredients = this.generateIngredientsFromInShape(recipe.inShape);
+          console.log('[ツールスキル] 生成されたingredients:', recipe.ingredients);
+        }
+
         await bot.craft(recipe, 1, craftingTable);
         console.log(`[ツールスキル] ${toolName}をクラフトしました！`);
         bot.chat(`${toolName}をクラフトしました！ 🔨`);
@@ -3064,6 +3071,41 @@ class CraftToolsSkill extends Skill {
       console.log('[ツールスキル] ツールをクラフトできませんでした。');
       return { success: false, error: 'ツールをクラフトできませんでした' };
     }
+  }
+
+  /**
+   * Generate ingredients array from inShape for mineflayer compatibility
+   * @param {Array} inShape - 3x3 crafting grid shape
+   * @returns {Array} ingredients array for mineflayer bot.craft()
+   */
+  generateIngredientsFromInShape(inShape) {
+    if (!inShape || !Array.isArray(inShape)) {
+      return [];
+    }
+
+    const ingredients = [];
+    const uniqueItems = new Set();
+
+    // Flatten inShape and collect unique non-null items
+    for (const row of inShape) {
+      if (Array.isArray(row)) {
+        for (const item of row) {
+          if (item !== null && typeof item === 'number') {
+            uniqueItems.add(item);
+          }
+        }
+      }
+    }
+
+    // Convert to ingredients format expected by mineflayer
+    for (const itemId of uniqueItems) {
+      ingredients.push({
+        id: itemId,
+        count: 1 // mineflayer will calculate actual count from inShape
+      });
+    }
+
+    return ingredients;
   }
 
   async getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
