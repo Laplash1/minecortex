@@ -308,10 +308,35 @@ class SkillLibrary {
 
     // Create an optimized recipe by replacing any wood plank requirement with the best available wood type
     const optimizedRecipe = JSON.parse(JSON.stringify(originalRecipe)); // Deep copy
-    const bestWoodItem = mcData.itemsByName[bestWoodType];
+    
+    // Try to find the wood item with multiple naming patterns
+    let bestWoodItem = null;
+    const searchNames = [
+      bestWoodType, // Original name (e.g., "jungle_planks")
+      bestWoodType.replace('_planks', '_plank'), // Singular form (e.g., "jungle_plank")
+      bestWoodType.replace('s', ''), // Remove trailing 's' (e.g., "jungle_plank")
+      'planks' // Generic fallback
+    ];
+
+    for (const searchName of searchNames) {
+      bestWoodItem = mcData.itemsByName[searchName];
+      if (bestWoodItem) {
+        console.log(`[木材レシピ最適化] 木材アイテム発見: ${bestWoodType} -> ${searchName} (id: ${bestWoodItem.id})`);
+        break;
+      }
+    }
 
     if (!bestWoodItem) {
-      console.warn(`[木材レシピ最適化] Best wood type ${bestWoodType} not found in minecraft-data`);
+      console.warn(`[木材レシピ最適化] Best wood type ${bestWoodType} not found in minecraft-data with any naming pattern`);
+      console.warn(`[木材レシピ最適化] 試行した名前: ${searchNames.join(', ')}`);
+      
+      // Debug: Show available wood-related items
+      if (mcData.itemsByName) {
+        const availableWoodItems = Object.keys(mcData.itemsByName).filter(name => 
+          name.includes('plank') || name.includes('wood')
+        );
+        console.warn(`[木材レシピ最適化] 利用可能な木材関連アイテム: ${availableWoodItems.slice(0, 10).join(', ')}`);
+      }
       return null;
     }
 
