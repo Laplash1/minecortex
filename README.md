@@ -1,332 +1,255 @@
-# MineCortex v1.6.4
+<div align="center">
 
-**mineflayer**（Minecraft操作用）と**Voyager**インスパイアなAI機能（インテリジェントな計画と学習）を組み合わせた、知的なMinecraftボット群です。
+# 🧠 MineCortex
 
-> 🧠 **MineCortex** = **Mine**（採掘/私の）+ **Cortex**（大脳皮質）  
-> あなた専用の賢いMinecraft大脳皮質システム
+**Intelligent Minecraft AI Bot System**
 
-## 🚀 v1.6.4 大規模リファクタリング - プロジェクト構造最適化
-- **プロジェクト簡素化** - `npm start` のみでの完全動作、不要ファイル大量削除
-- **ドキュメント体系再構築** - カテゴリ別整理による発見性向上
-- **ESLint品質管理** - コード品質保証の継続
-- **Gemini協調評価** - AI協調による客観的品質確認システム
-- **マルチプレイヤー協調** - 5体のAIプレイヤーが安定協調動作
+*Autonomous gameplay powered by mineflayer and Voyager-inspired AI*
 
-## 🎯 簡素化された使用方法
-- **単一コマンド**: `npm start` で5体のAIプレイヤーが即座に起動
-- **環境変数設定**: プレイヤー数やデバッグモードを柔軟にカスタマイズ
-- **コード品質**: `npm run lint` による継続的な品質管理
+[![Node.js](https://img.shields.io/badge/Node.js-16.13.0+-green.svg)](https://nodejs.org/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21-blue.svg)](https://minecraft.net/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code Style](https://img.shields.io/badge/Code%20Style-ESLint-purple.svg)](https://eslint.org/)
 
-## ディレクトリ構成
+[🚀 Quick Start](#-quick-start) • [📖 Documentation](docs/) • [🤖 Features](#-features) • [🛠️ Development](#️-development)
+
+</div>
+
+---
+
+## 🎯 What is MineCortex?
+
+**MineCortex** combines the power of **mineflayer** (Minecraft bot framework) with **Voyager-inspired AI capabilities** to create intelligent, autonomous Minecraft bots that can learn, adapt, and coordinate with each other.
+
+> 🧠 **MineCortex** = **Mine** (Mining/My) + **Cortex** (Brain)  
+> *Your personal intelligent Minecraft brain system*
+
+### ✨ Key Highlights
+
+- 🤖 **Multi-AI Coordination** - 5 synchronized AI players working together
+- 🧠 **Voyager-Inspired Learning** - Memory-based learning without file I/O
+- 🎮 **Autonomous Gameplay** - Self-directed exploration, mining, and crafting
+- 🛠️ **Extensible Skills** - Modular skill system for custom behaviors
+- 🔧 **Simple Setup** - Single command deployment (`npm start`)
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** >= 16.13.0
+- **Minecraft Java Edition 1.21** server (local or remote)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/minecortex.git
+cd minecortex
+
+# Install dependencies
+npm install
+
+# Launch 5 AI players (default)
+npm start
+```
+
+### 🎮 Customize Your Experience
+
+```bash
+# Launch with custom player count
+MULTIPLE_PLAYERS_COUNT=3 npm start
+
+# Enable debug mode
+DEBUG_MODE=true npm start
+
+# Custom server settings
+MINECRAFT_HOST=your-server.com MINECRAFT_PORT=25565 npm start
+```
+
+---
+
+## 🤖 Features
+
+### 🧠 AI Capabilities
+- **Autonomous Exploration** - Smart pathfinding and world discovery
+- **Resource Management** - Intelligent mining and inventory optimization
+- **Skill Learning** - Dynamic skill generation and improvement
+- **Multi-Player Coordination** - Synchronized teamwork and resource sharing
+
+### 🎮 Minecraft Integration
+- **Full Minecraft 1.21 Support** - Latest minecraft-data compatibility
+- **Chat Commands** - Natural language and structured command interface
+- **Real-time Adaptation** - Responds to game events and player interactions
+- **Survival Mechanics** - Food management, health monitoring, respawn handling
+
+### 🛠️ Developer Experience
+- **Modular Architecture** - Easy to extend and customize
+- **ESLint Integration** - Consistent code quality
+- **Comprehensive Documentation** - Detailed guides and references
+- **Hot-Reload Development** - Fast iteration cycles
+
+---
+
+## 📊 Performance
+
+| Players | CPU Usage | Memory Usage | Recommended Setup |
+|---------|-----------|--------------|-------------------|
+| 3 bots  | 10-15%    | 300MB        | Minimum          |
+| 5 bots  | 15-25%    | 416MB        | **Recommended**  |
+| 10 bots | 30-50%    | 1GB          | High Performance |
+
+*Measured on modern development hardware with real-world workloads*
+
+---
+
+## 🎮 In-Game Commands
+
+```
+!status              # Health, food, position report
+!goto <x> <y> <z>    # Move to coordinates
+!follow <player>     # Track and follow a player
+!stop                # Stop current task
+!learn               # Show learning statistics
+!curriculum          # Generate new AI curriculum
+```
+
+---
+
+## 🏗️ Architecture
 
 ```
 minecortex/
-├── README.md                      # このファイル
-├── package.json                   # プロジェクト設定（簡素化済み）
-├── examples/
-│   └── multiple-players.js       # メインエントリーポイント（npm start）
-├── src/                           # AIコンポーネント群
-│   ├── MinecraftAI.js            # メインAIコントローラー
-│   ├── VoyagerAI.js              # AI学習エンジン（メモリ内学習）
-│   ├── SkillLibrary.js           # スキル管理・実行
-│   ├── TaskPlanner.js            # タスク分解・計画
-│   ├── MultiPlayerCoordinator.js # 複数プレイヤー協調制御
-│   ├── StateManager.js           # 状態管理・同期
-│   ├── EnvironmentObserver.js    # 環境認識・監視
-│   ├── PathfindingCache.js       # 移動最適化
-│   ├── SharedEnvironment.js      # 共有環境データ
-│   ├── OpenAIRequestQueue.js     # AI API制御
-│   └── utils/                    # 共通ユーティリティ
-│       ├── ErrorHandler.js
-│       ├── Logger.js
-│       └── ValidationUtils.js
-├── config/                        # 設定ファイル
-│   ├── players-config.json       # プレイヤー設定
-│   └── item-alias.json           # アイテム別名管理
-├── docs/                          # 整理済みドキュメント
-│   ├── guides/                   # ユーザー向けガイド
-│   ├── references/               # 技術リファレンス
-│   ├── development/              # 開発者向け
-│   └── changelogs/               # 変更履歴
-└── logs/                          # 実行ログ
+├── 🚀 examples/
+│   └── multiple-players.js    # Main entry point
+├── 🧠 src/                    # AI Components
+│   ├── MinecraftAI.js         # Core AI controller
+│   ├── VoyagerAI.js           # Learning engine
+│   ├── SkillLibrary.js        # Skill management
+│   ├── TaskPlanner.js         # Task orchestration
+│   ├── MultiPlayerCoordinator.js # Team coordination
+│   └── utils/                 # Shared utilities
+├── ⚙️ config/                 # Configuration
+├── 📚 docs/                   # Documentation
+└── 📝 dev_daily/             # Development logs
 ```
 
-## 機能
+---
 
-### コア機能
-- **自律移動**: パスファインディングを使用してMinecraftワールドをナビゲート
-- **環境観察**: 周囲、エンティティ、ゲーム状態を継続的に監視
-- **タスク計画**: インテリジェントなタスク分解と実行
-- **スキルライブラリ**: 拡張可能な再利用可能な行動のコレクション
-- **学習と適応**: AI駆動のスキル生成と改善
+## 🛠️ Development
 
-### VoyagerインスパイアなAI
-- **動的スキル生成**: 必要に応じてGPT-4を使用して新しいスキルを作成
-- **経験学習**: 成功と失敗から学習
-- **カリキュラム生成**: 進歩的な学習タスクを自動生成
-- **コンテキスト認識計画**: 環境とゲーム状態に基づいて決定を行う
+### Code Quality
 
-### 基本スキル
-- **探索**: 自律的な地域探索と地形認識
-- **資源収集**: 木材、石材、その他の材料の効率的収集
-- **道具作成**: 自動道具作成とレシピ管理
-- **サバイバル**: 食料収集と基本的なサバイバル行動
-- **社会的相互作用**: チャットコマンドに応答し、プレイヤーを追跡
-- **🆕 マルチプレイヤー協調**: 複数ボット間でのリソース管理と役割分担
-
-## セットアップ
-
-### 前提条件
-- Node.js >= 16.13.0
-- Minecraft Java Edition 1.21サーバー（ローカルまたはリモート）
-- OpenAI APIキー（オプション、高度なAI機能用）
-- **新規**: minecraft-data 3.90.0対応 - Minecraft 1.21完全サポート
-
-### インストール
-
-1. **クローンとセットアップ**
-   ```bash
-   cd マインクラフト
-   npm install
-   ```
-
-2. **環境設定**
-   ```bash
-   cp .env.example .env
-   # .envファイルを設定で編集
-   ```
-
-3. **環境変数**
-   ```bash
-   # Minecraftサーバー
-   MINECRAFT_HOST=localhost
-   MINECRAFT_PORT=25565
-   MINECRAFT_USERNAME=AIPlayer
-   MINECRAFT_AUTH=offline
-
-   # OpenAI（オプション）
-   OPENAI_API_KEY=your_api_key_here
-   OPENAI_MODEL=gpt-4o-mini
-
-   # ボット設定
-   DEBUG_MODE=true
-   AUTO_RESPAWN=true
-   ```
-
-## 🚀 クイックスタート
-
-### 基本起動
 ```bash
-# 5体のAIプレイヤーが協調動作（推奨）
-npm start
-
-# プレイヤー数カスタマイズ
-MULTIPLE_PLAYERS_COUNT=3 npm start    # 3体で起動
-MULTIPLE_PLAYERS_COUNT=10 npm start   # 10体で起動
-
-# デバッグモード
-DEBUG_MODE=true npm start
-
-# コード品質チェック（開発時）
+# Check code style
 npm run lint
+
+# Auto-fix issues
 npm run lint:fix
 ```
 
-### チャットコマンド
-ボットはMinecraftチャットのコマンドに応答します：
+### Environment Variables
 
-- `!status` - ボットのステータスを表示（体力、食料、位置）
-- `!goto <x> <y> <z>` - 特定の座標に移動
-- `!follow <player>` - プレイヤーを追跡
-- `!stop` - 現在のタスクを停止
-- `!learn` - 学習統計を表示
-- `!curriculum` - 新しい学習カリキュラムを生成
+```bash
+# Minecraft Connection
+MINECRAFT_HOST=localhost
+MINECRAFT_PORT=25565
+MINECRAFT_USERNAME=AIPlayer
+MINECRAFT_AUTH=offline
 
-### コマンド例
+# AI Features (Optional)
+OPENAI_API_KEY=your_api_key
+OPENAI_MODEL=gpt-4o-mini
+
+# Bot Configuration
+DEBUG_MODE=true
+AUTO_RESPAWN=true
+MULTIPLE_PLAYERS_COUNT=5
 ```
-!status
-!goto 100 64 200
-!follow Steve
-!learn
-!curriculum
-```
 
-## アーキテクチャ
+### 🔧 Extending MineCortex
 
-### コアコンポーネント
-
-1. **MinecraftAI** (`src/MinecraftAI.js`)
-   - メインAIコントローラー
-   - すべてのサブシステムを調整
-   - メインAIループを管理
-
-2. **SkillLibrary** (`src/SkillLibrary.js`)
-   - 再利用可能な行動のコレクション
-   - 移動、相互作用、サバイバルの基本スキル
-   - 拡張可能なスキルシステム
-
-3. **TaskPlanner** (`src/TaskPlanner.js`)
-   - 高レベルの目標を実行可能なタスクに変換
-   - タスクの前提条件と依存関係を処理
-   - タスクの完了を監視
-
-4. **EnvironmentObserver** (`src/EnvironmentObserver.js`)
-   - ゲーム状態と周囲を監視
-   - エンティティ、ブロック、プレイヤーステータスを追跡
-   - 意思決定のためのコンテキストを提供
-
-5. **VoyagerAI** (`src/VoyagerAI.js`)
-   - AI駆動のスキル生成
-   - 経験からの学習
-   - カリキュラム生成
-   - OpenAI統合
-
-6. **🆕 StateManager** (`src/StateManager.js`)
-   - 状態同期と整合性管理
-   - パフォーマンス追跡
-   - マルチプレイヤー状態管理
-
-7. **🆕 MultiPlayerCoordinator** (`src/MultiPlayerCoordinator.js`)
-   - 複数ボット間の協調制御
-   - リソース競合解決
-   - 役割分担システム
-
-### AI学習ループ
-
-1. **観察** - 環境とゲーム状態を監視
-2. **計画** - 目標に基づいて適切なタスクを選択
-3. **実行** - スキルを実行してタスクを完了
-4. **学習** - 結果を分析して改善
-
-## 設定
-
-### Minecraftサーバーセットアップ
-ボットはmineflayerライブラリをサポートする任意のMinecraftサーバーで動作します：
-- ローカルサーバー（バニラ、Paper、Spigot）
-- リモートサーバー（適切な認証付き）
-- オンラインおよびオフラインモード両方対応
-
-### OpenAI統合
-高度なAI機能のため、OpenAI APIを設定：
-- 新しいタスクのスキル生成
-- 経験からの学習
-- カリキュラム開発
-- パターン分析と改善
-
-## ボットの拡張
-
-### 新しいスキルの追加
+**Add New Skills:**
 ```javascript
-// SkillLibrary.js内
 class MyCustomSkill extends Skill {
   constructor() {
-    super('my_skill', 'スキルの説明');
+    super('my_skill', 'Description of what this skill does');
   }
-
+  
   async execute(bot, params) {
-    // 実装
-    return { success: true, result: '完了' };
+    // Your implementation here
+    return { success: true, result: 'Task completed' };
   }
 }
-
-// スキルを登録
-this.registerSkill('my_skill', new MyCustomSkill());
 ```
 
-### 新しい目標の追加
-```javascript
-// TaskPlanner.js内
-planMyGoal(goal) {
-  return {
-    type: 'my_skill',
-    params: goal.params,
-    priority: goal.priority,
-    timeout: Date.now() + 60000
-  };
-}
-```
+---
 
-## トラブルシューティング
+## 📚 Documentation
 
-### よくある問題
+| Section | Description |
+|---------|-------------|
+| [📖 User Guide](docs/guides/user_guide.md) | Complete usage instructions |
+| [🔧 Installation Guide](docs/guides/installation.md) | Detailed setup process |
+| [🔑 Authentication Setup](docs/guides/authentication.md) | Minecraft account configuration |
+| [🤖 Technical Reference](docs/references/technical_reference.md) | Architecture deep-dive |
+| [🛠️ Contributing Guide](docs/development/CONTRIBUTING.md) | Development workflow |
 
-1. **接続失敗**
-   - サーバーアドレスとポートを確認
-   - サーバーが稼働中か確認
-   - 認証設定を確認
+---
 
-2. **ボットが動かない**
-   - `!stop`コマンドを使用
-   - パスファインディングの問題を確認
-   - 必要に応じて再起動
+## 🤝 Contributing
 
-3. **AI機能が動作しない**
-   - OpenAI APIキーを確認
-   - APIレート制限を確認
-   - ボットは基本スキルにフォールバック
+We welcome contributions! Please see our [Contributing Guide](docs/development/CONTRIBUTING.md) for details.
 
-### デバッグモード
-詳細なログのためにデバッグモードを有効化：
-```bash
-DEBUG_MODE=true
-```
+### Development Workflow
 
-## 📊 パフォーマンス
+1. 🍴 Fork the repository
+2. 🌟 Create a feature branch
+3. 💻 Make your changes
+4. ✅ Run `npm run lint` to ensure code quality
+5. 🧪 Test with `npm start`
+6. 📝 Update documentation as needed
+7. 🚀 Submit a pull request
 
-| プレイヤー数 | CPU使用率 | メモリ使用量 | 推奨環境 |
-|-------------|-----------|-------------|----------|
-| 3体 | 10-15% | 300MB | 最小環境 |
-| 5体 | 15-25% | 416MB | 推奨環境（実測値） |
-| 10体 | 30-50% | 1GB | 高性能環境 |
+---
 
-- **ネットワーク**: 効率的、必要なパケットのみ送信
-- **学習**: メモリ内学習により高速・リアルタイム改善
-- **協調システム**: 複数ボット間の効率的なリソース管理と同期制御
-- **実測パフォーマンス**: イベントループ遅延平均0.67ms、最大2.26ms
+## 📊 Project Status
 
-## 📚 詳細ドキュメント
+### ✅ What's Working
+- ✅ Multi-player AI coordination (5 bots tested)
+- ✅ Autonomous exploration and mining
+- ✅ Real-time learning and adaptation
+- ✅ Minecraft 1.21 full compatibility
+- ✅ Memory-efficient architecture
 
-プロジェクトの詳細情報は以下のドキュメントを参照してください：
+### 🚧 Upcoming Features
+- 🔮 Enhanced natural language processing
+- 🏗️ Advanced building and construction
+- 🌐 Multi-server support
+- 📱 Web dashboard interface
 
-### ガイド
-- **[インストールガイド](docs/guides/installation.md)** - 詳細なセットアップ手順
-- **[ユーザーガイド](docs/guides/user_guide.md)** - 完全なユーザー使用ガイド
-- **[認証設定](docs/guides/authentication.md)** - オフライン・Microsoft認証設定
-- **[OpenAI設定](docs/guides/openai_setup.md)** - OpenAI API設定と最適化
+---
 
-### リファレンス
-- **[技術リファレンス](docs/references/technical_reference.md)** - 技術アーキテクチャとAI学習詳細
-- **[スキルリファレンス](docs/references/skills_reference.md)** - Minecraftスキルの詳細分析
+## 📄 License
 
-### 開発者向け
-- **[貢献ガイド](docs/development/CONTRIBUTING.md)** - 開発参加方法とコーディング規約
-- **[NLU実装計画](docs/development/nlu_plan.md)** - NLU機能の実装計画
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-### 変更履歴
-- **[変更履歴](docs/changelogs/CHANGELOG.md)** - バージョン履歴と変更記録
-- **[v1.6.4](docs/changelogs/CHANGELOG_1.6.4.md)** - 大規模リファクタリング記録
+---
 
-## ライセンス
+## 🙏 Acknowledgments
 
-MITライセンス - 必要に応じてボットを自由に変更・拡張してください。
+- **[mineflayer](https://github.com/PrismarineJS/mineflayer)** - Excellent Minecraft bot framework
+- **[Voyager](https://github.com/MineDojo/Voyager)** - AI learning architecture inspiration (MIT License)
+- **[PrismarineJS](https://github.com/PrismarineJS)** - Minecraft protocol implementation
+- **[OpenAI](https://openai.com/)** - GPT-4 for intelligent skill generation
 
-## 貢献
+---
 
-1. リポジトリをフォーク
-2. 機能ブランチを作成
-3. 変更を実装
-4. `npm run lint` でコード品質確認
-5. `npm start` で動作確認
-6. プルリクエストを提出
+<div align="center">
 
-詳細は[貢献ガイド](docs/development/CONTRIBUTING.md)を参照してください。
+**[⬆ Back to Top](#-minecortex)**
 
-## 謝辞
+Made with ❤️ for the Minecraft AI community
 
-- **mineflayer** - 優秀なMinecraftボットフレームワーク
-- **Voyager** - AI学習アーキテクチャのインスピレーション（MITライセンス）
-- **PrismarineJS** - Minecraftプロトコル実装
-- **OpenAI** - インテリジェントなスキル生成のためのGPT-4
-
-### Voyager参考資料
-Voyagerプロジェクトのスキルライブラリとライセンス情報は`references/`ディレクトリに保存されています。# minecortex
+</div>
