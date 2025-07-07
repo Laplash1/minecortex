@@ -3212,7 +3212,7 @@ class CraftToolsSkill extends Skill {
     for (const row of inShape) {
       if (Array.isArray(row)) {
         for (const item of row) {
-          if (item !== null && typeof item === 'number') {
+          if (item !== null && item !== undefined && typeof item === 'number' && item !== 0) {
             uniqueItems.add(item);
           }
         }
@@ -3241,13 +3241,20 @@ class CraftToolsSkill extends Skill {
       return delta;
     }
 
+    console.log('[レシピ修正] 元のinShape:', JSON.stringify(inShape));
+
     // Count items in inShape
     const itemCounts = new Map();
     for (const row of inShape) {
       if (Array.isArray(row)) {
         for (const item of row) {
-          if (item !== null && typeof item === 'number') {
+          console.log(`[レシピ修正] inShapeアイテム: ${item} (type: ${typeof item})`);
+          // Exclude null, undefined, and Air (ID: 0)
+          if (item !== null && item !== undefined && typeof item === 'number' && item !== 0) {
             itemCounts.set(item, (itemCounts.get(item) || 0) + 1);
+            console.log(`[レシピ修正] カウント: ID:${item}`);
+          } else {
+            console.log(`[レシピ修正] 除外: ${item}`);
           }
         }
       }
@@ -3263,6 +3270,7 @@ class CraftToolsSkill extends Skill {
     }
 
     console.log(`[レシピ修正] inShape分析: ${Array.from(itemCounts.entries()).map(([id, count]) => `ID:${id}×${count}`).join(', ')}`);
+    console.log('[レシピ修正] 除外されたアイテム: Air(0), null, undefined');
     return correctedDelta;
   }
 
