@@ -1973,7 +1973,7 @@ class MinecraftAI {
       this.log(`⚰️ プレイヤーが死亡しました (${this.deathCount}回目)`, 'warn');
 
       // Clear current tasks to prevent confusion after respawn
-      this.stateManager.setState('currentTask', null);
+      this.stateManager.updateState({ currentTask: null }, 'death_handler');
       this.goals = [];
 
       // Check for death loop (3 deaths within 60 seconds)
@@ -2001,7 +2001,7 @@ class MinecraftAI {
       this.isRespawning = false;
 
       // Reset state after respawn
-      this.stateManager.setState('currentTask', null);
+      this.stateManager.updateState({ currentTask: null }, 'respawn_handler');
       this.goals = [];
 
       // Add safe initial goals after respawn
