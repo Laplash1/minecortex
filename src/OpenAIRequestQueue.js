@@ -206,64 +206,117 @@ class OpenAIRequestQueue {
     }
   }
 
-  /**
-   * スキル生成API呼び出し
-   */
-  async generateSkill(_data) {
+  async generateSkill(data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
 
-    // 実装は既存のVoyagerAI.jsの実装を参照
-    // ここでは簡略化
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_SKILL_MODEL || 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a Minecraft bot skill generator. Generate executable JavaScript code for Minecraft bot skills.'
+        },
+        {
+          role: 'user',
+          content: data.prompt || 'Generate a basic skill'
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7
+    });
+
     return {
       success: true,
-      skill: '// Generated skill code here',
+      skill: response.choices[0].message.content,
       fromQueue: true
     };
   }
 
-  /**
-   * カリキュラム生成API呼び出し
-   */
-  async generateCurriculum(_data) {
+  async generateCurriculum(data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
 
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_CURRICULUM_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Generate a learning curriculum for a Minecraft bot based on its current state.'
+        },
+        {
+          role: 'user',
+          content: data.prompt || 'Generate a basic curriculum'
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7
+    });
+
     return {
       success: true,
-      curriculum: ['task1', 'task2', 'task3'],
+      curriculum: JSON.parse(response.choices[0].message.content),
       fromQueue: true
     };
   }
 
-  /**
-   * 分析API呼び出し
-   */
-  async performAnalysis(_data) {
+  async performAnalysis(data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
 
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an AI that learns from failures to improve Minecraft bot performance.'
+        },
+        {
+          role: 'user',
+          content: data.prompt || 'Analyze bot performance'
+        }
+      ],
+      max_tokens: 800,
+      temperature: 0.2
+    });
+
     return {
       success: true,
-      analysis: 'Analysis result here',
+      analysis: response.choices[0].message.content,
       fromQueue: true
     };
   }
 
-  /**
-   * チャット補完API呼び出し
-   */
-  async chatCompletion(_data) {
+  async chatCompletion(data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
 
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: data.model || 'gpt-4o-mini',
+      messages: data.messages || [],
+      max_tokens: data.max_tokens || 500,
+      temperature: data.temperature || 0.7
+    });
+
     return {
       success: true,
-      response: 'Chat response here',
+      response: response.choices[0].message.content,
       fromQueue: true
     };
   }

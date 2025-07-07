@@ -5,6 +5,8 @@
  * to reduce code duplication and improve consistency across the codebase.
  */
 
+const { Logger } = require('./utils/Logger');
+
 class InventoryUtils {
   /**
    * Safe count method that handles both Mineflayer v3 standard API and callback extensions
@@ -13,7 +15,11 @@ class InventoryUtils {
    * @returns {number} Item count
    */
   static _safeCount(bot, predicate) {
-    if (!bot || !bot.inventory) return 0;
+    if (!bot || !bot.inventory) {
+      const logger = Logger.createLogger('InventoryUtils');
+      logger.warn('Bot or inventory is null/undefined');
+      return 0;
+    }
     try {
       // Try using bot.inventory.items() method for safer access
       const items = bot.inventory.items();

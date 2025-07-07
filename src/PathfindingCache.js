@@ -3,12 +3,15 @@
  * 5体ボット環境での重複パスファインディング計算を削減
  */
 
+const { Logger } = require('./utils/Logger');
+
 class PathfindingCache {
   constructor(options = {}) {
     this.cache = new Map(); // key -> pathResult
     this.maxCacheSize = options.maxCacheSize || 1000;
     this.maxCacheAge = options.maxCacheAge || 300000; // 5分
     this.hitRadius = options.hitRadius || 3; // キャッシュヒット判定半径
+    this.logger = Logger.createLogger('PathfindingCache');
 
     // パフォーマンス統計
     this.stats = {
@@ -23,7 +26,7 @@ class PathfindingCache {
       this.cleanup();
     }, 60000); // 1分ごと
 
-    console.log('[PathfindingCache] パスファインディングキャッシュ初期化完了');
+    this.logger.log('パスファインディングキャッシュ初期化完了');
   }
 
   /**
@@ -49,7 +52,7 @@ class PathfindingCache {
     this.stats.totalPaths++;
 
     if (this.stats.totalPaths % 100 === 0) {
-      console.log(`[PathfindingCache] キャッシュ状況: ${this.cache.size}個, ヒット率: ${this.getHitRate().toFixed(1)}%`);
+      this.logger.log(`キャッシュ状況: ${this.cache.size}個, ヒット率: ${this.getHitRate().toFixed(1)}%`);
     }
   }
 
@@ -76,7 +79,7 @@ class PathfindingCache {
 
       const searchTime = Date.now() - startTime;
       if (searchTime > 10) {
-        console.log(`[PathfindingCache] キャッシュヒット (${searchTime}ms): ${this.formatPos(fromPos)} → ${this.formatPos(toPos)}`);
+        this.logger.log(`キャッシュヒット (${searchTime}ms): ${this.formatPos(fromPos)} → ${this.formatPos(toPos)}`);
       }
 
       return adaptedPath;
@@ -141,7 +144,7 @@ class PathfindingCache {
         originalCacheKey: this.generateKey(originalFrom, originalTo)
       };
     } catch (error) {
-      console.log(`[PathfindingCache] パス適応エラー: ${error.message}`);
+      this.logger.error(`パス適応エラー: ${error.message}`);
       return null;
     }
   }
@@ -182,7 +185,7 @@ class PathfindingCache {
     expiredKeys.forEach(key => this.cache.delete(key));
 
     if (expiredKeys.length > 0) {
-      console.log(`[PathfindingCache] クリーンアップ: ${expiredKeys.length}個の期限切れエントリを削除`);
+      this.logger.log(`クリーンアップ: ${expiredKeys.length}個の期限切れエントリを削除`);
     }
   }
 
@@ -290,7 +293,7 @@ class PathfindingCache {
     }
 
     keysToDelete.forEach(key => this.cache.delete(key));
-    console.log(`[PathfindingCache] ボット ${botId} のキャッシュ ${keysToDelete.length}個を削除`);
+    this.logger.log(`ボット ${botId} のキャッシュ ${keysToDelete.length}個を削除`);
   }
 
   /**
@@ -300,24 +303,24 @@ class PathfindingCache {
     const size = this.cache.size;
     this.cache.clear();
     this.stats = { hits: 0, misses: 0, evictions: 0, totalPaths: 0 };
-    console.log(`[PathfindingCache] キャッシュクリア: ${size}個のエントリを削除`);
+    this.logger.log(`キャッシュクリア: ${size}個のエントリを削除`);
   }
 
   /**
    * システム終了処理
    */
   shutdown() {
-    console.log('[PathfindingCache] システム終了中...');
+    this.logger.log('システム終了中...');
 
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
 
-    console.log(`[PathfindingCache] 終了時統計: ヒット率 ${this.getHitRate().toFixed(1)}%, ${this.cache.size}個のエントリ`);
+    this.logger.log(`終了時統計: ヒット率 ${this.getHitRate().toFixed(1)}%, ${this.cache.size}個のエントリ`);
     this.cache.clear();
 
-    console.log('[PathfindingCache] システム終了完了');
+    this.logger.log('システム終了完了');
   }
 }
 

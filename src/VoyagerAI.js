@@ -234,16 +234,17 @@ Always prioritize safety and efficiency in your implementations.`;
   }
 
   async learnFromExperience(task, result, context) {
-    // Enhanced guard against null/undefined task objects
-    if (!task || typeof task !== 'object') {
-      console.log('Error in learning analysis: Cannot read properties of null (reading \'type\')');
-      return; // Skip learning if task is null or not an object
-    }
+    try {
+      if (!task || typeof task !== 'object') {
+        throw new Error('Cannot read properties of null (reading \'type\')');
+      }
 
-    // Guard against missing task type
-    if (!task.type || typeof task.type !== 'string') {
-      console.log('Error in learning analysis: Cannot read properties of null (reading \'type\')');
-      return; // Skip learning if task type is invalid
+      if (!task.type || typeof task.type !== 'string') {
+        throw new Error('Cannot read properties of null (reading \'type\')');
+      }
+    } catch (error) {
+      console.log(`Error in learning analysis: ${error.message}`);
+      return;
     }
 
     // Enhanced result validation

@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const { Logger } = require('./utils/Logger');
 
 /**
  * 自然言語理解(NLU)プロセッサ
@@ -6,9 +7,10 @@ const OpenAI = require('openai');
  */
 class NLUProcessor {
   constructor() {
+    this.logger = Logger.createLogger('NLUProcessor');
     // OpenAI APIキーの設定確認
     if (!process.env.OPENAI_API_KEY) {
-      console.warn('[NLU] OpenAI API key not found. NLU features will be disabled.');
+      this.logger.warn('OpenAI API key not found. NLU features will be disabled.');
       this.client = null;
       return;
     }
@@ -29,7 +31,7 @@ class NLUProcessor {
    */
   async parse(text, context = {}) {
     if (!this.client) {
-      console.warn('[NLU] OpenAI client not initialized. Skipping NLU processing.');
+      this.logger.warn('OpenAI client not initialized. Skipping NLU processing.');
       return null;
     }
 
@@ -38,8 +40,8 @@ class NLUProcessor {
       const tools = this._getSkillDefinitions();
 
       if (this.debugMode) {
-        console.log('[NLU Debug] Input text:', text);
-        console.log('[NLU Debug] Context:', context);
+        this.logger.debug('Input text:', text);
+        this.logger.debug('Context:', context);
       }
 
       const response = await this.client.chat.completions.create({
@@ -56,7 +58,7 @@ class NLUProcessor {
 
       return this._processResponse(response);
     } catch (error) {
-      console.error('[NLU Error] Failed to parse natural language:', error.message);
+      this.logger.error('Failed to parse natural language:', error.message);
       return null;
     }
   }
@@ -255,7 +257,7 @@ ${contextInfo}
 
       if (!message?.tool_calls || message.tool_calls.length === 0) {
         if (this.debugMode) {
-          console.log('[NLU Debug] No tool calls found in response');
+          this.logger.debug('No tool calls found in response');
         }
         return null;
       }
@@ -267,18 +269,18 @@ ${contextInfo}
       try {
         entities = JSON.parse(toolCall.function.arguments);
       } catch (parseError) {
-        console.error('[NLU Error] Failed to parse function arguments:', parseError);
+        this.logger.error('Failed to parse function arguments:', parseError);
         return null;
       }
 
       if (this.debugMode) {
-        console.log('[NLU Debug] Parsed intent:', intent);
-        console.log('[NLU Debug] Parsed entities:', entities);
+        this.logger.debug('Parsed intent:', intent);
+        this.logger.debug('Parsed entities:', entities);
       }
 
       return { intent, entities };
     } catch (error) {
-      console.error('[NLU Error] Failed to process OpenAI response:', error);
+      this.logger.error('Failed to process OpenAI response:', error);
       return null;
     }
   }

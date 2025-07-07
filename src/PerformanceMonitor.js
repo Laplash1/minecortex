@@ -5,9 +5,12 @@
 
 const { performance, PerformanceObserver } = require('perf_hooks');
 
+const { Logger } = require('./utils/Logger');
+
 class PerformanceMonitor {
   constructor(options = {}) {
     this.enabled = options.enabled !== false;
+    this.logger = Logger.createLogger('PerformanceMonitor');
     this.logInterval = options.logInterval || 5000; // 5秒間隔
     this.eventLoopThreshold = options.eventLoopThreshold || 50; // 50ms以上で警告
 
@@ -37,7 +40,7 @@ class PerformanceMonitor {
   startMonitoring() {
     if (this.isMonitoring) return;
 
-    console.log('[PerformanceMonitor] 監視開始...');
+    this.logger.log('監視開始...');
     this.isMonitoring = true;
 
     // 定期的なメトリクス収集
@@ -58,7 +61,7 @@ class PerformanceMonitor {
   stopMonitoring() {
     if (!this.isMonitoring) return;
 
-    console.log('[PerformanceMonitor] 監視停止...');
+    this.logger.log('監視停止...');
     this.isMonitoring = false;
 
     if (this.intervalId) {
@@ -121,7 +124,7 @@ class PerformanceMonitor {
 
       // パフォーマンス警告
       if (eventLoopLag > this.eventLoopThreshold) {
-        console.warn(`[PerformanceMonitor] ⚠️  高いイベントループ遅延検出: ${eventLoopLag.toFixed(2)}ms`);
+        this.logger.warn(`⚠️  高いイベントループ遅延検出: ${eventLoopLag.toFixed(2)}ms`);
       }
 
       // 定期レポート
@@ -148,7 +151,7 @@ class PerformanceMonitor {
             });
 
             if (entry.duration > 100) { // 100ms以上のGC
-              console.warn(`[PerformanceMonitor] ⚠️  長時間GC検出: ${entry.duration.toFixed(2)}ms (kind: ${entry.kind})`);
+              this.logger.warn(`⚠️  長時間GC検出: ${entry.duration.toFixed(2)}ms (kind: ${entry.kind})`);
             }
           }
         });
@@ -211,13 +214,13 @@ class PerformanceMonitor {
     const memValues = recentMetrics.memoryUsage;
     const latestMem = memValues[memValues.length - 1];
 
-    console.log('[PerformanceMonitor] 📊 直近1分統計:');
+    this.logger.log('📊 直近1分統計:');
     console.log(`  イベントループ遅延: 平均 ${avgLag.toFixed(2)}ms, 最大 ${maxLag.toFixed(2)}ms`);
     console.log(`  メモリ使用量: RSS ${(latestMem.rss / 1024 / 1024).toFixed(1)}MB, Heap ${(latestMem.heapUsed / 1024 / 1024).toFixed(1)}MB`);
 
     // 警告表示
     if (avgLag > this.eventLoopThreshold) {
-      console.warn(`[PerformanceMonitor] 🚨 平均イベントループ遅延が閾値超過: ${avgLag.toFixed(2)}ms > ${this.eventLoopThreshold}ms`);
+      this.logger.warn(`🚨 平均イベントループ遅延が閾値超過: ${avgLag.toFixed(2)}ms > ${this.eventLoopThreshold}ms`);
     }
   }
 
@@ -306,7 +309,7 @@ class PerformanceMonitor {
     this.metrics.memoryUsage = [];
     this.metrics.gcEvents = [];
     this.metrics.performanceTiming.clear();
-    console.log('[PerformanceMonitor] メトリクスをクリアしました');
+    this.logger.log('メトリクスをクリアしました');
   }
 }
 

@@ -2,12 +2,10 @@ const { SkillLibrary } = require('./SkillLibrary');
 const { TaskPlanner } = require('./TaskPlanner');
 const { EnvironmentObserver } = require('./EnvironmentObserver');
 const { VoyagerAI } = require('./VoyagerAI');
-// MultiPlayerCoordinator is passed as parameter
 const { StateManager } = require('./StateManager');
 const InventoryUtils = require('./InventoryUtils');
 const { NLUProcessor } = require('./NLUProcessor');
 const PerformanceMonitor = require('./PerformanceMonitor');
-// const { SharedEnvironment } = require('./SharedEnvironment'); // unused import
 
 class MinecraftAI {
   constructor(bot, coordinator = null, sharedEnvironment = null, pathfindingCache = null) {
@@ -546,7 +544,7 @@ class MinecraftAI {
 
       this.log('定期メンテナンスクリーンアップ完了');
     } catch (error) {
-      this.log(`メンテナンスクリーンアップエラー: ${error.message}`);
+      this.log(`メンテナンスクリーンアップエラー: ${error.message}`, 'error');
     }
   }
 
@@ -572,7 +570,7 @@ class MinecraftAI {
 
       this.log('緊急リセット完了');
     } catch (error) {
-      this.log(`緊急リセットエラー: ${error.message}`);
+      this.log(`緊急リセットエラー: ${error.message}`, 'error');
     }
   }
 
@@ -1307,14 +1305,20 @@ class MinecraftAI {
     const timestamp = new Date().toISOString();
     const formattedMessage = `[${timestamp}] [AI-${this.playerId}] [${level.toUpperCase()}] ${message}`;
 
-    // Always log errors and warnings
-    if (level === 'error' || level === 'warn') {
-      console.log(formattedMessage);
-    } else if (this.debugMode) {
-      console.log(formattedMessage);
+    switch (level.toLowerCase()) {
+    case 'error':
+      this.logger.error(formattedMessage);
+      break;
+    case 'warn':
+      this.logger.warn(formattedMessage);
+      break;
+    case 'debug':
+      this.logger.debug(formattedMessage);
+      break;
+    default:
+      this.logger.log(formattedMessage);
     }
 
-    // Store important logs in state manager for debugging
     if (this.stateManager && (level === 'error' || level === 'warn' || level === 'important')) {
       const state = this.stateManager.getState();
       if (!state.logHistory) {
@@ -1335,7 +1339,6 @@ class MinecraftAI {
 
       const newHistory = [...(state.logHistory || []), logEntry];
 
-      // Keep only last 100 important logs
       if (newHistory.length > 100) {
         newHistory.shift();
       }

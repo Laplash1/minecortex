@@ -1,6 +1,7 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { Vec3 } = require('vec3');
 const InventoryUtils = require('./InventoryUtils');
+const { Logger } = require('./utils/Logger');
 
 class SkillLibrary {
   constructor(pathfindingCache = null) {
@@ -8,6 +9,7 @@ class SkillLibrary {
     this.recipeCache = new Map();
     this.aliasConfig = null;
     this.pathfindingCache = pathfindingCache;
+    this.logger = Logger.createLogger('SkillLibrary');
   }
 
   /**

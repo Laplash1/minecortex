@@ -1,6 +1,9 @@
+const { Logger } = require('./utils/Logger');
+
 class MultiPlayerCoordinator {
   constructor() {
-    this.players = new Map(); // playerId -> player info
+    this.players = new Map();
+    this.logger = Logger.createLogger('MultiPlayerCoordinator');
     this.resourceClaims = new Map(); // resource -> claimant info
     this.sharedGoals = [];
     this.conflictResolutionQueue = [];
@@ -19,7 +22,7 @@ class MultiPlayerCoordinator {
   // Register a player in the coordination system
   registerPlayer(playerId, bot, ai) {
     if (!bot) {
-      console.error(`[Coordinator] Cannot register player ${playerId}: bot is null`);
+      this.logger.error(`Cannot register player ${playerId}: bot is null`);
       return;
     }
 
@@ -37,7 +40,7 @@ class MultiPlayerCoordinator {
       cooperationScore: 100 // Initial cooperation score
     });
 
-    console.log(`[Coordinator] Player ${playerId} registered with personality: ${this.detectPersonality(playerId)}`);
+    this.logger.log(`Player ${playerId} registered with personality: ${this.detectPersonality(playerId)}`);
   }
 
   // Remove a player from coordination
@@ -49,7 +52,7 @@ class MultiPlayerCoordinator {
         this.releaseResourceClaim(resource, playerId);
       }
       this.players.delete(playerId);
-      console.log(`[Coordinator] Player ${playerId} unregistered`);
+      this.logger.log(`Player ${playerId} unregistered`);
     }
   }
 
@@ -113,7 +116,7 @@ class MultiPlayerCoordinator {
     }
 
     const locationStr = JSON.stringify(resourceLocation);
-    console.log(`[Coordinator] Resource access granted to ${playerId} for ${resourceType} at ${locationStr}`);
+    this.logger.log(`Resource access granted to ${playerId} for ${resourceType} at ${locationStr}`);
     return { granted: true, waitTime: 0 };
   }
 

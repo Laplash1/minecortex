@@ -1,5 +1,7 @@
 const InventoryUtils = require('./InventoryUtils');
 const { PathfindingCache } = require('./PathfindingCache');
+const { ValidationUtils } = require('./utils/ValidationUtils');
+const { Logger } = require('./utils/Logger');
 
 class TaskPlanner {
   constructor(bot, pathfindingCache = null) {
@@ -7,21 +9,18 @@ class TaskPlanner {
     this.pathfindingCache = pathfindingCache || new PathfindingCache();
     this.activeTasks = new Map();
     this.taskHistory = [];
+    this.logger = Logger.createLogger('TaskPlanner');
 
     if (!pathfindingCache) {
-      console.log('[TaskPlanner] 独自PathfindingCacheを初期化');
+      this.logger.log('独自PathfindingCacheを初期化');
     }
   }
 
   async planTask(goal) {
-    // Enhanced goal validation to prevent "No valid type given" errors
-    if (!goal || typeof goal !== 'object') {
-      console.log('タスクプランナー: 無効な目標オブジェクト');
-      return null;
-    }
-
-    if (!goal.type || typeof goal.type !== 'string') {
-      console.log(`タスクプランナー: 無効な目標タイプ: ${goal.type}`);
+    try {
+      ValidationUtils.validateGoal(goal, 'TaskPlanner');
+    } catch (error) {
+      this.logger.error(error.message);
       return null;
     }
 
@@ -76,12 +75,11 @@ class TaskPlanner {
       return this.planGenericTask(goal);
 
     default:
-      // Enhanced handling for unknown goal types
       if (goal.type && typeof goal.type === 'string') {
-        console.log(`不明な目標タイプ: ${goal.type}, 汎用タスクを作成`);
+        this.logger.log(`不明な目標タイプ: ${goal.type}, 汎用タスクを作成`);
         return this.planGenericTask(goal);
       } else {
-        console.log('タスクプランナー: 無効な目標タイプで汎用タスクを作成できません');
+        this.logger.error('無効な目標タイプで汎用タスクを作成できません');
         return null;
       }
     }
@@ -131,11 +129,10 @@ class TaskPlanner {
 
   planToolCrafting(goal) {
     const { tools = ['wooden_pickaxe', 'wooden_axe', 'wooden_sword'] } = goal;
-    console.log(`[タスクプランナー] ツールクラフトタスクを計画中: ${tools.join(', ')}`);
+    this.logger.log(`ツールクラフトタスクを計画中: ${tools.join(', ')}`);
 
-    // Check materials needed
     const needsWood = this.checkWoodRequirements(tools);
-    console.log(`[タスクプランナー] ツールクラフトの前提条件: 木材必要量=${needsWood}`);
+    this.logger.log(`ツールクラフトの前提条件: 木材必要量=${needsWood}`);
 
     const task = {
       type: 'craft_tools',
@@ -272,10 +269,8 @@ class TaskPlanner {
     // Prioritize resource collection over aimless exploration
     const timeout = this.calculateTaskTimeout(goal);
 
-    // Check current inventory to determine best fallback
     if (!this.bot || !this.bot.inventory) {
-      console.warn('[タスクプランナー] planGenericTask: botまたはinventoryが未定義です。探索タスクにフォールバックします。');
-      // Fall back to exploration with minimal radius
+      this.logger.warn('planGenericTask: botまたはinventoryが未定義です。探索タスクにフォールバックします。');
       const radius = this.calculateExplorationRadius(goal) * 0.5;
       return {
         type: 'explore',
@@ -470,25 +465,31 @@ class TaskPlanner {
   }
 
   hasPickaxe() {
-    if (!this.bot || !this.bot.inventory) {
-      console.warn('[タスクプランナー] hasPickaxe: botまたはinventoryが未定義です');
+    try {
+      ValidationUtils.validateBotInventory(this.bot, 'TaskPlanner.hasPickaxe');
+      return InventoryUtils.hasTool(this.bot, 'pickaxe');
+    } catch (error) {
+      this.logger.warn(error.message);
       return false;
     }
-    return InventoryUtils.hasTool(this.bot, 'pickaxe');
   }
 
   hasWeapon() {
-    if (!this.bot || !this.bot.inventory) {
-      console.warn('[タスクプランナー] hasWeapon: botまたはinventoryが未定義です');
+    try {
+      ValidationUtils.validateBotInventory(this.bot, 'TaskPlanner.hasWeapon');
+      return InventoryUtils.hasTool(this.bot, 'sword');
+    } catch (error) {
+      this.logger.warn(error.message);
       return false;
     }
-    return InventoryUtils.hasTool(this.bot, 'sword');
   }
 
   checkWoodRequirements(tools) {
-    if (!this.bot || !this.bot.inventory) {
-      console.warn('[タスクプランナー] checkWoodRequirements: botまたはinventoryが未定義です');
-      return 10; // Default requirement when bot is not available
+    try {
+      ValidationUtils.validateBotInventory(this.bot, 'TaskPlanner.checkWoodRequirements');
+    } catch (error) {
+      this.logger.warn(error.message);
+      return 10;
     }
 
     const woodNeeded = InventoryUtils.calculateWoodRequirements(tools);
@@ -500,9 +501,8 @@ class TaskPlanner {
   isTaskComplete(task) {
     if (!task) return true;
 
-    // Check timeout
     if (task.timeout && Date.now() > task.timeout) {
-      console.log(`タスク ${task.type} がタイムアウトしました`);
+      this.logger.log(`タスク ${task.type} がタイムアウトしました`);
       return true;
     }
 
@@ -527,9 +527,11 @@ class TaskPlanner {
   }
 
   checkWoodGatheringComplete(task) {
-    if (!this.bot || !this.bot.inventory) {
-      console.warn('[タスクプランナー] checkWoodGatheringComplete: botまたはinventoryが未定義です');
-      return false; // Can't determine completion status
+    try {
+      ValidationUtils.validateBotInventory(this.bot, 'TaskPlanner.checkWoodGatheringComplete');
+    } catch (error) {
+      this.logger.warn(error.message);
+      return false;
     }
 
     const { amount } = task.params;
@@ -540,9 +542,11 @@ class TaskPlanner {
   }
 
   checkToolCraftingComplete(task) {
-    if (!this.bot || !this.bot.inventory) {
-      console.warn('[タスクプランナー] checkToolCraftingComplete: botまたはinventoryが未定義です');
-      return false; // Can't determine completion status
+    try {
+      ValidationUtils.validateBotInventory(this.bot, 'TaskPlanner.checkToolCraftingComplete');
+    } catch (error) {
+      this.logger.warn(error.message);
+      return false;
     }
 
     const { tools } = task.params;
@@ -553,9 +557,11 @@ class TaskPlanner {
   }
 
   checkFoodGatheringComplete(task) {
-    if (!this.bot) {
-      console.warn('[タスクプランナー] checkFoodGatheringComplete: botが未定義です');
-      return false; // Can't determine completion status
+    try {
+      ValidationUtils.validateBot(this.bot, 'TaskPlanner.checkFoodGatheringComplete');
+    } catch (error) {
+      this.logger.warn(error.message);
+      return false;
     }
 
     const { minHunger } = task.params;

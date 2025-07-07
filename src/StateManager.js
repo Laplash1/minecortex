@@ -1,6 +1,9 @@
+const { Logger } = require('./utils/Logger');
+
 class StateManager {
   constructor(bot) {
     this.bot = bot;
+    this.logger = Logger.createLogger('StateManager');
     this.state = {
       // Core bot state
       position: { x: 0, y: 0, z: 0 },
@@ -66,7 +69,7 @@ class StateManager {
     // Listen for inventory updates to ensure real-time synchronization
     this.bot.on('inventoryUpdate', (slot, oldItem, newItem) => {
       try {
-        console.log(`[StateManager] インベントリ更新検出: slot=${slot}, old=${oldItem?.name}, new=${newItem?.name}`);
+        this.logger.log(`インベントリ更新検出: slot=${slot}, old=${oldItem?.name}, new=${newItem?.name}`);
 
         // Force immediate inventory sync to avoid cache issues
         const inventoryUpdates = this.syncInventory();
@@ -74,26 +77,26 @@ class StateManager {
           this.updateState(inventoryUpdates, 'inventory-event');
         }
       } catch (error) {
-        console.error(`[StateManager] inventoryUpdate event error: ${error.message}`);
+        this.logger.error(`inventoryUpdate event error: ${error.message}`);
       }
     });
 
     // Listen for held item changes
     this.bot.on('heldItemChanged', (heldItem) => {
       try {
-        console.log(`[StateManager] 手持ちアイテム変更: ${heldItem?.name || 'null'}`);
+        this.logger.log(`手持ちアイテム変更: ${heldItem?.name || 'null'}`);
         this.updateState({
           equippedItems: { ...this.state.equippedItems, hand: heldItem }
         }, 'held-item-event');
       } catch (error) {
-        console.error(`[StateManager] heldItemChanged event error: ${error.message}`);
+        this.logger.error(`heldItemChanged event error: ${error.message}`);
       }
     });
 
     // Listen for window open/close (crafting table access)
     this.bot.on('windowOpen', (window) => {
       try {
-        console.log(`[StateManager] ウィンドウ開始: ${window.type}`);
+        this.logger.log(`ウィンドウ開始: ${window.type}`);
         // Force inventory sync when opening crafting interfaces
         if (window.type === 'minecraft:crafting' || window.type === 'generic_3x3') {
           setTimeout(() => {
@@ -104,11 +107,11 @@ class StateManager {
           }, 100); // Small delay to ensure window is fully loaded
         }
       } catch (error) {
-        console.error(`[StateManager] windowOpen event error: ${error.message}`);
+        this.logger.error(`windowOpen event error: ${error.message}`);
       }
     });
 
-    console.log('[StateManager] リアルタイムインベントリ監視を開始しました');
+    this.logger.log('リアルタイムインベントリ監視を開始しました');
   }
 
   // Subscribe to state changes

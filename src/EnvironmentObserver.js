@@ -1,8 +1,11 @@
+const { Logger } = require('./utils/Logger');
+
 class EnvironmentObserver {
   constructor(bot, sharedEnvironment = null) {
     this.bot = bot;
     this.sharedEnvironment = sharedEnvironment;
     this.botId = bot.username || 'unknown';
+    this.logger = Logger.createLogger('EnvironmentObserver');
 
     this.lastPosition = null;
     this.nearbyEntities = new Map();
@@ -18,10 +21,9 @@ class EnvironmentObserver {
     this.observationHistory = [];
     this.maxHistorySize = 1000;
 
-    // SharedEnvironment連携の設定
     if (this.sharedEnvironment) {
       this.sharedEnvironment.registerObserver(this.botId, this);
-      console.log(`[EnvironmentObserver] ボット ${this.botId} を SharedEnvironment に登録`);
+      this.logger.log(`ボット ${this.botId} を SharedEnvironment に登録`);
     }
   }
 

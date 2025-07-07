@@ -3,9 +3,12 @@
  * 5体ボット環境でのCPU負荷削減を目的とした統合環境観測システム
  */
 
+const { Logger } = require('./utils/Logger');
+
 class SharedEnvironment {
   constructor() {
     this.observers = new Map(); // botId -> observer instance
+    this.logger = Logger.createLogger('SharedEnvironment');
     this.sharedData = {
       worldBlocks: new Map(), // 共有ブロック情報
       worldEntities: new Map(), // 共有エンティティ情報

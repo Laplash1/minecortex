@@ -2,6 +2,7 @@ const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { GoalBlock, GoalLookAtBlock } = goals;
 const { Vec3 } = require('vec3');
 const InventoryUtils = require('./InventoryUtils');
+const { Logger } = require('./utils/Logger');
 
 class ControlPrimitives {
   constructor(bot) {
@@ -10,9 +11,9 @@ class ControlPrimitives {
     this.mineBlockFailCount = 0;
     this.craftItemFailCount = 0;
     this.maxFailCount = 10;
-    this.environmentObserver = null; // Will be set from MinecraftAI
+    this.environmentObserver = null;
+    this.logger = Logger.createLogger('ControlPrimitives');
 
-    // Initialize pathfinder
     this.initializePathfinder();
   }
 
@@ -64,10 +65,10 @@ class ControlPrimitives {
         movements.breakCost = 1; // Cost for breaking blocks
 
         this.bot.pathfinder.setMovements(movements);
-        console.log('[ControlPrimitives] Enhanced pathfinder initialized with parkour and jumping');
+        this.logger.log('Enhanced pathfinder initialized with parkour and jumping');
       }
     } catch (error) {
-      console.log('[ControlPrimitives] Pathfinder initialization skipped (mock bot or already loaded)');
+      this.logger.log('Pathfinder initialization skipped (mock bot or already loaded)');
     }
   }
 
@@ -84,7 +85,7 @@ class ControlPrimitives {
       throw new Error(`No block named ${name}`);
     }
 
-    console.log(`[ControlPrimitives] Looking for ${count} ${name} blocks...`);
+    this.logger.log(`Looking for ${count} ${name} blocks...`);
 
     // Find blocks
     const blocks = this.bot.findBlocks({
@@ -108,9 +109,9 @@ class ControlPrimitives {
     const tool = this.getOptimalTool(blockByName);
     if (tool) {
       await this.bot.equip(tool, 'hand');
-      console.log(`[ControlPrimitives] Equipped ${tool.name} for mining ${name}`);
+      this.logger.log(`Equipped ${tool.name} for mining ${name}`);
     } else {
-      console.log(`[ControlPrimitives] Warning: Mining ${name} without proper tool`);
+      this.logger.warn(`Mining ${name} without proper tool`);
     }
 
     let mined = 0;
@@ -124,7 +125,7 @@ class ControlPrimitives {
             await this.bot.pathfinder.goto(new GoalBlock(block.position.x, block.position.y, block.position.z));
           }
 
-          console.log(`[ControlPrimitives] Mining ${name} ${mined + 1}/${count} at ${block.position}`);
+          this.logger.log(`Mining ${name} ${mined + 1}/${count} at ${block.position}`);
           await this.bot.dig(block);
           mined++;
 
@@ -132,12 +133,12 @@ class ControlPrimitives {
           await this.sleep(100);
         }
       } catch (error) {
-        console.log(`[ControlPrimitives] Failed to mine block: ${error.message}`);
+        this.logger.error(`Failed to mine block: ${error.message}`);
         continue;
       }
     }
 
-    console.log(`[ControlPrimitives] Successfully mined ${mined}/${count} ${name} blocks`);
+    this.logger.log(`Successfully mined ${mined}/${count} ${name} blocks`);
     this.mineBlockFailCount = 0; // Reset fail count on success
     return mined > 0;
   }
@@ -187,7 +188,7 @@ class ControlPrimitives {
       throw new Error(`No item named ${name}`);
     }
 
-    console.log(`[ControlPrimitives] Attempting to craft ${count} ${name}`);
+    this.logger.log(`Attempting to craft ${count} ${name}`);
 
     // Find crafting table
     const craftingTable = this.bot.findBlock({
@@ -196,13 +197,12 @@ class ControlPrimitives {
     });
 
     if (!craftingTable) {
-      console.log('[ControlPrimitives] No crafting table found, crafting in inventory');
+      this.logger.log('No crafting table found, crafting in inventory');
     } else {
-      // Move to crafting table
       await this.bot.pathfinder.goto(
         new GoalLookAtBlock(craftingTable.position, this.bot.world)
       );
-      console.log(`[ControlPrimitives] Moved to crafting table at ${craftingTable.position}`);
+      this.logger.log(`Moved to crafting table at ${craftingTable.position}`);
     }
 
     // Get recipe
@@ -220,14 +220,14 @@ class ControlPrimitives {
     }
 
     try {
-      console.log(`[ControlPrimitives] Crafting ${name} x${count}`);
+      this.logger.log(`Crafting ${name} x${count}`);
       await this.bot.craft(recipe, count, craftingTable);
       this.bot.chat(`Successfully crafted ${name} x${count}`);
       this.craftItemFailCount = 0; // Reset fail count on success
       return true;
     } catch (error) {
       this.bot.chat(`Failed to craft ${name}: ${error.message}`);
-      console.log(`[ControlPrimitives] Craft error: ${error.message}`);
+      this.logger.error(`Craft error: ${error.message}`);
       return false;
     }
   }
@@ -246,7 +246,7 @@ class ControlPrimitives {
       const needed = ingredient.count;
       // Ensure ingredient.id is valid for count() method
       if (typeof ingredient.id !== 'number' && typeof ingredient.id !== 'string') {
-        console.log(`[ControlPrimitives] Invalid ingredient ID type: ${typeof ingredient.id}, value: ${ingredient.id}`);
+        this.logger.warn(`Invalid ingredient ID type: ${typeof ingredient.id}, value: ${ingredient.id}`);
         continue;
       }
 
@@ -258,7 +258,7 @@ class ControlPrimitives {
           missing.push(`${itemName} (need ${needed}, have ${available})`);
         }
       } catch (error) {
-        console.log(`[ControlPrimitives] Error counting ingredient ${ingredient.id}: ${error.message}`);
+        this.logger.error(`Error counting ingredient ${ingredient.id}: ${error.message}`);
         const itemName = this.mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
         missing.push(`${itemName} (count error: ${error.message})`);
       }
@@ -273,7 +273,7 @@ class ControlPrimitives {
       throw new Error(`No ${name} in inventory`);
     }
 
-    console.log(`[ControlPrimitives] Placing ${name} at ${position}`);
+    this.logger.log(`Placing ${name} at ${position}`);
 
     try {
       await this.bot.equip(item, 'hand');
@@ -285,16 +285,16 @@ class ControlPrimitives {
       }
 
       await this.bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-      console.log(`[ControlPrimitives] Successfully placed ${name}`);
+      this.logger.log(`Successfully placed ${name}`);
       return true;
     } catch (error) {
-      console.log(`[ControlPrimitives] Failed to place ${name}: ${error.message}`);
+      this.logger.error(`Failed to place ${name}: ${error.message}`);
       return false;
     }
   }
 
   async exploreUntil(direction, maxTime, condition) {
-    console.log('[ControlPrimitives] Starting exploration...');
+    this.logger.log('Starting exploration...');
 
     const startTime = Date.now();
     const maxTimeMs = maxTime * 1000;
@@ -330,12 +330,12 @@ class ControlPrimitives {
         try {
           await this.bot.pathfinder.goto(new GoalBlock(randomTarget.x, randomTarget.y, randomTarget.z));
         } catch (e) {
-          console.log('[ControlPrimitives] Movement failed, continuing exploration...');
+          this.logger.warn('Movement failed, continuing exploration...');
         }
       }
     }
 
-    console.log(`[ControlPrimitives] Exploration timed out after ${maxTime} seconds`);
+    this.logger.log(`Exploration timed out after ${maxTime} seconds`);
     return null;
   }
 
