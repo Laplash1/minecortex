@@ -2809,7 +2809,6 @@ class CraftToolsSkill extends Skill {
 
     // Use recipe.delta instead of recipe.ingredients for better compatibility
     const ingredients = recipe.delta || recipe.ingredients || [];
-    
     for (const ingredient of ingredients) {
       if (ingredient.count < 0) {
         // Negative count means required material
