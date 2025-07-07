@@ -4,7 +4,8 @@ class EnvironmentObserver {
   constructor(bot, sharedEnvironment = null) {
     this.bot = bot;
     this.sharedEnvironment = sharedEnvironment;
-    this.botId = bot.username || 'unknown';
+    // botIdはlogin後に設定される。初期値としては予想値を使用
+    this.botId = bot.username || `pending_${Date.now()}`;
     this.logger = Logger.createLogger('EnvironmentObserver');
 
     this.lastPosition = null;
@@ -21,9 +22,27 @@ class EnvironmentObserver {
     this.observationHistory = [];
     this.maxHistorySize = 1000;
 
+    // SharedEnvironment登録は後で行う（login後にbotIdが確定してから）
+  }
+
+  /**
+   * ボットのログイン完了後にbotIdを更新し、SharedEnvironmentに登録
+   */
+  initializeAfterLogin() {
+    const newBotId = this.bot.username || `unknown_${Date.now()}`;
+
+    // 古いIDで既に登録されている場合は削除
+    if (this.sharedEnvironment && this.botId !== newBotId) {
+      this.sharedEnvironment.unregisterObserver(this.botId);
+    }
+
+    // botIdを更新
+    this.botId = newBotId;
+
+    // SharedEnvironmentに新しいIDで登録
     if (this.sharedEnvironment) {
       this.sharedEnvironment.registerObserver(this.botId, this);
-      this.logger.log(`ボット ${this.botId} を SharedEnvironment に登録`);
+      this.logger.log(`ボット ${this.botId} を SharedEnvironment に登録 (login後)`);
     }
   }
 

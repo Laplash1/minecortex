@@ -83,12 +83,16 @@ class MinecraftAI {
     this.playerId = bot.username || 'unknown';
 
     // Delay coordinator registration until login so username is defined
-    if (this.coordinator) {
-      bot.once('login', () => {
-        this.playerId = bot.username;
+    bot.once('login', () => {
+      this.playerId = bot.username;
+
+      // EnvironmentObserverのbotIdを更新してSharedEnvironmentに登録
+      this.observer.initializeAfterLogin();
+
+      if (this.coordinator) {
         this.coordinator.registerPlayer(this.playerId, bot, this);
-      });
-    }
+      }
+    });
 
     // Set up state synchronization
     this.setupStateSync();
