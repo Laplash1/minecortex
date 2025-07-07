@@ -3057,7 +3057,69 @@ class CraftToolsSkill extends Skill {
           console.log('[ツールスキル] 修正されたdelta:', recipe.delta);
         }
 
-        await bot.craft(recipe, 1, craftingTable);
+        // 詳細なデバッグ情報を追加
+        console.log(`[ツールスキル] ${toolName}のクラフト直前デバッグ:`);
+        console.log(`  - craftingTable: ${craftingTable ? 'OK' : 'NULL'}`);
+        console.log(`  - recipe: ${recipe ? 'OK' : 'NULL'}`);
+        console.log(`  - recipe.id: ${recipe?.id}`);
+        console.log(`  - recipe.result: ${recipe?.result ? JSON.stringify(recipe.result) : 'NULL'}`);
+        console.log(`  - recipe.delta: ${recipe?.delta ? JSON.stringify(recipe.delta) : 'NULL'}`);
+        console.log(`  - recipe.inShape: ${recipe?.inShape ? JSON.stringify(recipe.inShape) : 'NULL'}`);
+        console.log(`  - recipe.ingredients: ${recipe?.ingredients ? JSON.stringify(recipe.ingredients) : 'NULL'}`);
+
+        // minecraft-data の状態確認
+        const mcData = require('minecraft-data')(bot.version);
+        console.log(`  - mcData: ${mcData ? 'OK' : 'NULL'}`);
+        console.log(`  - mcData.version: ${mcData?.version?.minecraftVersion || 'unknown'}`);
+        console.log(`  - bot.version: ${bot.version}`);
+
+        // botの状態確認
+        console.log(`  - bot.entity: ${bot.entity ? 'OK' : 'NULL'}`);
+        console.log(`  - bot.inventory: ${bot.inventory ? 'OK' : 'NULL'}`);
+        console.log(`  - bot.currentWindow: ${bot.currentWindow ? bot.currentWindow.type : 'NULL'}`);
+
+        // レシピ検証を追加
+        if (recipe && recipe.delta) {
+          for (const item of recipe.delta) {
+            if (item && item.id !== null && item.id !== undefined) {
+              const mcItem = mcData.items[item.id];
+              console.log(`  - delta item ${item.id}: ${mcItem ? mcItem.name : 'UNKNOWN'}`);
+            } else {
+              console.log('  - delta item: NULL or invalid');
+            }
+          }
+        }
+
+        // より安全な bot.craft() 呼び出しを実装
+        try {
+          // 最終的なレシピ安全性チェック
+          if (!recipe || !recipe.result || !recipe.result.id) {
+            throw new Error('Recipe result is invalid');
+          }
+
+          if (!mcData || !mcData.items || !mcData.items[recipe.result.id]) {
+            throw new Error('Recipe result item not found in minecraft-data');
+          }
+
+          // 作業台の状態確認
+          if (craftingTable && !bot.blockAt(craftingTable.position)) {
+            throw new Error('Crafting table is no longer available');
+          }
+
+          // bot.craft() 呼び出しをPromiseでラップして適切なエラー処理
+          const craftPromise = bot.craft(recipe, 1, craftingTable);
+          const result = await Promise.race([
+            craftPromise,
+            new Promise((resolve, reject) =>
+              setTimeout(() => reject(new Error('Craft timeout after 15 seconds')), 15000)
+            )
+          ]);
+
+          console.log(`[ツールスキル] ${toolName}のクラフト結果:`, result);
+        } catch (craftError) {
+          console.log(`[ツールスキル] bot.craft()内部エラー: ${craftError.message}`);
+          throw craftError;
+        }
         console.log(`[ツールスキル] ${toolName}をクラフトしました！`);
         bot.chat(`${toolName}をクラフトしました！ 🔨`);
         craftedTools.push(toolName);

@@ -1,0 +1,417 @@
+[InventoryUtils] - oak_log: 4個
+[InventoryUtils] - birch_log: 3個
+[InventoryUtils] - jungle_log: 5個
+[InventoryUtils] 木材検出: 総数=12
+[InventoryUtils] - oak_log: 4個
+[InventoryUtils] - birch_log: 3個
+[InventoryUtils] - jungle_log: 5個
+[MinecraftAI] [2025-07-07T13:24:19.065Z] [AI-AIPlayer1] [INFO] 道具クラフトの機会を検出
+[TaskPlanner] ツールクラフトタスクを計画中: wooden_pickaxe, wooden_axe, wooden_sword
+[InventoryUtils] 木材検出: 総数=12
+[InventoryUtils] - oak_log: 4個
+[InventoryUtils] - birch_log: 3個
+[InventoryUtils] - jungle_log: 5個
+[TaskPlanner] ツールクラフトの前提条件: 木材必要量=0
+[MinecraftAI] [2025-07-07T13:24:19.066Z] [AI-AIPlayer1] [INFO] 新しいタスクを開始: craft_tools
+[MinecraftAI] [2025-07-07T13:24:19.066Z] [AI-AIPlayer1] [INFO] タスク実行中: craft_tools
+[ツールスキル] wooden_pickaxe, wooden_axe, wooden_swordの作成を開始します...
+[ツールスキル] 作業台の確保を開始...
+[ツールスキル] 近くに作業台を発見: (-21, 133, 48)
+[ツールスキル] wooden_pickaxeの作成を試みます
+[木材レシピ最適化] 使用する木材: oak_planks (20個) for wooden_pickaxe
+[木材レシピ最適化] 木材アイテム発見: oak_planks -> oak_planks (id: 36)
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 3個の材料をoak_planksに置換しました
+[材料チェック] 木材最適化レシピを使用: wooden_pickaxe
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:20
+[材料チェック] 利用可能木材: {"oak_planks":20}
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:20
+[材料チェック] 利用可能木材: {"oak_planks":20}
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:20
+[材料チェック] 利用可能木材: {"oak_planks":20}
+[材料チェック] 材料十分: stick (必要:1) -> 利用可能:1
+[材料チェック] 材料十分: stick (必要:1) -> 利用可能:1
+[ツールスキル] wooden_pickaxeクラフト前のレシピ状態: {
+  hasRecipe: true,
+  recipeId: 820,
+  recipeResult: { id: 820, count: 1 },
+  recipeDelta: 2
+}
+[ツールスキル] wooden_pickaxeをクラフト中...
+[ツールスキル] wooden_pickaxeのdelta/inShape不整合をチェックします
+[レシピ修正] inShape分析: ID:41×3, ID:848×2
+[ツールスキル] 修正されたdelta: [ { id: 41, count: -3 }, { id: 848, count: -2 } ]
+[StateManager] 手持ちアイテム変更: null
+[StateManager] ウィンドウ開始: minecraft:crafting
+[ツールスキル] wooden_pickaxeのクラフトに失敗: TypeError: Cannot read properties of null (reading 'id')
+[ツールスキル] レシピ詳細: {
+  "id": 820,
+  "result": {
+    "id": 820,
+    "count": 1
+  },
+  "delta": [
+    {
+      "id": 41,
+      "count": -3
+    },
+    {
+      "id": 848,
+      "count": -2
+    }
+  ],
+  "inShape": [
+    [
+      41,
+      41,
+      41
+    ],
+    [
+      null,
+      848,
+      null
+    ],
+    [
+      null,
+      848,
+      null
+    ]
+  ],
+  "ingredients": [
+    {
+      "id": 41,
+      "count": 1
+    },
+    {
+      "id": 848,
+      "count": 1
+    }
+  ]
+}
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.03ms, 最大 0.05ms
+  メモリ使用量: RSS 425.6MB, Heap 115.3MB
+[StateManager] 手持ちアイテム変更: cobblestone
+[StateManager] 手持ちアイテム変更: jungle_log
+[StateManager] 手持ちアイテム変更: dirt
+[StateManager] 手持ちアイテム変更: dirt
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.14ms, 最大 0.39ms
+  メモリ使用量: RSS 426.7MB, Heap 110.3MB
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.21ms, 最大 0.22ms
+  メモリ使用量: RSS 426.7MB, Heap 110.3MB
+[StateManager] 手持ちアイテム変更: dirt
+[StateManager] 手持ちアイテム変更: wooden_axe
+[StateManager] 手持ちアイテム変更: wooden_axe
+[StateManager] 手持ちアイテム変更: dirt
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.07ms, 最大 0.12ms
+  メモリ使用量: RSS 426.7MB, Heap 112.1MB
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.15ms, 最大 0.33ms
+  メモリ使用量: RSS 426.7MB, Heap 112.1MB
+[StateManager] 手持ちアイテム変更: dirt
+[ツールスキル] wooden_pickaxeのクラフトに失敗: Error: Event windowOpen did not fire within timeout of 20000ms
+[ツールスキル] レシピ詳細: {
+  "id": 820,
+  "result": {
+    "id": 820,
+    "count": 1
+  },
+  "delta": [
+    {
+      "id": 41,
+      "count": -3
+    },
+    {
+      "id": 848,
+      "count": -2
+    }
+  ],
+  "inShape": [
+    [
+      41,
+      41,
+      41
+    ],
+    [
+      null,
+      848,
+      null
+    ],
+    [
+      null,
+      848,
+      null
+    ]
+  ],
+  "ingredients": [
+    {
+      "id": 41,
+      "count": 1
+    },
+    {
+      "id": 848,
+      "count": 1
+    }
+  ]
+}
+[StateManager] 手持ちアイテム変更: jungle_log
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.03ms, 最大 0.05ms
+  メモリ使用量: RSS 426.9MB, Heap 114.7MB
+AI Learning Suggestions: The repeated error "TypeError: Cannot read properties of null (reading 'id')" during the crafting of a wooden pickaxe indicates that the bot is attempting to access an item or resource that is not available in its inventory. Given the context provided, here are specific suggestions for improving task execution and avoiding these errors:
+
+### 1. **Check Inventory Before Crafting**
+   - **Implementation**: Before attempting to craft any item, the bot should first check if it has the necessary materials in its inventory. For a wooden pickaxe, it requires 3 wooden planks and 2 sticks.
+   - **Code Example**:
+     ```javascript
+     if (inventoryItems['wooden_plank'] < 3 || inventoryItems['stick'] < 2) {
+         console.log("Not enough materials to craft wooden pickaxe.");
+         return;
+     }
+     ```
+
+### 2. **Handle Null Values Gracefully**
+   - **Implementation**: Implement error handling to check if the object or property being accessed is null or undefined before attempting to read its properties.
+   - **Code Example**:
+     ```javascript
+     if (item == null) {
+         console.error("Item is null, cannot read properties.");
+         return;
+     }
+     ```
+
+### 3. **Inventory Management**
+   - **Implementation**: Ensure that the bot has a mechanism to collect and manage resources effectively. This could involve prioritizing resource gathering before attempting to craft tools.
+   - **Strategy**: Implement a resource gathering routine that checks for available wood and collects it before attempting to craft.
+
+### 4. **Feedback Mechanism**
+   - **Implementation**: Provide feedback to the user or log messages when the bot fails to craft due to insufficient materials. This will help in debugging and understanding the bot's decision-making process.
+   - **Code Example**:
+     ```javascript
+     console.log("Crafting failed: Insufficient materials for wooden pickaxe.");
+     ```
+
+### 5. **Debugging and Logging**
+   - **Implementation**: Enhance logging to capture the state of the inventory and the crafting process. This will help identify patterns leading to the error.
+   - **Code Example**:
+     ```javascript
+     console.log("Current Inventory: ", inventoryItems);
+     ```
+
+### 6. **Pre-Crafting Checks**
+   - **Implementation**: Before executing the crafting command, perform a series of checks to ensure that all conditions for crafting are met (e.g., enough materials, correct crafting table presence).
+   - **Code Example**:
+     ```javascript
+     if (!isCraftingTableNearby()) {
+         console.log("No crafting table nearby.");
+         return;
+     }
+     ```
+
+### 7. **Update Context Information**
+   - **Implementation**: Ensure that the bot's context information is updated regularly, especially the inventory state, to reflect any changes after gathering resources.
+   - **Strategy**: After gathering resources, refresh the inventory data before attempting to craft.
+
+### 8. **Testing and Iteration**
+   - **Implementation**: Test the bot's crafting functionality in various scenarios to identify edge cases that may lead to errors. Iterate on the code based on test results.
+   - **Strategy**: Create unit tests for the crafting function to ensure it behaves correctly under different inventory states.
+
+By implementing these suggestions, the bot should be able to avoid the null reference errors and improve its overall performance in crafting tasks.
+[MinecraftAI] [2025-07-07T13:24:34.903Z] [AI-AIPlayer1] [INFO] タスクが失敗: craft_tools - Failed to craft wooden_pickaxe: TypeError: Cannot read properties of null (reading 'id')
+[MinecraftAI] [2025-07-07T13:24:34.903Z] [AI-AIPlayer1] [INFO] タスク craft_tools が失敗: UNKNOWN
+[MinecraftAI] [2025-07-07T13:24:34.903Z] [AI-AIPlayer1] [INFO] タスク 'craft_tools' が3回連続で失敗しました。探索に切り替えます。
+[InventoryUtils] 木材検出: 総数=12
+[InventoryUtils] - oak_log: 4個
+[InventoryUtils] - birch_log: 3個
+[InventoryUtils] - jungle_log: 5個
+[InventoryUtils] 木材検出: 総数=12
+[InventoryUtils] - oak_log: 4個
+[InventoryUtils] - birch_log: 3個
+[InventoryUtils] - jungle_log: 5個
+[MinecraftAI] [2025-07-07T13:24:35.304Z] [AI-AIPlayer1] [INFO] 道具クラフトの機会を検出
+[TaskPlanner] ツールクラフトタスクを計画中: wooden_pickaxe, wooden_axe, wooden_sword
+[InventoryUtils] 木材検出: 総数=12
+[InventoryUtils] - oak_log: 4個
+[InventoryUtils] - birch_log: 3個
+[InventoryUtils] - jungle_log: 5個
+[TaskPlanner] ツールクラフトの前提条件: 木材必要量=0
+[MinecraftAI] [2025-07-07T13:24:35.304Z] [AI-AIPlayer1] [INFO] 新しいタスクを開始: craft_tools
+[MinecraftAI] [2025-07-07T13:24:35.304Z] [AI-AIPlayer1] [INFO] タスク実行中: craft_tools
+[ツールスキル] wooden_pickaxe, wooden_axe, wooden_swordの作成を開始します...
+[ツールスキル] 作業台の確保を開始...
+[ツールスキル] 近くに作業台を発見: (-21, 133, 48)
+[ツールスキル] wooden_pickaxeの作成を試みます
+[木材レシピ最適化] 使用する木材: oak_planks (20個) for wooden_pickaxe
+[木材レシピ最適化] 木材アイテム発見: oak_planks -> oak_planks (id: 36)
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 3個の材料をoak_planksに置換しました
+[材料チェック] 木材最適化レシピを使用: wooden_pickaxe
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:20
+[材料チェック] 利用可能木材: {"oak_planks":20}
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:20
+[材料チェック] 利用可能木材: {"oak_planks":20}
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:20
+[材料チェック] 利用可能木材: {"oak_planks":20}
+[材料チェック] 材料十分: stick (必要:1) -> 利用可能:1
+[材料チェック] 材料十分: stick (必要:1) -> 利用可能:1
+[ツールスキル] wooden_pickaxeクラフト前のレシピ状態: {
+  hasRecipe: true,
+  recipeId: 820,
+  recipeResult: { id: 820, count: 1 },
+  recipeDelta: 2
+}
+[ツールスキル] wooden_pickaxeをクラフト中...
+[ツールスキル] wooden_pickaxeのdelta/inShape不整合をチェックします
+[レシピ修正] inShape分析: ID:41×3, ID:848×2
+[ツールスキル] 修正されたdelta: [ { id: 41, count: -3 }, { id: 848, count: -2 } ]
+[StateManager] 手持ちアイテム変更: null
+[StateManager] ウィンドウ開始: minecraft:crafting
+[ツールスキル] wooden_pickaxeのクラフトに失敗: TypeError: Cannot read properties of null (reading 'id')
+[ツールスキル] レシピ詳細: {
+  "id": 820,
+  "result": {
+    "id": 820,
+    "count": 1
+  },
+  "delta": [
+    {
+      "id": 41,
+      "count": -3
+    },
+    {
+      "id": 848,
+      "count": -2
+    }
+  ],
+  "inShape": [
+    [
+      41,
+      41,
+      41
+    ],
+    [
+      null,
+      848,
+      null
+    ],
+    [
+      null,
+      848,
+      null
+    ]
+  ],
+  "ingredients": [
+    {
+      "id": 41,
+      "count": 1
+    },
+    {
+      "id": 848,
+      "count": 1
+    }
+  ]
+}
+
+=== プレイヤーステータス ===
+プレイヤー1: AIPlayer1 - 🟢 接続中
+プレイヤー2: AIPlayer2 - 🟢 接続中
+プレイヤー3: AIPlayer3 - 🟢 接続中
+プレイヤー4: AIPlayer4 - 🟢 接続中
+プレイヤー5: AIPlayer5 - 🟢 接続中
+========================
+
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.13ms, 最大 0.39ms
+  メモリ使用量: RSS 426.5MB, Heap 115.8MB
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.21ms, 最大 0.23ms
+  メモリ使用量: RSS 426.5MB, Heap 115.8MB
+[StateManager] 手持ちアイテム変更: cobblestone
+[StateManager] 手持ちアイテム変更: null
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.09ms, 最大 0.20ms
+  メモリ使用量: RSS 426.5MB, Heap 109.9MB
+[PerformanceMonitor] 📊 直近1分統計:
+  イベントループ遅延: 平均 0.20ms, 最大 0.40ms
+  メモリ使用量: RSS 426.5MB, Heap 109.9MB
+AI Learning Suggestions: Based on the provided task failures related to crafting tools in Minecraft, here are specific suggestions for improving task execution and avoiding these errors:
+
+### 1. **Error: Skill execution failed**
+- **Issue**: The bot attempted to execute the crafting skill but failed without a clear reason.
+- **Improvements**:
+  - **Inventory Check**: Ensure that the bot checks its inventory for the required materials before attempting to craft. In this case, it appears the bot had `inventoryItems: 0`, indicating it lacked the necessary resources.
+  - **Resource Gathering**: Implement a resource gathering step before crafting. If the bot has no items, it should navigate to a location where it can gather wood or other necessary materials.
+  - **Error Logging**: Enhance logging to capture more details about the failure, such as the specific crafting recipe attempted and the state of the inventory at the time of failure.
+
+### 2. **Error: Failed to craft wooden_pickaxe: Event windowOpen did not fire within timeout of 20000ms**
+- **Issue**: The crafting window did not open within the expected time frame, leading to a timeout.
+- **Improvements**:
+  - **Increase Timeout Duration**: If the crafting window is known to take longer to open in certain situations (e.g., server lag), consider increasing the timeout duration to accommodate this.
+  - **Pre-check for Crafting Table**: Before attempting to craft, the bot should check if a crafting table is nearby and accessible. If not, it should navigate to one.
+  - **Retry Mechanism**: Implement a retry mechanism that attempts to open the crafting window multiple times before failing, with a brief pause between attempts.
+  - **Feedback Loop**: Provide feedback to the user or log a message indicating that the bot is attempting to open the crafting window, which can help in diagnosing issues.
+
+### 3. **General Improvements**
+- **Health and Food Status**: Although the bot's health and food levels were full, ensure that the bot has a mechanism to check these statuses before engaging in tasks that may require stamina or health.
+- **Dynamic Pathfinding**: Enhance the pathfinding algorithm to account for dynamic obstacles or changes in the environment that may affect the bot's ability to reach a crafting table or gather resources.
+- **User Notifications**: Implement a notification system to inform the user when the bot encounters issues, such as lacking materials or failing to open the crafting window, so they can intervene if necessary.
+
+### 4. **Testing and Simulation**
+- **Simulate Crafting Scenarios**: Run simulations of crafting tasks in various environments to identify potential failure points and optimize the bot's response to different situations.
+- **Continuous Learning**: Incorporate a feedback mechanism that allows the bot to learn from past failures and adjust its strategies accordingly.
+
+By implementing these improvements, the bot's performance in crafting tasks should become more reliable, reducing the likelihood of encountering similar errors in the future.
+[MinecraftAI] [2025-07-07T13:24:40.429Z] [AI-AIPlayer5] [INFO] タスクが失敗: craft_tools - Failed to craft wooden_pickaxe: Error: Event windowOpen did not fire within timeout of 20000ms
+[MinecraftAI] [2025-07-07T13:24:40.429Z] [AI-AIPlayer5] [INFO] タスク craft_tools が失敗: UNKNOWN
+[MinecraftAI] [2025-07-07T13:24:40.429Z] [AI-AIPlayer5] [INFO] 不明な失敗理由(UNKNOWN)のため、回復タスクを生成できません
+[InventoryUtils] 木材検出: 総数=6
+[InventoryUtils] - oak_log: 6個
+[InventoryUtils] 木材検出: 総数=6
+[InventoryUtils] - oak_log: 6個
+[MinecraftAI] [2025-07-07T13:24:40.829Z] [AI-AIPlayer5] [INFO] 道具クラフトの機会を検出
+[TaskPlanner] ツールクラフトタスクを計画中: wooden_pickaxe, wooden_axe, wooden_sword
+[InventoryUtils] 木材検出: 総数=6
+[InventoryUtils] - oak_log: 6個
+[TaskPlanner] ツールクラフトの前提条件: 木材必要量=0
+[MinecraftAI] [2025-07-07T13:24:40.830Z] [AI-AIPlayer5] [INFO] 新しいタスクを開始: craft_tools
+[MinecraftAI] [2025-07-07T13:24:40.830Z] [AI-AIPlayer5] [INFO] タスク実行中: craft_tools
+[ツールスキル] wooden_pickaxe, wooden_axe, wooden_swordの作成を開始します...
+[ツールスキル] 作業台の確保を開始...
+[ツールスキル] 近くに作業台を発見: (-13, 101, 1)
+[ツールスキル] wooden_pickaxeの作成を試みます
+[木材レシピ最適化] 使用する木材: oak_planks (2個) for wooden_pickaxe
+[木材レシピ最適化] 木材アイテム発見: oak_planks -> oak_planks (id: 36)
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 材料置換: cherry_planks -> oak_planks
+[木材レシピ最適化] 3個の材料をoak_planksに置換しました
+[材料チェック] 木材最適化レシピを使用: wooden_pickaxe
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:2
+[材料チェック] 利用可能木材: {"oak_planks":2}
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:2
+[材料チェック] 利用可能木材: {"oak_planks":2}
+[材料チェック] 木材代替可能: oak_planks (必要:1) -> 利用可能合計:2
+[材料チェック] 利用可能木材: {"oak_planks":2}
+[材料チェック] 材料十分: stick (必要:1) -> 利用可能:4
+[材料チェック] 材料十分: stick (必要:1) -> 利用可能:4
+[ツールスキル] wooden_pickaxeクラフト前のレシピ状態: {
+  hasRecipe: true,
+  recipeId: 820,
+  recipeResult: { id: 820, count: 1 },
+  recipeDelta: 2
+}
+[ツールスキル] wooden_pickaxeをクラフト中...
+[ツールスキル] wooden_pickaxeのdelta/inShape不整合をチェックします
+[レシピ修正] inShape分析: ID:41×3, ID:848×2
+[ツールスキル] 修正されたdelta: [ { id: 41, count: -3 }, { id: 848, count: -2 } ]
+^C
+シャットダウン信号を受信しました...
+全プレイヤーをシャットダウン中...
+プレイヤー1を停止中...
