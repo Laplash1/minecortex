@@ -23,10 +23,12 @@ class MultiplePlayersManager {
         hitRadius: 4
       })
       : null;
-    this.openAIRequestQueue = process.env.OPENAI_API_KEY ? new OpenAIRequestQueue({
-      maxConcurrentRequests: 2, // 多ボット環境では制限
-      requestsPerMinute: 30 // 控えめなレート設定
-    }) : null;
+    this.openAIRequestQueue = process.env.OPENAI_API_KEY
+      ? new OpenAIRequestQueue({
+        maxConcurrentRequests: 2, // 多ボット環境では制限
+        requestsPerMinute: 30 // 控えめなレート設定
+      })
+      : null;
 
     if (this.sharedEnvironment) {
       console.log(`[MultiplePlayersManager] SharedEnvironment を初期化 (${playerCount}ボット用パフォーマンス最適化)`);

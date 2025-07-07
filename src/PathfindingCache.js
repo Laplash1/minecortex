@@ -94,7 +94,7 @@ class PathfindingCache {
     const fromNorm = this.normalizePosition(fromPos);
     const toNorm = this.normalizePosition(toPos);
 
-    for (const [key, entry] of this.cache.entries()) {
+    for (const entry of this.cache.values()) {
       // 年齢チェック
       if (currentTime - entry.timestamp > maxAge) {
         continue;
@@ -115,7 +115,7 @@ class PathfindingCache {
   /**
    * パス結果を新しい位置に適応
    */
-  adaptPathToNewPositions(originalPath, originalFrom, originalTo, newFrom, newTo) {
+  adaptPathToNewPositions(originalPath, originalFrom, originalTo, newFrom, _newTo) {
     if (!originalPath || !originalPath.path || originalPath.path.length === 0) {
       return null;
     }

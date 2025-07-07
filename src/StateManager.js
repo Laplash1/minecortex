@@ -54,7 +54,7 @@ class StateManager {
     this.maxHistorySize = 100;
     this.lastSync = Date.now();
     this.syncInterval = 1000; // 1 second
-    
+
     // Setup real-time inventory updates for immediate cache invalidation
     this.setupInventoryEventListeners();
   }
@@ -67,7 +67,7 @@ class StateManager {
     this.bot.on('inventoryUpdate', (slot, oldItem, newItem) => {
       try {
         console.log(`[StateManager] インベントリ更新検出: slot=${slot}, old=${oldItem?.name}, new=${newItem?.name}`);
-        
+
         // Force immediate inventory sync to avoid cache issues
         const inventoryUpdates = this.syncInventory();
         if (Object.keys(inventoryUpdates).length > 0) {
@@ -82,8 +82,8 @@ class StateManager {
     this.bot.on('heldItemChanged', (heldItem) => {
       try {
         console.log(`[StateManager] 手持ちアイテム変更: ${heldItem?.name || 'null'}`);
-        this.updateState({ 
-          equippedItems: { ...this.state.equippedItems, hand: heldItem } 
+        this.updateState({
+          equippedItems: { ...this.state.equippedItems, hand: heldItem }
         }, 'held-item-event');
       } catch (error) {
         console.error(`[StateManager] heldItemChanged event error: ${error.message}`);

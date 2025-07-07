@@ -354,7 +354,7 @@ class EnvironmentObserver {
 
     for (const block of this.nearbyBlocks.values()) {
       if (block.type === blockType) {
-        const distance = block.position.distanceTo(this.bot.entity.position);
+        const distance = this.calculateDistance(block.position, this.bot.entity.position);
         if (distance < minDistance) {
           nearest = block;
           minDistance = distance;
@@ -363,6 +363,14 @@ class EnvironmentObserver {
     }
 
     return nearest;
+  }
+
+  calculateDistance(pos1, pos2) {
+    if (!pos1 || !pos2) return Infinity;
+    const dx = pos1.x - pos2.x;
+    const dy = pos1.y - pos2.y;
+    const dz = pos1.z - pos2.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
   getInventoryCount(itemName) {

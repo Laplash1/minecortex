@@ -120,7 +120,7 @@ class SharedEnvironment {
    * 代表オブザーバーを選択
    */
   selectRepresentativeObserver() {
-    for (const [botId, observer] of this.observers.entries()) {
+    for (const observer of this.observers.values()) {
       // ボットが有効でpositionが取得できる場合に選択
       if (observer.bot?.entity?.position && observer.bot.entities) {
         return observer;
@@ -249,7 +249,7 @@ class SharedEnvironment {
    * 共有データを全オブザーバーに配布
    */
   distributeSharedData() {
-    for (const [botId, observer] of this.observers.entries()) {
+    for (const observer of this.observers.values()) {
       this.syncDataToObserver(observer);
     }
   }

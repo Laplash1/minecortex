@@ -2005,12 +2005,12 @@ class MineBlockSkill extends Skill {
     const workbenchResult = await this.ensureWorkbench(bot);
     if (!workbenchResult.success) {
       console.log(`[ツール作成] 作業台の確保に失敗: ${workbenchResult.error}`);
-      
+
       // Try to gather materials automatically
       if (workbenchResult.error.includes('材料不足')) {
         console.log('[ツール作成] 材料不足のため自動収集を試みます...');
         const gatherResult = await this.simpleWoodGathering(bot);
-        
+
         if (gatherResult.success) {
           console.log('[ツール作成] 材料収集成功、作業台確保を再試行...');
           const retryWorkbenchResult = await this.ensureWorkbench(bot);
@@ -2327,13 +2327,13 @@ class MineBlockSkill extends Skill {
       if (!exploreResult.success) {
         return { success: false, error: '木が見つかりません（探索後）' };
       }
-      
+
       // Search again after exploration
       const treeAfterExplore = bot.findBlock({
         matching: (block) => block && block.name.includes('_log'),
         maxDistance: 64
       });
-      
+
       if (!treeAfterExplore) {
         return { success: false, error: '探索後も木が見つかりません' };
       }
@@ -2353,34 +2353,34 @@ class MineBlockSkill extends Skill {
   // Explore to find trees
   async exploreForTrees(bot) {
     console.log('[探索] 木材探索を開始...');
-    
+
     const originalPosition = bot.entity.position.clone();
     const searchDirections = [
-      { x: 0, z: 16 },  // North
-      { x: 16, z: 0 },  // East
+      { x: 0, z: 16 }, // North
+      { x: 16, z: 0 }, // East
       { x: 0, z: -16 }, // South
-      { x: -16, z: 0 }  // West
+      { x: -16, z: 0 } // West
     ];
-    
+
     for (const direction of searchDirections) {
       const targetPos = originalPosition.offset(direction.x, 0, direction.z);
       console.log(`[探索] ${direction.x}, ${direction.z}方向を探索中...`);
-      
+
       try {
         // Basic movement toward the direction
         await bot.lookAt(targetPos);
-        
+
         // Move forward for exploration
         bot.setControlState('forward', true);
         await new Promise(resolve => setTimeout(resolve, 3000));
         bot.setControlState('forward', false);
-        
+
         // Search for trees in new area
         const tree = bot.findBlock({
           matching: (block) => block && block.name.includes('_log'),
           maxDistance: 32
         });
-        
+
         if (tree) {
           console.log(`[探索] 木材を発見: ${tree.position}`);
           return { success: true, tree };
@@ -2390,7 +2390,7 @@ class MineBlockSkill extends Skill {
         continue;
       }
     }
-    
+
     // Return to original position
     try {
       await bot.lookAt(originalPosition);
@@ -2400,7 +2400,7 @@ class MineBlockSkill extends Skill {
     } catch (error) {
       console.log(`[探索] 復帰エラー: ${error.message}`);
     }
-    
+
     return { success: false, error: '探索でも木材が見つかりませんでした' };
   }
 
@@ -2700,13 +2700,13 @@ class CraftToolsSkill extends Skill {
 
     if (!workbenchResult.success) {
       console.log(`[ツールスキル] 作業台の確保に失敗: ${workbenchResult.error}`);
-      
+
       // Try to gather materials automatically
       if (workbenchResult.error.includes('材料不足')) {
         console.log('[ツールスキル] 材料不足のため自動収集を試みます...');
         // Use a simple wood gathering approach
         const gatherResult = await this.simpleWoodGathering(bot);
-        
+
         if (gatherResult.success) {
           console.log('[ツールスキル] 材料収集成功、作業台確保を再試行...');
           const retryWorkbenchResult = await this.ensureWorkbench(bot);
@@ -2743,10 +2743,10 @@ class CraftToolsSkill extends Skill {
       }
 
       // Use getRecipeSafe for better recipe handling
-      const recipe = await SkillLibrary.getRecipeSafe(bot, toolName, 1, craftingTable);
+      let recipe = await SkillLibrary.getRecipeSafe(bot, toolName, 1, craftingTable);
       if (!recipe) {
         console.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
-        
+
         // Try alternative recipes or wait for materials
         const alternativeRecipe = await SkillLibrary.getRecipeSafe(bot, toolItem.id, 1, craftingTable);
         if (!alternativeRecipe) {
@@ -2807,12 +2807,18 @@ class CraftToolsSkill extends Skill {
     const recipe = recipes[0];
     const missing = [];
 
-    for (const ingredient of recipe.ingredients) {
-      const needed = ingredient.count;
-      const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id);
-      if (available < needed) {
-        const itemName = mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
-        missing.push({ item: itemName, needed: needed - available, have: available });
+    // Use recipe.delta instead of recipe.ingredients for better compatibility
+    const ingredients = recipe.delta || recipe.ingredients || [];
+    
+    for (const ingredient of ingredients) {
+      if (ingredient.count < 0) {
+        // Negative count means required material
+        const needed = Math.abs(ingredient.count);
+        const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id);
+        if (available < needed) {
+          const itemName = mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
+          missing.push({ item: itemName, needed: needed - available, have: available });
+        }
       }
     }
     return missing;
@@ -2866,30 +2872,30 @@ class CraftToolsSkill extends Skill {
 
   async placeCraftingTable(bot) {
     console.log('[ツールスキル] 作業台の設置場所を探しています...');
-    
+
     // Multiple placement attempts with different positions
     const placementPositions = [
       new Vec3(0, -1, 0), // Below bot
       new Vec3(1, -1, 0), // Below bot + east
       new Vec3(-1, -1, 0), // Below bot + west
       new Vec3(0, -1, 1), // Below bot + south
-      new Vec3(0, -1, -1), // Below bot + north
+      new Vec3(0, -1, -1) // Below bot + north
     ];
-    
+
     for (const offset of placementPositions) {
       const refBlock = bot.blockAt(bot.entity.position.offset(offset.x, offset.y, offset.z));
-      
+
       if (!refBlock || refBlock.name === 'air') {
         continue; // Skip invalid reference blocks
       }
-      
+
       // Check if target position is free
       const targetPos = refBlock.position.offset(0, 1, 0);
       const targetBlock = bot.blockAt(targetPos);
       if (targetBlock && targetBlock.name !== 'air') {
         continue; // Position already occupied
       }
-      
+
       try {
         const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
         if (!craftingTableItem) {
@@ -2898,19 +2904,17 @@ class CraftToolsSkill extends Skill {
         }
 
         await bot.equip(craftingTableItem, 'hand');
-        
+
         // Retry mechanism for blockUpdate timeout
-        let placementSuccess = false;
-        let lastError = null;
-        
+
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             console.log(`[ツールスキル] 作業台設置試行 ${attempt}/3 at ${targetPos}`);
             await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-            
+
             // Wait for block update confirmation
             await new Promise(resolve => setTimeout(resolve, 500));
-            
+
             // Verify placement
             const placedBlock = bot.blockAt(targetPos);
             if (placedBlock && placedBlock.name === 'crafting_table') {
@@ -2918,35 +2922,33 @@ class CraftToolsSkill extends Skill {
               return { success: true, workbench: placedBlock };
             }
           } catch (error) {
-            lastError = error;
             console.log(`[ツールスキル] 設置試行 ${attempt} 失敗: ${error.message}`);
-            
+
             // Wait before retry
             if (attempt < 3) {
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
           }
         }
-        
+
         // If all retries failed, try next position
         console.log(`[ツールスキル] 位置 ${targetPos} での設置に失敗、次の位置を試行...`);
-        
       } catch (error) {
         console.log(`[ツールスキル] 設置準備エラー: ${error.message}`);
         continue;
       }
     }
-    
-    return { 
-      success: false, 
-      error: '全ての設置位置で作業台の設置に失敗しました' 
+
+    return {
+      success: false,
+      error: '全ての設置位置で作業台の設置に失敗しました'
     };
   }
 
   // Simple wood gathering method for CraftToolsSkill
   async simpleWoodGathering(bot) {
     console.log('[材料収集] 木材の自動収集を開始...');
-    
+
     try {
       // Find a nearby tree
       const tree = bot.findBlock({
@@ -2960,32 +2962,32 @@ class CraftToolsSkill extends Skill {
       }
 
       console.log(`[材料収集] 木材を発見: ${tree.position}`);
-      
+
       // Basic movement to the tree
       try {
         await bot.lookAt(tree.position);
         const distance = bot.entity.position.distanceTo(tree.position);
-        
+
         if (distance > 4) {
           bot.setControlState('forward', true);
           await new Promise(resolve => setTimeout(resolve, Math.min(distance * 500, 3000)));
           bot.setControlState('forward', false);
         }
-        
+
         // Mine the tree
         await bot.dig(tree);
         console.log(`[材料収集] ${tree.name}を収集しました`);
-        
+
         // Wait for inventory update to sync
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Verify collection with detailed logging
         const postCollectionInventory = bot.inventory.items();
         console.log(`[材料収集] 収集後インベントリ検査: ${postCollectionInventory.length}個のアイテム`);
         postCollectionInventory.forEach(item => {
           console.log(`[材料収集] - ${item.name}: ${item.count}個`);
         });
-        
+
         return { success: true };
       } catch (error) {
         console.log(`[材料収集] 木材収集に失敗: ${error.message}`);
@@ -3002,68 +3004,68 @@ class CraftToolsSkill extends Skill {
     // Use InventoryUtils for consistent detection
     const totalPlanks = InventoryUtils.getPlanksCount(bot);
     console.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
-    
+
     // Debug: Show all plank items found
     const plankItems = InventoryUtils.findItemsByPattern(bot, '_planks');
     plankItems.forEach(item => {
       console.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
     });
-    
+
     return totalPlanks;
   }
-  
+
   countLogItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalLogs = InventoryUtils.getWoodCount(bot);
     console.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
-    
+
     // Debug: Show all log items found
     const logItems = InventoryUtils.findItemsByPattern(bot, '_log');
     logItems.forEach(item => {
       console.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
     });
-    
+
     return totalLogs;
   }
-  
+
   countItemsInInventoryByName(bot, itemName) {
     // Use InventoryUtils for consistent detection
     return InventoryUtils.getItemCount(bot, itemName);
   }
-  
+
   // On-demand log to plank conversion
   async convertLogsToPlanksDemand(bot, logsToCraft) {
     console.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
-    
+
     try {
       const mcData = require('minecraft-data')(bot.version);
-      
+
       // Find the first log type in inventory
-      const logItem = bot.inventory.items().find(item => 
+      const logItem = bot.inventory.items().find(item =>
         item && item.name && item.name.includes('_log')
       );
-      
+
       if (!logItem) {
         return { success: false, error: 'インベントリに原木がありません' };
       }
-      
+
       // Get corresponding plank name
       const plankName = logItem.name.replace('_log', '_planks');
       const plankItem = mcData.itemsByName[plankName];
-      
+
       if (!plankItem) {
         return { success: false, error: `対応する板材(${plankName})が見つかりません` };
       }
-      
+
       // Get recipe for planks
       const plankRecipe = await SkillLibrary.getRecipeSafe(bot, plankItem.id, 1, null);
       if (!plankRecipe) {
         return { success: false, error: `${plankName}のレシピが見つかりません` };
       }
-      
+
       // Convert logs to planks (one log = 4 planks)
       const totalConversions = Math.min(logsToCraft, logItem.count);
-      
+
       for (let i = 0; i < totalConversions; i++) {
         try {
           await bot.craft(plankRecipe, 1, null);
@@ -3076,11 +3078,10 @@ class CraftToolsSkill extends Skill {
           break;
         }
       }
-      
+
       const convertedPlanks = this.countPlankItems(bot);
       console.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
       return { success: true, planksConverted: convertedPlanks };
-      
     } catch (error) {
       console.log(`[オンデマンド変換] エラー: ${error.message}`);
       return { success: false, error: `変換エラー: ${error.message}` };
@@ -3092,74 +3093,74 @@ class CraftWorkbenchSkill extends Skill {
   constructor() {
     super('craft_workbench', 'Crafts a crafting table from planks, with automatic log-to-plank conversion');
   }
-  
+
   // Improved inventory detection methods for CraftWorkbenchSkill
   countPlankItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalPlanks = InventoryUtils.getPlanksCount(bot);
     console.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
-    
+
     // Debug: Show all plank items found
     const plankItems = InventoryUtils.findItemsByPattern(bot, '_planks');
     plankItems.forEach(item => {
       console.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
     });
-    
+
     return totalPlanks;
   }
-  
+
   countLogItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalLogs = InventoryUtils.getWoodCount(bot);
     console.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
-    
+
     // Debug: Show all log items found
     const logItems = InventoryUtils.findItemsByPattern(bot, '_log');
     logItems.forEach(item => {
       console.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
     });
-    
+
     return totalLogs;
   }
-  
+
   countItemsInInventoryByName(bot, itemName) {
     // Use InventoryUtils for consistent detection
     return InventoryUtils.getItemCount(bot, itemName);
   }
-  
+
   // On-demand log to plank conversion for CraftWorkbenchSkill
   async convertLogsToPlanksDemand(bot, logsToCraft) {
     console.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
-    
+
     try {
       const mcData = require('minecraft-data')(bot.version);
-      
+
       // Find the first log type in inventory
-      const logItem = bot.inventory.items().find(item => 
+      const logItem = bot.inventory.items().find(item =>
         item && item.name && item.name.includes('_log')
       );
-      
+
       if (!logItem) {
         return { success: false, error: 'インベントリに原木がありません' };
       }
-      
+
       // Get corresponding plank name
       const plankName = logItem.name.replace('_log', '_planks');
       const plankItem = mcData.itemsByName[plankName];
-      
+
       if (!plankItem) {
         return { success: false, error: `対応する板材(${plankName})が見つかりません` };
       }
-      
+
       // Get recipe for planks
       const plankRecipe = await SkillLibrary.getRecipeSafe(bot, plankItem.id, 1, null);
       if (!plankRecipe) {
         return { success: false, error: `${plankName}のレシピが見つかりません` };
       }
-      
+
       // Convert logs to planks (one log = 4 planks)
       const totalConversions = Math.min(logsToCraft, logItem.count);
-      
+
       for (let i = 0; i < totalConversions; i++) {
         try {
           await bot.craft(plankRecipe, 1, null);
@@ -3172,11 +3173,10 @@ class CraftWorkbenchSkill extends Skill {
           break;
         }
       }
-      
+
       const convertedPlanks = this.countPlankItems(bot);
       console.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
       return { success: true, planksConverted: convertedPlanks };
-      
     } catch (error) {
       console.log(`[オンデマンド変換] エラー: ${error.message}`);
       return { success: false, error: `変換エラー: ${error.message}` };

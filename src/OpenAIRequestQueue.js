@@ -209,7 +209,7 @@ class OpenAIRequestQueue {
   /**
    * スキル生成API呼び出し
    */
-  async generateSkill(data) {
+  async generateSkill(_data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
@@ -226,7 +226,7 @@ class OpenAIRequestQueue {
   /**
    * カリキュラム生成API呼び出し
    */
-  async generateCurriculum(data) {
+  async generateCurriculum(_data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
@@ -241,7 +241,7 @@ class OpenAIRequestQueue {
   /**
    * 分析API呼び出し
    */
-  async performAnalysis(data) {
+  async performAnalysis(_data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
@@ -256,7 +256,7 @@ class OpenAIRequestQueue {
   /**
    * チャット補完API呼び出し
    */
-  async chatCompletion(data) {
+  async chatCompletion(_data) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
@@ -286,7 +286,7 @@ class OpenAIRequestQueue {
   /**
    * 統計更新
    */
-  updateStats(waitTime, responseTime, success) {
+  updateStats(waitTime, responseTime, _success) {
     // 移動平均で更新
     const alpha = 0.1;
     this.stats.averageWaitTime =
