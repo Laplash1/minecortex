@@ -2930,6 +2930,14 @@ class CraftToolsSkill extends Skill {
         }
       }
 
+      if (toolName.includes('wooden_') && !recipe) {
+        console.log(`[ツールスキル] 木材ツール用の最適化レシピを再取得: ${toolName}`);
+        recipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, toolName, 1, craftingTable);
+        if (recipe) {
+          console.log(`[ツールスキル] 木材最適化レシピを取得成功: ${toolName}`);
+        }
+      }
+
       // Check for sufficient materials now that we have a valid recipe
       const missingMaterials = await this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
       if (missingMaterials && missingMaterials.length > 0) {
@@ -3013,14 +3021,35 @@ class CraftToolsSkill extends Skill {
         }
       }
 
+      // Debug: Log recipe state before crafting
+      console.log(`[ツールスキル] ${toolName}クラフト前のレシピ状態:`, {
+        hasRecipe: !!recipe,
+        recipeId: recipe?.id,
+        recipeResult: recipe?.result,
+        recipeDelta: recipe?.delta?.length || 0
+      });
+
       try {
         console.log(`[ツールスキル] ${toolName}をクラフト中...`);
+
+        if (!recipe) {
+          console.log(`[ツールスキル] ${toolName}のレシピがnullです - クラフトをスキップ`);
+          return { success: false, error: `Recipe is null for ${toolName}` };
+        }
+
+        if (!recipe.id && !recipe.result) {
+          console.log(`[ツールスキル] ${toolName}のレシピが不正な形式です`);
+          console.log('[ツールスキル] レシピ詳細:', JSON.stringify(recipe, null, 2));
+          return { success: false, error: `Invalid recipe format for ${toolName}` };
+        }
+
         await bot.craft(recipe, 1, craftingTable);
         console.log(`[ツールスキル] ${toolName}をクラフトしました！`);
         bot.chat(`${toolName}をクラフトしました！ 🔨`);
         craftedTools.push(toolName);
       } catch (error) {
         console.log(`[ツールスキル] ${toolName}のクラフトに失敗: ${error.message}`);
+        console.log('[ツールスキル] レシピ詳細:', recipe ? JSON.stringify(recipe, null, 2) : 'null');
         return { success: false, error: `Failed to craft ${toolName}: ${error.message}` };
       }
     }
