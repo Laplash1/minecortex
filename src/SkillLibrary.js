@@ -145,18 +145,26 @@ class SkillLibrary {
             // 材料情報を変換
             if (rawRecipe.ingredients) {
               // shapeless recipe
-              foundRecipe.delta = rawRecipe.ingredients.map(ingredientId => ({
-                id: ingredientId,
-                count: 1
-              }));
+              foundRecipe.delta = rawRecipe.ingredients.map(ingredientId => {
+                const ingredientName = mcData.items[ingredientId]?.name || mcData.blocks[ingredientId]?.name || 'unknown';
+                console.log(`[レシピ検索] 材料変換: ID ${ingredientId} -> ${ingredientName}`);
+                return {
+                  id: ingredientId,
+                  count: 1
+                };
+              });
               console.log(`[レシピ検索] Shapeless recipe found for ${itemName}: ingredients ${rawRecipe.ingredients}`);
             } else if (rawRecipe.inShape) {
               // shaped recipe
               const flatIngredients = rawRecipe.inShape.flat().filter(id => id !== null && id !== undefined);
-              foundRecipe.delta = flatIngredients.map(ingredientId => ({
-                id: ingredientId,
-                count: 1
-              }));
+              foundRecipe.delta = flatIngredients.map(ingredientId => {
+                const ingredientName = mcData.items[ingredientId]?.name || mcData.blocks[ingredientId]?.name || 'unknown';
+                console.log(`[レシピ検索] 材料変換: ID ${ingredientId} -> ${ingredientName}`);
+                return {
+                  id: ingredientId,
+                  count: 1
+                };
+              });
               console.log(`[レシピ検索] Shaped recipe found for ${itemName}: shape ${JSON.stringify(rawRecipe.inShape)}`);
             }
 
@@ -2769,12 +2777,61 @@ class CraftToolsSkill extends Skill {
       const missingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
       if (missingMaterials && missingMaterials.length > 0) {
         console.log(`[ツールスキル] ${toolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
-        bot.chat(`${toolName}の材料が不足しています`);
-        return {
-          success: false,
-          reason: 'INSUFFICIENT_MATERIALS',
-          details: { missing: missingMaterials, tool: toolName }
-        };
+
+        // Try to auto-convert materials if possible
+        let materialConverted = false;
+        for (const missing of missingMaterials) {
+          // Check if this is a planks material and we have logs
+          if (missing.item.includes('_planks') || missing.item.includes('planks')) {
+            console.log(`[ツールスキル] 板材不足検出: ${missing.item} ${missing.needed}個`);
+            const logs = InventoryUtils.getAllItems(bot).filter(item => item.name && item.name.includes('_log'));
+            if (logs.length > 0) {
+              console.log(`[ツールスキル] 木材が利用可能: ${logs.length}種類`);
+              const convertResult = await this.convertLogsToPlanksDynamic(bot, missing.needed);
+              if (convertResult.success) {
+                console.log(`[ツールスキル] 板材変換成功: ${convertResult.converted}個`);
+                materialConverted = true;
+                break;
+              } else {
+                console.log(`[ツールスキル] 板材変換失敗: ${convertResult.error}`);
+              }
+            }
+          } else if (missing.item === 'stick') {
+            // Check if this is a stick material and we have planks
+            console.log(`[ツールスキル] スティック不足検出: ${missing.needed}個`);
+            const stickResult = await this.createStickFromPlanks(bot, missing.needed);
+            if (stickResult.success) {
+              console.log(`[ツールスキル] スティック作成成功: ${stickResult.created}個`);
+              materialConverted = true;
+              break;
+            } else {
+              console.log(`[ツールスキル] スティック作成失敗: ${stickResult.error}`);
+            }
+          }
+        }
+
+        if (!materialConverted) {
+          bot.chat(`${toolName}の材料が不足しています`);
+          return {
+            success: false,
+            reason: 'INSUFFICIENT_MATERIALS',
+            details: { missing: missingMaterials, tool: toolName }
+          };
+        }
+
+        // Re-check materials after conversion
+        const updatedMissingMaterials = this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+        if (updatedMissingMaterials && updatedMissingMaterials.length > 0) {
+          console.log(`[ツールスキル] 材料変換後も不足: ${updatedMissingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
+          bot.chat(`${toolName}の材料が不足しています`);
+          return {
+            success: false,
+            reason: 'INSUFFICIENT_MATERIALS',
+            details: { missing: updatedMissingMaterials, tool: toolName }
+          };
+        } else {
+          console.log('[ツールスキル] 材料変換後、材料が十分になりました');
+        }
       }
 
       try {
@@ -2803,10 +2860,51 @@ class CraftToolsSkill extends Skill {
 
   getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
     const mcData = require('minecraft-data')(bot.version);
-    const recipes = bot.recipesFor(itemId, null, 1, craftingTable);
-    if (recipes.length === 0) return [{ item: 'unknown', needed: 1, reason: 'No recipe' }];
 
-    const recipe = recipes[0];
+    // Try to get recipe using enhanced getRecipeSafe method
+    let recipe = null;
+    try {
+      const recipes = bot.recipesFor(itemId, null, 1, craftingTable);
+      if (recipes.length > 0) {
+        recipe = recipes[0];
+      }
+    } catch (error) {
+      console.log(`[材料チェック] bot.recipesFor failed: ${error.message}`);
+    }
+
+    // If bot.recipesFor failed, use minecraft-data direct search
+    if (!recipe) {
+      const directRecipes = mcData.recipes[itemId];
+      if (directRecipes && Array.isArray(directRecipes) && directRecipes.length > 0) {
+        const rawRecipe = directRecipes[0];
+        recipe = {
+          id: itemId,
+          result: rawRecipe.result || { id: itemId, count: 1 },
+          delta: [],
+          inShape: rawRecipe.inShape || null,
+          ingredients: rawRecipe.ingredients || null
+        };
+
+        // Convert materials to delta format
+        if (rawRecipe.ingredients) {
+          recipe.delta = rawRecipe.ingredients.map(ingredientId => ({
+            id: ingredientId,
+            count: -1 // Negative count means required material
+          }));
+        } else if (rawRecipe.inShape) {
+          const flatIngredients = rawRecipe.inShape.flat().filter(id => id !== null && id !== undefined);
+          recipe.delta = flatIngredients.map(ingredientId => ({
+            id: ingredientId,
+            count: -1 // Negative count means required material
+          }));
+        }
+      }
+    }
+
+    if (!recipe) {
+      return [{ item: 'unknown', needed: 1, reason: 'No recipe found' }];
+    }
+
     const missing = [];
 
     // Use recipe.delta instead of recipe.ingredients for better compatibility
@@ -2817,7 +2915,7 @@ class CraftToolsSkill extends Skill {
         const needed = Math.abs(ingredient.count);
         const available = InventoryUtils._safeCount(bot, item => item.id === ingredient.id);
         if (available < needed) {
-          const itemName = mcData.items[ingredient.id]?.name || `item_${ingredient.id}`;
+          const itemName = mcData.items[ingredient.id]?.name || mcData.blocks[ingredient.id]?.name || `item_${ingredient.id}`;
           missing.push({ item: itemName, needed: needed - available, have: available });
         }
       }

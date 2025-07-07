@@ -6,9 +6,6 @@ yarn-error.log*
 
 .claude/
 
-CLAUDE.md
-GEMINI.md
-
 # Runtime data
 pids
 *.pid

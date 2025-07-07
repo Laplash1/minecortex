@@ -480,6 +480,30 @@ class InventoryUtils {
   }
 
   /**
+   * Get all items from bot inventory
+   * @param {Bot} bot - Mineflayer bot instance
+   * @returns {Array} Array of inventory items
+   */
+  static getAllItems(bot) {
+    try {
+      if (!bot || !bot.inventory) {
+        console.warn('[InventoryUtils] Bot or inventory is null/undefined');
+        return [];
+      }
+
+      const items = bot.inventory.items();
+      if (Array.isArray(items)) {
+        return items.filter(item => item && item.name);
+      }
+
+      return [];
+    } catch (error) {
+      console.error('[InventoryUtils] getAllItems error:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Get item priority for inventory management
    * @param {string} itemName - Item name
    * @returns {number} Priority (higher = more important)
