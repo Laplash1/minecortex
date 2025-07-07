@@ -6,6 +6,7 @@ const { StateManager } = require('./StateManager');
 const InventoryUtils = require('./InventoryUtils');
 const { NLUProcessor } = require('./NLUProcessor');
 const PerformanceMonitor = require('./PerformanceMonitor');
+const { Logger } = require('./utils/Logger');
 
 class MinecraftAI {
   constructor(bot, coordinator = null, sharedEnvironment = null, pathfindingCache = null) {
@@ -33,6 +34,7 @@ class MinecraftAI {
 
     this.isInitialized = false;
     this.debugMode = process.env.DEBUG_MODE === 'true';
+    this.logger = Logger.createLogger('MinecraftAI');
     this.failedTargets = new Map(); // To track recently failed targets
     this.taskFailureCounts = new Map(); // To track generic task failures
 
