@@ -1,11 +1,12 @@
 # セットアップとインストールガイド
 
-このガイドでは、MineCortex v1.2.1の完全なセットアップ手順を説明します。
+このガイドでは、MineCortex v1.5.0の完全なセットアップ手順を説明します。
 
-## 🚨 v1.2.1 インストール注意事項
-- このバージョンには重要なバグ修正が含まれています
-- 既存のv1.2.0以前からの更新を強く推奨します
-- npm installで最新の依存関係が自動インストールされます
+## 🚨 v1.5.0 重要な変更事項
+- プロジェクト構造を大幅に簡素化
+- `npm start` のみでの実行に最適化
+- 不要なテスト・例・スクリプトを削除
+- ESLintによるコード品質管理を維持
 
 ## 📋 システム要件
 
@@ -84,13 +85,13 @@ sudo yum groupinstall -y "Development Tools"
 ```bash
 # プロジェクトをクローンまたはダウンロード
 git clone <repository-url>
-cd minecraft-ai-player
+cd minecortex
 
 # 依存関係インストール
 npm install
 
-# 環境設定
-cp .env.example .env
+# 環境設定ファイル作成
+touch .env
 ```
 
 ### 3. 基本設定
@@ -111,17 +112,17 @@ OPENAI_API_KEY=your_api_key_here
 
 ### 4. 実行
 ```bash
-# 標準実行
+# MineCortex起動（5体のAIプレイヤーが複数サーバーで協調動作）
 npm start
 
-# デバッグモード
-npm run dev
+# 環境変数で設定変更
+DEBUG_MODE=true npm start                    # デバッグモード
+MULTIPLE_PLAYERS_COUNT=3 npm start          # プレイヤー数変更
+MULTIPLE_PLAYERS_COUNT=10 npm start         # 大規模チーム
 
-# マルチプレイヤー（5人チーム）
-npm run squad
-
-# マルチプレイヤー（10人軍団）
-npm run army
+# コード品質チェック（開発時）
+npm run lint
+npm run lint:fix
 ```
 
 ---
@@ -187,7 +188,7 @@ After=network.target
 [Service]
 Type=simple
 User=minecraft
-WorkingDirectory=/opt/minecraft-ai-player
+WorkingDirectory=/opt/minecortex
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=10
@@ -300,7 +301,7 @@ nvm use 18
 
 # プロジェクトセットアップ
 git clone <repository>
-cd minecraft-ai-player
+cd minecortex
 npm install
 ```
 

@@ -1,13 +1,13 @@
-# MineCortex v1.2.1 ユーザーガイド
+# MineCortex v1.5.0 ユーザーガイド
 
-🧠 **MineCortex v1.2.1** の完全なユーザー向け使用方法ガイドです。初心者から上級者まで対応しています。
+🧠 **MineCortex v1.5.0** の完全なユーザー向け使用方法ガイドです。簡素化されたプロジェクト構造で、より使いやすくなりました。
 
-## 🚨 v1.2.1 重要アップデート
-このバージョンではシステム安定性が大幅に改善されました：
-- **EPIPE エラー**: 95%削減
-- **パスファインディング**: 70%のタイムアウト削減  
-- **成功率**: 0%から70-80%への劇的改善
-- **システム稼働時間**: 500%向上
+## 🚨 v1.5.0 重要アップデート
+このバージョンではプロジェクト構造が大幅に簡素化されました：
+- **npm startのみ**: 単一コマンドで複数AIプレイヤーが起動
+- **不要ファイル削除**: tests/, training/, scripts/等を削除
+- **コード品質**: ESLintによる品質管理を維持
+- **メンテナンス性**: ドキュメント構造を整理・最新化
 
 ## 📋 目次
 - [初期設定](#初期設定)
@@ -35,14 +35,15 @@
 npm install
 
 # 2. 設定ファイル作成
-cp .env.example .env
+touch .env
 
 # 3. 基本設定（.envを編集）
 MINECRAFT_HOST=localhost
+MINECRAFT_PORT=25565
 MINECRAFT_USERNAME=AIPlayer
 MINECRAFT_AUTH=offline
 
-# 4. 起動
+# 4. MineCortex起動（5体のAIプレイヤーが協調動作）
 npm start
 ```
 
@@ -50,27 +51,28 @@ npm start
 
 ## 🎮 基本的な使い方
 
-### シングルプレイヤー起動
+### MineCortex起動方法
 
-#### 標準起動
+#### 標準起動（推奨）
 ```bash
-# デフォルト設定で起動
+# 5体のAIプレイヤーでマルチプレイヤー協調システム起動
 npm start
 
-# カスタムユーザー名で起動
-MINECRAFT_USERNAME=MyBot npm start
+# プレイヤー数をカスタマイズ
+MULTIPLE_PLAYERS_COUNT=3 npm start     # 3体で起動
+MULTIPLE_PLAYERS_COUNT=10 npm start    # 10体で起動
 
 # デバッグモードで起動
-npm run dev
+DEBUG_MODE=true npm start
 ```
 
-#### コマンドライン引数
+#### 環境変数による設定変更
 ```bash
-# 特定のユーザー名で起動
-node index.js CustomBotName
+# サーバー設定変更
+MINECRAFT_HOST=192.168.1.100 npm start
 
-# 複数パラメータ
-node index.js BotName --debug --host=192.168.1.100
+# 複数設定の組み合わせ
+MULTIPLE_PLAYERS_COUNT=3 DEBUG_MODE=true npm start
 ```
 
 ### 環境設定の詳細
@@ -86,14 +88,17 @@ MINECRAFT_AUTH=offline         # 認証方式
 
 #### オプション設定
 ```bash
-# デバッグ・運用設定
-DEBUG_MODE=true               # 詳細ログ表示
-AUTO_RESPAWN=true            # 自動リスポーン
-LOG_LEVEL=info               # ログレベル (error/warn/info/debug)
+# マルチプレイヤー設定
+MULTIPLE_PLAYERS_COUNT=5     # AIプレイヤー数（デフォルト: 5）
 
-# AI設定
-OPENAI_API_KEY=your-key      # OpenAI API使用時
-OPENAI_MODEL=gpt-4o-mini     # 使用モデル
+# デバッグ・運用設定
+DEBUG_MODE=true              # 詳細ログ表示
+AUTO_RESPAWN=true           # 自動リスポーン
+
+# AI設定（オプション）
+OPENAI_API_KEY=your-key     # OpenAI API使用時
+OPENAI_MODEL=gpt-4o-mini    # 使用モデル
+OPENAI_SKILL_MODEL=gpt-4o   # スキル生成モデル
 ```
 
 ---

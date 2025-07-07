@@ -1,55 +1,54 @@
-# MineCortex v1.5.0
+# MineCortex v1.6.4
 
 **mineflayer**（Minecraft操作用）と**Voyager**インスパイアなAI機能（インテリジェントな計画と学習）を組み合わせた、知的なMinecraftボット群です。
 
 > 🧠 **MineCortex** = **Mine**（採掘/私の）+ **Cortex**（大脳皮質）  
 > あなた専用の賢いMinecraft大脳皮質システム
 
-## 🎉 v1.5.0 重大アップデート - NO_RECIPE問題完全解決
-- **CraftWorkbenchSkill完全解決** - Gemini協調開発による段階的材料準備システム実装
-- **minecraft-data 3.90.0完全対応** - Minecraft 1.21環境での100%成功率達成
-- **レシピ検証ロジック修正** - 入力材料と出力アイテムの正確な区別
-- **自動材料変換システム** - 原木から板材への自動変換機能
-- **4段階実行フロー** - 既存確認→材料評価→板材準備→作業台作成
+## 🚀 v1.6.4 大規模リファクタリング - プロジェクト構造最適化
+- **プロジェクト簡素化** - `npm start` のみでの完全動作、不要ファイル大量削除
+- **ドキュメント体系再構築** - カテゴリ別整理による発見性向上
+- **ESLint品質管理** - コード品質保証の継続
+- **Gemini協調評価** - AI協調による客観的品質確認システム
+- **マルチプレイヤー協調** - 5体のAIプレイヤーが安定協調動作
 
-## 🔄 v1.4.x 継続改善
-- **段階的バグ修正** - mineflayerクラフトAPI互換性問題の特定と解決
-- **診断システム強化** - 詳細なレシピ検証とインベントリ管理
-- **マルチプレイヤー最適化** - 5体のAIプレイヤー間での協調作業
+## 🎯 簡素化された使用方法
+- **単一コマンド**: `npm start` で5体のAIプレイヤーが即座に起動
+- **環境変数設定**: プレイヤー数やデバッグモードを柔軟にカスタマイズ
+- **コード品質**: `npm run lint` による継続的な品質管理
 
 ## ディレクトリ構成
 
 ```
-mc-ai/
-├── README.md                 # このファイル
-├── index.js                  # メインエントリーポイント
-├── package.json              # プロジェクト設定
-├── src/                      # メインソースコード
-│   ├── MinecraftAI.js       # メインAIコントローラー
-│   ├── VoyagerAI.js         # AI学習エンジン
-│   ├── SkillLibrary.js      # スキル管理
-│   └── ...
-├── docs/                     # ドキュメント
-│   ├── USER_GUIDE.md        # 完全なユーザーガイド
-│   ├── SETUP_AND_INSTALLATION.md  # セットアップ・インストール
-│   ├── AUTHENTICATION_GUIDE.md    # 認証設定
-│   ├── OPENAI_CONFIGURATION.md    # OpenAI設定・最適化
-│   ├── TECHNICAL_REFERENCE.md     # 技術アーキテクチャ
-│   └── CHANGELOG.md         # 変更履歴
-├── config/                   # 設定ファイル
-│   ├── players-config.json  # プレイヤー設定
-│   └── servers.json         # サーバー設定
-├── examples/                 # 使用例
-│   ├── multi-server.js      # マルチサーバー例
-│   └── ...
-├── tests/                    # テストファイル
-│   ├── ai_training_verification.js  # AI学習テスト
-│   └── ...
-├── training/                 # 学習関連
-│   ├── sample_training_data.json    # サンプル学習データ
-│   ├── training_scenarios.js       # 学習シナリオ
-│   └── ...
-└── references/              # 参考資料（Voyagerスキルライブラリ等）
+minecortex/
+├── README.md                      # このファイル
+├── package.json                   # プロジェクト設定（簡素化済み）
+├── examples/
+│   └── multiple-players.js       # メインエントリーポイント（npm start）
+├── src/                           # AIコンポーネント群
+│   ├── MinecraftAI.js            # メインAIコントローラー
+│   ├── VoyagerAI.js              # AI学習エンジン（メモリ内学習）
+│   ├── SkillLibrary.js           # スキル管理・実行
+│   ├── TaskPlanner.js            # タスク分解・計画
+│   ├── MultiPlayerCoordinator.js # 複数プレイヤー協調制御
+│   ├── StateManager.js           # 状態管理・同期
+│   ├── EnvironmentObserver.js    # 環境認識・監視
+│   ├── PathfindingCache.js       # 移動最適化
+│   ├── SharedEnvironment.js      # 共有環境データ
+│   ├── OpenAIRequestQueue.js     # AI API制御
+│   └── utils/                    # 共通ユーティリティ
+│       ├── ErrorHandler.js
+│       ├── Logger.js
+│       └── ValidationUtils.js
+├── config/                        # 設定ファイル
+│   ├── players-config.json       # プレイヤー設定
+│   └── item-alias.json           # アイテム別名管理
+├── docs/                          # 整理済みドキュメント
+│   ├── guides/                   # ユーザー向けガイド
+│   ├── references/               # 技術リファレンス
+│   ├── development/              # 開発者向け
+│   └── changelogs/               # 変更履歴
+└── logs/                          # 実行ログ
 ```
 
 ## 機能
@@ -118,17 +117,19 @@ mc-ai/
 
 ### 基本起動
 ```bash
-# マルチプレイヤーボット（デフォルト）
+# 5体のAIプレイヤーが協調動作（推奨）
 npm start
 
-# マルチプレイヤーボット（明示的）
-npm run multi-players
+# プレイヤー数カスタマイズ
+MULTIPLE_PLAYERS_COUNT=3 npm start    # 3体で起動
+MULTIPLE_PLAYERS_COUNT=10 npm start   # 10体で起動
 
-# 5体チーム
-npm run squad
+# デバッグモード
+DEBUG_MODE=true npm start
 
-# 10体軍団
-npm run army
+# コード品質チェック（開発時）
+npm run lint
+npm run lint:fix
 ```
 
 ### チャットコマンド
@@ -274,24 +275,36 @@ DEBUG_MODE=true
 
 | プレイヤー数 | CPU使用率 | メモリ使用量 | 推奨環境 |
 |-------------|-----------|-------------|----------|
-| 1体 | 5-10% | 100MB | 最小環境 |
-| 5体 | 15-25% | 500MB | 推奨環境 |
+| 3体 | 10-15% | 300MB | 最小環境 |
+| 5体 | 15-25% | 416MB | 推奨環境（実測値） |
 | 10体 | 30-50% | 1GB | 高性能環境 |
 
 - **ネットワーク**: 効率的、必要なパケットのみ送信
-- **学習**: 経験とともに徐々に改善
-- **🆕 協調システム**: 複数ボット間の効率的なリソース管理
+- **学習**: メモリ内学習により高速・リアルタイム改善
+- **協調システム**: 複数ボット間の効率的なリソース管理と同期制御
+- **実測パフォーマンス**: イベントループ遅延平均0.67ms、最大2.26ms
 
 ## 📚 詳細ドキュメント
 
 プロジェクトの詳細情報は以下のドキュメントを参照してください：
 
-- **[USER_GUIDE.md](docs/USER_GUIDE.md)** - 完全なユーザー使用ガイド
-- **[SETUP_AND_INSTALLATION.md](docs/SETUP_AND_INSTALLATION.md)** - 詳細なセットアップ手順
-- **[AUTHENTICATION_GUIDE.md](docs/AUTHENTICATION_GUIDE.md)** - オフライン・Microsoft認証設定
-- **[OPENAI_CONFIGURATION.md](docs/OPENAI_CONFIGURATION.md)** - OpenAI API設定と最適化
-- **[TECHNICAL_REFERENCE.md](docs/TECHNICAL_REFERENCE.md)** - 技術アーキテクチャとAI学習詳細
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - バージョン履歴と変更記録
+### ガイド
+- **[インストールガイド](docs/guides/installation.md)** - 詳細なセットアップ手順
+- **[ユーザーガイド](docs/guides/user_guide.md)** - 完全なユーザー使用ガイド
+- **[認証設定](docs/guides/authentication.md)** - オフライン・Microsoft認証設定
+- **[OpenAI設定](docs/guides/openai_setup.md)** - OpenAI API設定と最適化
+
+### リファレンス
+- **[技術リファレンス](docs/references/technical_reference.md)** - 技術アーキテクチャとAI学習詳細
+- **[スキルリファレンス](docs/references/skills_reference.md)** - Minecraftスキルの詳細分析
+
+### 開発者向け
+- **[貢献ガイド](docs/development/CONTRIBUTING.md)** - 開発参加方法とコーディング規約
+- **[NLU実装計画](docs/development/nlu_plan.md)** - NLU機能の実装計画
+
+### 変更履歴
+- **[変更履歴](docs/changelogs/CHANGELOG.md)** - バージョン履歴と変更記録
+- **[v1.6.4](docs/changelogs/CHANGELOG_1.6.4.md)** - 大規模リファクタリング記録
 
 ## ライセンス
 
@@ -302,8 +315,11 @@ MITライセンス - 必要に応じてボットを自由に変更・拡張し�
 1. リポジトリをフォーク
 2. 機能ブランチを作成
 3. 変更を実装
-4. 徹底的にテスト
-5. プルリクエストを提出
+4. `npm run lint` でコード品質確認
+5. `npm start` で動作確認
+6. プルリクエストを提出
+
+詳細は[貢献ガイド](docs/development/CONTRIBUTING.md)を参照してください。
 
 ## 謝辞
 

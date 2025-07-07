@@ -98,6 +98,37 @@ logs/
 minecortex.log
 minecortex*.log
 
+# AI/ML Model Data and Training Artifacts
+# AI学習データとトレーニング成果物
+training/
+*.model
+*.pt
+*.pth
+*.onnx
+*.pkl
+*.joblib
+ai_verification_report.json
+
+# Large data files
+# 大規模なデータファイル
+*.csv
+*.json.gz
+
+# Environment-specific configuration files
+# 環境固有の設定ファイル
+config/local-*.json
+
+# CI/CD cache and artifacts
+# CI/CDのキャッシュと成果物
+.gitlab-ci-cache/
+.circleci-cache/
+/build
+
+# IDE settings
+.idea/
+.vscode/
+*.code-workspace
+
 # OS generated files
 .DS_Store
 .DS_Store?

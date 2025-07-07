@@ -5,22 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node examples/multiple-players.js",
-    "test": "node tests/test-config.js",
-    "test:ai": "node tests/ai_training_verification.js",
-    "dev": "cross-env DEBUG_MODE=true node examples/multiple-players.js",
-    "multi-players": "node examples/multiple-players.js",
-    "squad": "cross-env MULTIPLE_PLAYERS_COUNT=5 node examples/multiple-players.js",
-    "army": "cross-env MULTIPLE_PLAYERS_COUNT=10 node examples/multiple-players.js",
-    "squad:win": "set MULTIPLE_PLAYERS_COUNT=5 && node examples/multiple-players.js",
-    "army:win": "set MULTIPLE_PLAYERS_COUNT=10 && node examples/multiple-players.js",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "profile:flame": "clinic flame -- node examples/multiple-players.js",
-    "profile:doctor": "clinic doctor -- node examples/multiple-players.js",
-    "profile:squad": "clinic flame -- cross-env MULTIPLE_PLAYERS_COUNT=5 node examples/multiple-players.js",
-    "test:performance": "node scripts/performance-test.js"
+    "lint:fix": "eslint . --fix"
   },
   "keywords": [
     "minecraft",
@@ -41,15 +27,11 @@
     "vec3": "^0.1.8"
   },
   "devDependencies": {
-    "@clinic/doctor": "^11.0.0",
-    "@clinic/flame": "^13.0.0",
-    "clinic": "^13.0.0",
     "eslint": "^8.55.0",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.29.0",
     "eslint-plugin-n": "^16.4.0",
-    "eslint-plugin-promise": "^6.1.1",
-    "prettier": "^3.1.0"
+    "eslint-plugin-promise": "^6.1.1"
   },
   "engines": {
     "node": ">=16.13.0"

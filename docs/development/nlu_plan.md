@@ -152,7 +152,7 @@ reportInventory()                          // インベントリ報告
 #### 3. テスト・品質保証
 **実装内容**: 包括的なテストスイート
 
-**tests/nlu-test.js**:
+**NLUテスト（削除済み）**:
 - NLUProcessor単体テスト
 - MinecraftAI統合テスト
 - MockBot環境でのサーバー非依存テスト

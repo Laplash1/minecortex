@@ -1,32 +1,39 @@
 # 技術リファレンス
 
-🧠 **MineCortex v1.2.1** の技術的な詳細とアーキテクチャについて説明します。
+🧠 **MineCortex v1.5.0** の技術的な詳細とアーキテクチャについて説明します。
 
-## 🚨 v1.2.1 技術的改善
-- **EPIPE保護システム**: 包括的なネットワークエラー処理
-- **強化されたエラーハンドリング**: null参照の完全防止
-- **最適化されたパスファインディング**: タイムアウト削減とフォールバック機能
-- **学習システム安定化**: VoyagerAI の堅牢性向上
+## 🚨 v1.5.0 技術的改善
+- **プロジェクト構造簡素化**: 不要なディレクトリ・ファイルを削除
+- **単一エントリーポイント**: `npm start` のみでの実行最適化
+- **コード品質管理**: ESLintによる継続的な品質保証
+- **ドキュメント整理**: カテゴリ別に再構成で保守性向上
 
 ## 📐 システムアーキテクチャ
 
 ### 全体構成
 ```
-MineCortex v1.2.1
-├── MinecraftAI (コアAIシステム)
-├── VoyagerAI (学習・スキル生成)
-├── SkillLibrary (行動定義)
-├── TaskPlanner (タスク管理)
-├── EnvironmentObserver (環境認識)
-├── StateManager (状態管理)
-└── MultiPlayerCoordinator (協調制御)
+MineCortex v1.5.0 簡素化アーキテクチャ
+├── examples/multiple-players.js (エントリーポイント)
+├── src/ (AIコンポーネント群)
+│   ├── MinecraftAI.js (コアAIシステム)
+│   ├── VoyagerAI.js (学習・スキル生成)
+│   ├── SkillLibrary.js (行動定義)
+│   ├── TaskPlanner.js (タスク管理)
+│   ├── EnvironmentObserver.js (環境認識)
+│   ├── StateManager.js (状態管理)
+│   ├── MultiPlayerCoordinator.js (協調制御)
+│   └── utils/ (共通ユーティリティ)
+├── config/ (設定ファイル)
+└── docs/ (整理済みドキュメント)
 ```
 
 ### データフローアーキテクチャ
 ```
-[環境観察] → [タスク計画] → [スキル実行] → [結果評価] → [学習データ蓄積] → [AI改善]
-     ↑                                                              ↓
-[状況判断] ← [カリキュラム生成] ← [学習分析] ← [パターン認識] ← [経験データベース]
+[複数プレイヤー起動] → [協調同期] → [環境観察] → [タスク計画] → [スキル実行]
+         ↓                           ↓             ↓             ↓
+[MultiPlayerCoordinator] → [SharedEnvironment] → [PathfindingCache] → [実行結果]
+         ↑                                                              ↓
+[プレイヤー間調整] ← [リソース共有] ← [学習データ] ← [結果評価] ← [VoyagerAI学習]
 ```
 
 ---
