@@ -3106,6 +3106,36 @@ class CraftToolsSkill extends Skill {
             throw new Error('Crafting table is no longer available');
           }
 
+          // currentWindowがNULLの場合、windowOpenイベントを待機
+          if (!bot.currentWindow) {
+            console.log('[ツールスキル] currentWindowがNULL - windowOpenイベントを待機中...');
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                bot.removeListener('windowOpen', onWindowOpen);
+                reject(new Error('windowOpen event timeout after 10 seconds'));
+              }, 10000);
+
+              const onWindowOpen = (window) => {
+                if (window.type === 'minecraft:crafting' || window.type === 'generic_3x3') {
+                  clearTimeout(timeout);
+                  bot.removeListener('windowOpen', onWindowOpen);
+                  console.log(`[ツールスキル] windowOpen確認: ${window.type}`);
+                  // 少し待ってからresolve to ensure window is fully initialized
+                  setTimeout(resolve, 100);
+                }
+              };
+
+              bot.on('windowOpen', onWindowOpen);
+            });
+          }
+
+          // currentWindowの最終確認
+          if (!bot.currentWindow) {
+            throw new Error('currentWindow is still null after waiting for windowOpen');
+          }
+
+          console.log(`[ツールスキル] currentWindow確認: ${bot.currentWindow.type}`);
+
           // bot.craft() 呼び出しをPromiseでラップして適切なエラー処理
           const craftPromise = bot.craft(recipe, 1, craftingTable);
           const result = await Promise.race([
