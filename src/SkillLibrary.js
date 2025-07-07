@@ -3046,6 +3046,11 @@ class CraftToolsSkill extends Skill {
           return { success: false, error: `Invalid recipe format for ${toolName}` };
         }
 
+        // Sanitize inShape so that bot.craft() never receives null cells
+        if (recipe.inShape) {
+          recipe.inShape = this.sanitizeInShape(recipe.inShape);
+        }
+
         // Fix missing ingredients field by generating from inShape
         if (!recipe.ingredients && recipe.inShape) {
           console.log(`[ツールスキル] ${toolName}のingredientsがnullのため、inShapeから生成します`);
@@ -3252,6 +3257,21 @@ class CraftToolsSkill extends Skill {
 
     console.log(`[レシピ修正] inShape分析: ${Array.from(itemCounts.entries()).map(([id, count]) => `ID:${id}×${count}`).join(', ')}`);
     return correctedDelta;
+  }
+
+  /**
+   * Sanitize inShape array by replacing null / undefined cells with 0.
+   * Mineflayer 4.x では bot.craft 内部で inShape[row][col].id を参照するため
+   * null が残っていると「Cannot read properties of null (reading 'id')」が発生する。
+   * 0 は Air を意味し、mineflayer 側でスキップされる。
+   * @param {Array} inShape 3x3 shaped recipe grid
+   * @returns {Array} sanitized copy
+   */
+  sanitizeInShape(inShape) {
+    if (!Array.isArray(inShape)) return inShape;
+    return inShape.map(row =>
+      Array.isArray(row) ? row.map(cell => (cell == null ? 0 : cell)) : row
+    );
   }
 
   async getMissingMaterialsForRecipe(bot, itemId, craftingTable) {
