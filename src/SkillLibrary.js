@@ -148,14 +148,22 @@ class SkillLibrary {
             // 最初のレシピを変換
             const rawRecipe = directRecipes[0];
 
-            // Mineflayer形式に変換
+            // Mineflayer形式に変換 - resultプロパティを確実に設定
             foundRecipe = {
               id: itemId, // レシピIDとしてitemIdを使用
-              result: rawRecipe.result || { id: itemId, count },
+              result: {
+                id: itemId,
+                count: count || 1
+              },
               delta: [],
               inShape: rawRecipe.inShape || null,
               ingredients: rawRecipe.ingredients || null
             };
+
+            // rawRecipe.resultが存在する場合は上書き
+            if (rawRecipe.result && typeof rawRecipe.result === 'object' && rawRecipe.result.id) {
+              foundRecipe.result = rawRecipe.result;
+            }
 
             // 材料情報を変換
             if (rawRecipe.ingredients) {
@@ -220,6 +228,86 @@ class SkillLibrary {
       console.error(`[レシピ検索] エラー: ${error.message}`);
       return null;
     }
+  }
+
+  /**
+   * Find best available tool material with material priority system (Gemini collaboration)
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {*} _inventory - Unused parameter for compatibility
+   * @param {string} toolType - Tool type (pickaxe, axe, shovel, sword, hoe)
+   * @returns {Object|null} Best material info or null
+   */
+  static findBestAvailableToolMaterial(bot, _inventory, toolType = 'pickaxe') {
+    // 優先順位: 鉄 > 石 > 金 > 木材 (ダイヤモンド除外)
+    const materialPriority = [
+      {
+        name: 'iron_ingot',
+        tools: {
+          pickaxe: 'iron_pickaxe',
+          axe: 'iron_axe',
+          shovel: 'iron_shovel',
+          sword: 'iron_sword',
+          hoe: 'iron_hoe'
+        }
+      },
+      {
+        name: 'cobblestone',
+        tools: {
+          pickaxe: 'stone_pickaxe',
+          axe: 'stone_axe',
+          shovel: 'stone_shovel',
+          sword: 'stone_sword',
+          hoe: 'stone_hoe'
+        }
+      },
+      {
+        name: 'gold_ingot',
+        tools: {
+          pickaxe: 'golden_pickaxe',
+          axe: 'golden_axe',
+          shovel: 'golden_shovel',
+          sword: 'golden_sword',
+          hoe: 'golden_hoe'
+        }
+      }
+    ];
+
+    // ダイヤモンドツールの除外チェック
+    const excludedMaterials = ['diamond', 'netherite'];
+
+    for (const material of materialPriority) {
+      // ダイヤモンドやネザライトは除外
+      if (excludedMaterials.some(excluded => material.name.includes(excluded))) {
+        console.log(`[ツール作成] ${material.name} は除外対象です`);
+        continue;
+      }
+
+      // ツール作成に必要な材料（通常は3つ、剣は2つ）と棒（2つ）があるか確認
+      const materialCount = toolType === 'sword' ? 2 : 3;
+      const stickCount = toolType === 'sword' ? 1 : 2;
+
+      const hasMaterial = bot.inventory.items().some(item => item.name === material.name && item.count >= materialCount);
+      const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
+
+      if (hasMaterial && hasSticks && material.tools[toolType]) {
+        console.log(`[ツール作成] 最良の利用可能素材として ${material.name} を発見 (${toolType})`);
+        return { name: material.name, tool: material.tools[toolType] };
+      }
+    }
+
+    // 木材のチェック (特殊ケース)
+    const woodenPlanks = bot.inventory.items().find(item => item.name && item.name.includes('_planks') && item.count >= 3);
+    const stickCount = toolType === 'sword' ? 1 : 2;
+    const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
+
+    if (woodenPlanks && hasSticks) {
+      const woodenToolName = `wooden_${toolType}`;
+      console.log(`[ツール作成] 最良の利用可能素材として ${woodenPlanks.name} を発見 (${toolType})`);
+      return { name: woodenPlanks.name, tool: woodenToolName };
+    }
+
+    console.log(`[ツール作成] ${toolType}を作成するための適切な素材が見つかりません`);
+    return null;
   }
 
   /**
@@ -2255,79 +2343,6 @@ class MineBlockSkill extends Skill {
     return { success: false, error: '適切なツールがなく、作成もできませんでした', reason: 'NO_TOOL' };
   }
 
-  // Find best available tool material with material priority system (Enhanced)
-  static findBestAvailableToolMaterial(bot, _inventory, toolType = 'pickaxe') {
-    // 優先順位: 鉄 > 石 > 金 > 木材 (ダイヤモンド除外)
-    const materialPriority = [
-      {
-        name: 'iron_ingot',
-        tools: {
-          pickaxe: 'iron_pickaxe',
-          axe: 'iron_axe',
-          shovel: 'iron_shovel',
-          sword: 'iron_sword',
-          hoe: 'iron_hoe'
-        }
-      },
-      {
-        name: 'cobblestone',
-        tools: {
-          pickaxe: 'stone_pickaxe',
-          axe: 'stone_axe',
-          shovel: 'stone_shovel',
-          sword: 'stone_sword',
-          hoe: 'stone_hoe'
-        }
-      },
-      {
-        name: 'gold_ingot',
-        tools: {
-          pickaxe: 'golden_pickaxe',
-          axe: 'golden_axe',
-          shovel: 'golden_shovel',
-          sword: 'golden_sword',
-          hoe: 'golden_hoe'
-        }
-      }
-    ];
-
-    // ダイヤモンドツールの除外チェック
-    const excludedMaterials = ['diamond', 'netherite'];
-
-    for (const material of materialPriority) {
-      // ダイヤモンドやネザライトは除外
-      if (excludedMaterials.some(excluded => material.name.includes(excluded))) {
-        console.log(`[ツール作成] ${material.name} は除外対象です`);
-        continue;
-      }
-
-      // ツール作成に必要な材料（通常は3つ、剣は2つ）と棒（2つ）があるか確認
-      const materialCount = toolType === 'sword' ? 2 : 3;
-      const stickCount = toolType === 'sword' ? 1 : 2;
-
-      const hasMaterial = bot.inventory.items().some(item => item.name === material.name && item.count >= materialCount);
-      const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
-
-      if (hasMaterial && hasSticks && material.tools[toolType]) {
-        console.log(`[ツール作成] 最良の利用可能素材として ${material.name} を発見 (${toolType})`);
-        return { name: material.name, tool: material.tools[toolType] };
-      }
-    }
-
-    // 木材のチェック (特殊ケース)
-    const woodenPlanks = bot.inventory.items().find(item => item.name && item.name.includes('_planks') && item.count >= 3);
-    const stickCount = toolType === 'sword' ? 1 : 2;
-    const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
-
-    if (woodenPlanks && hasSticks) {
-      const woodenToolName = `wooden_${toolType}`;
-      console.log(`[ツール作成] 最良の利用可能素材として ${woodenPlanks.name} を発見 (${toolType})`);
-      return { name: woodenPlanks.name, tool: woodenToolName };
-    }
-
-    console.log(`[ツール作成] ${toolType}を作成するための適切な素材が見つかりません`);
-    return null;
-  }
 
   // Craft best available pickaxe (Gemini collaboration)
   async craftBestAvailablePickaxe(bot) {
@@ -2346,7 +2361,7 @@ class MineBlockSkill extends Skill {
       }
     }
 
-    const bestMaterial = SkillLibrary.findBestAvailableToolMaterial(bot, null);
+    const bestMaterial = SkillLibrary.findBestAvailableToolMaterial(bot, null, 'pickaxe');
     if (!bestMaterial) {
       return { success: false, error: 'ツール作成に必要な素材（鉱石や石、木材）がありません' };
     }
@@ -3264,10 +3279,14 @@ class CraftToolsSkill extends Skill {
 
       if (recipe) {
         // 最適化されたレシピから実際のツール名を取得
-        const optimizedToolItem = mcData.items[recipe.result.id];
-        if (optimizedToolItem) {
-          actualToolName = optimizedToolItem.name;
-          console.log(`[ツールスキル] 素材優先度システムにより ${toolName} -> ${actualToolName} に最適化`);
+        if (recipe.result && recipe.result.id) {
+          const optimizedToolItem = mcData.items[recipe.result.id];
+          if (optimizedToolItem) {
+            actualToolName = optimizedToolItem.name;
+            console.log(`[ツールスキル] 素材優先度システムにより ${toolName} -> ${actualToolName} に最適化`);
+          }
+        } else {
+          console.warn(`[ツールスキル] 最適化レシピの result.id が無効です: ${JSON.stringify(recipe.result)}`);
         }
       } else {
         // フォールバック: 通常のレシピ取得
