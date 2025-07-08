@@ -223,6 +223,75 @@ class SkillLibrary {
   }
 
   /**
+   * Get optimized tool recipe using best available materials with priority system
+   * @param {Bot} bot - Mineflayer bot instance
+   * @param {string} toolName - Tool name (e.g., 'iron_pickaxe', 'stone_sword')
+   * @param {number} count - Number of tools to craft
+   * @param {Block|null} table - Crafting table block
+   * @returns {Object|null} Optimized recipe or null
+   */
+  static async getOptimizedToolRecipe(bot, toolName, count = 1, table = null) {
+    const mcData = require('minecraft-data')(bot.version);
+
+    if (!mcData) {
+      console.error(`[ツール最適化] minecraft-data for version ${bot.version} not found`);
+      return null;
+    }
+
+    // ダイヤモンドツールの除外チェック
+    const excludedMaterials = ['diamond', 'netherite'];
+    if (excludedMaterials.some(excluded => toolName.includes(excluded))) {
+      console.log(`[ツール最適化] ${toolName} は除外対象です (ダイヤモンド/ネザライト)`);
+      return null;
+    }
+
+    // ツールタイプを抽出
+    const toolTypes = ['pickaxe', 'axe', 'shovel', 'sword', 'hoe'];
+    const toolType = toolTypes.find(type => toolName.includes(type));
+
+    if (!toolType) {
+      console.log(`[ツール最適化] 不明なツールタイプ: ${toolName}`);
+      return null;
+    }
+
+    // 最適な材料を検索
+    const bestMaterial = SkillLibrary.findBestAvailableToolMaterial(bot, null, toolType);
+    if (!bestMaterial) {
+      console.log(`[ツール最適化] ${toolType}の最適な材料が見つかりません`);
+      return null;
+    }
+
+    // 最適な材料で作成可能なツール名を取得
+    const optimizedToolName = bestMaterial.tool;
+    console.log(`[ツール最適化] ${toolName} -> ${optimizedToolName} (${bestMaterial.name})`);
+
+    // 最適化されたツールのレシピを取得
+    const toolItem = mcData.itemsByName[optimizedToolName];
+    if (!toolItem) {
+      console.warn(`[ツール最適化] Tool ${optimizedToolName} not found in minecraft-data`);
+      return null;
+    }
+
+    // レシピを取得
+    let recipe = null;
+    try {
+      const recipes = bot.recipesFor(toolItem.id, null, count, table);
+      if (recipes.length > 0) {
+        recipe = recipes[0];
+      }
+    } catch (error) {
+      console.log(`[ツール最適化] bot.recipesFor failed: ${error.message}`);
+    }
+
+    if (!recipe) {
+      console.log(`[ツール最適化] ${optimizedToolName}のレシピが見つかりません`);
+      return null;
+    }
+
+    return recipe;
+  }
+
+  /**
    * Get optimized wooden tool recipe using available wood planks
    * @param {Bot} bot - Mineflayer bot instance
    * @param {string} toolName - Wooden tool name (e.g., 'wooden_pickaxe')
@@ -2076,6 +2145,235 @@ class MineBlockSkill extends Skill {
     console.log(`[ツール管理] ${block.name}の採掘に適したツールを装備します`);
     const blockName = block.name;
 
+    // Tool hierarchy with mining levels and durability (Gemini collaboration)
+    const toolHierarchy = {
+      wooden: { level: 1, durability: 59 },
+      golden: { level: 1, durability: 32 }, // 金は速いが木と同じレベル
+      stone: { level: 2, durability: 131 },
+      iron: { level: 3, durability: 250 },
+      diamond: { level: 4, durability: 1561 }, // 存在は定義するが、作成ロジックからは除外
+      netherite: { level: 5, durability: 2031 }
+    };
+
+    // Block mining requirements with required tool levels
+    const blockMiningRequirements = {
+      coal_ore: { requiredLevel: 1 },
+      copper_ore: { requiredLevel: 2 },
+      iron_ore: { requiredLevel: 2 },
+      lapis_ore: { requiredLevel: 2 },
+      gold_ore: { requiredLevel: 3 },
+      redstone_ore: { requiredLevel: 3 },
+      diamond_ore: { requiredLevel: 3 },
+      emerald_ore: { requiredLevel: 3 },
+      obsidian: { requiredLevel: 4 },
+      ancient_debris: { requiredLevel: 4 },
+      // Deepslate variants
+      deepslate_coal_ore: { requiredLevel: 1 },
+      deepslate_copper_ore: { requiredLevel: 2 },
+      deepslate_iron_ore: { requiredLevel: 2 },
+      deepslate_lapis_ore: { requiredLevel: 2 },
+      deepslate_gold_ore: { requiredLevel: 3 },
+      deepslate_redstone_ore: { requiredLevel: 3 },
+      deepslate_diamond_ore: { requiredLevel: 3 },
+      deepslate_emerald_ore: { requiredLevel: 3 },
+      // Stone variants
+      stone: { requiredLevel: 1 },
+      cobblestone: { requiredLevel: 1 },
+      deepslate: { requiredLevel: 1 },
+      // Nether ores
+      nether_quartz_ore: { requiredLevel: 1 },
+      nether_gold_ore: { requiredLevel: 1 },
+      // Default for hand-minable blocks
+      default: { requiredLevel: 0 }
+    };
+
+    // Get block mining requirement
+    const requirement = blockMiningRequirements[blockName] ||
+                       (blockName.includes('ore') ? blockMiningRequirements.iron_ore : blockMiningRequirements.default);
+    const requiredLevel = requirement.requiredLevel;
+
+    console.log(`[ツール管理] ${blockName}の採掘に必要なレベル: ${requiredLevel}`);
+
+    // If hand-minable
+    if (requiredLevel === 0) {
+      console.log(`[ツール管理] ${blockName}は素手で採掘可能`);
+      return { success: true, toolUsed: 'hand' };
+    }
+
+    // Find best tool in inventory
+    const inventory = bot.inventory.items();
+    const pickaxes = inventory.filter(item => item.name && item.name.includes('_pickaxe'));
+
+    let bestTool = null;
+    let bestLevel = -1;
+
+    for (const tool of pickaxes) {
+      const toolType = tool.name.split('_')[0];
+      const toolInfo = toolHierarchy[toolType];
+
+      if (toolInfo && toolInfo.level >= requiredLevel) {
+        // より高いレベルのツールを優先
+        if (toolInfo.level > bestLevel) {
+          bestLevel = toolInfo.level;
+          bestTool = tool;
+        }
+      }
+    }
+
+    // Equip best available tool
+    if (bestTool) {
+      try {
+        await bot.equip(bestTool, 'hand');
+        console.log(`[ツール管理] ${bestTool.name}を装備しました (レベル${bestLevel})`);
+        return { success: true, toolUsed: bestTool.name };
+      } catch (err) {
+        console.error(`[ツール管理] ${bestTool.name}の装備に失敗: ${err.message}`);
+        return { success: false, error: 'ツールの装備に失敗しました' };
+      }
+    }
+
+    // No appropriate tool found - try to craft one
+    console.log(`[ツール管理] ${blockName}の採掘に適したツールがありません。作成を試みます...`);
+    bot.chat(`${blockName}を掘るための適切な道具がないので、作ってみます。`);
+
+    const craftResult = await this.craftBestAvailablePickaxe(bot);
+    if (craftResult.success && craftResult.toolName) {
+      const newTool = bot.inventory.items().find(item => item.name === craftResult.toolName);
+      if (newTool) {
+        try {
+          await bot.equip(newTool, 'hand');
+          console.log(`[ツール管理] 新しく作成した ${craftResult.toolName}を装備しました`);
+          return { success: true, toolUsed: craftResult.toolName };
+        } catch (err) {
+          return { success: false, error: '作成したツールの装備に失敗しました' };
+        }
+      }
+    }
+
+    console.error(`[ツール管理] ${blockName}に必要なツールの作成に失敗しました`);
+    bot.chat('適切な道具の作成に失敗しました。');
+    return { success: false, error: '適切なツールがなく、作成もできませんでした', reason: 'NO_TOOL' };
+  }
+
+  // Find best available tool material with material priority system (Enhanced)
+  static findBestAvailableToolMaterial(bot, _inventory, toolType = 'pickaxe') {
+    // 優先順位: 鉄 > 石 > 金 > 木材 (ダイヤモンド除外)
+    const materialPriority = [
+      {
+        name: 'iron_ingot',
+        tools: {
+          pickaxe: 'iron_pickaxe',
+          axe: 'iron_axe',
+          shovel: 'iron_shovel',
+          sword: 'iron_sword',
+          hoe: 'iron_hoe'
+        }
+      },
+      {
+        name: 'cobblestone',
+        tools: {
+          pickaxe: 'stone_pickaxe',
+          axe: 'stone_axe',
+          shovel: 'stone_shovel',
+          sword: 'stone_sword',
+          hoe: 'stone_hoe'
+        }
+      },
+      {
+        name: 'gold_ingot',
+        tools: {
+          pickaxe: 'golden_pickaxe',
+          axe: 'golden_axe',
+          shovel: 'golden_shovel',
+          sword: 'golden_sword',
+          hoe: 'golden_hoe'
+        }
+      }
+    ];
+
+    // ダイヤモンドツールの除外チェック
+    const excludedMaterials = ['diamond', 'netherite'];
+
+    for (const material of materialPriority) {
+      // ダイヤモンドやネザライトは除外
+      if (excludedMaterials.some(excluded => material.name.includes(excluded))) {
+        console.log(`[ツール作成] ${material.name} は除外対象です`);
+        continue;
+      }
+
+      // ツール作成に必要な材料（通常は3つ、剣は2つ）と棒（2つ）があるか確認
+      const materialCount = toolType === 'sword' ? 2 : 3;
+      const stickCount = toolType === 'sword' ? 1 : 2;
+
+      const hasMaterial = bot.inventory.items().some(item => item.name === material.name && item.count >= materialCount);
+      const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
+
+      if (hasMaterial && hasSticks && material.tools[toolType]) {
+        console.log(`[ツール作成] 最良の利用可能素材として ${material.name} を発見 (${toolType})`);
+        return { name: material.name, tool: material.tools[toolType] };
+      }
+    }
+
+    // 木材のチェック (特殊ケース)
+    const woodenPlanks = bot.inventory.items().find(item => item.name && item.name.includes('_planks') && item.count >= 3);
+    const stickCount = toolType === 'sword' ? 1 : 2;
+    const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
+
+    if (woodenPlanks && hasSticks) {
+      const woodenToolName = `wooden_${toolType}`;
+      console.log(`[ツール作成] 最良の利用可能素材として ${woodenPlanks.name} を発見 (${toolType})`);
+      return { name: woodenPlanks.name, tool: woodenToolName };
+    }
+
+    console.log(`[ツール作成] ${toolType}を作成するための適切な素材が見つかりません`);
+    return null;
+  }
+
+  // Craft best available pickaxe (Gemini collaboration)
+  async craftBestAvailablePickaxe(bot) {
+    console.log('[ツール作成] 利用可能な最良のピッケルの作成を開始...');
+
+    // Check if we have sticks, if not try to create them
+    const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= 2);
+    if (!hasSticks) {
+      console.log('[ツール作成] 棒が不足しているため、作成を試みます');
+      const craftSticksSkill = this.getSkill('craft_tools');
+      if (craftSticksSkill) {
+        const stickResult = await craftSticksSkill.execute(bot, { toolName: 'stick', amount: 4 });
+        if (!stickResult.success) {
+          return { success: false, error: 'ツールの柄となる棒の作成に失敗しました' };
+        }
+      }
+    }
+
+    const bestMaterial = SkillLibrary.findBestAvailableToolMaterial(bot, null);
+    if (!bestMaterial) {
+      return { success: false, error: 'ツール作成に必要な素材（鉱石や石、木材）がありません' };
+    }
+
+    const { tool: toolToCraft } = bestMaterial;
+    const craftSkill = this.getSkill('craft_tools');
+    if (!craftSkill) {
+      return { success: false, error: 'CraftToolsSkillが見つかりません' };
+    }
+
+    console.log(`[ツール作成] ${toolToCraft} の作成を試みます...`);
+    const craftResult = await craftSkill.execute(bot, {
+      toolName: toolToCraft,
+      amount: 1
+    });
+
+    if (craftResult.success) {
+      console.log(`[ツール作成] ${toolToCraft} の作成に成功しました`);
+      return { success: true, toolName: toolToCraft };
+    } else {
+      console.error(`[ツール作成] ${toolToCraft} の作成に失敗しました: ${craftResult.error}`);
+      return { success: false, error: `${toolToCraft}の作成に失敗: ${craftResult.error}` };
+    }
+  }
+
+  // Legacy tool requirements (for backward compatibility)
+  getLegacyToolRequirements() {
     // Define which blocks require tools and what tools are needed
     const toolRequirements = {
       // Stone and cobblestone can be mined with any pickaxe, faster with better pickaxes
@@ -2124,6 +2422,12 @@ class MineBlockSkill extends Skill {
       ancient_debris: ['diamond_pickaxe']
     };
 
+    return toolRequirements;
+  }
+
+  // Tool management method for mining operations
+  async manageTool(bot, blockName) {
+    const toolRequirements = this.getLegacyToolRequirements();
     const requiredTools = toolRequirements[blockName];
 
     // If no specific tool is required, no tool needed (like dirt, grass, etc.)
@@ -2933,6 +3237,14 @@ class CraftToolsSkill extends Skill {
     for (const toolName of tools) {
       console.log(`[ツールスキル] ${toolName}の作成を試みます`);
 
+      // ダイヤモンドツールの除外チェック
+      const excludedMaterials = ['diamond', 'netherite'];
+      if (excludedMaterials.some(excluded => toolName.includes(excluded))) {
+        console.log(`[ツールスキル] ${toolName} は除外対象です (ダイヤモンド/ネザライト)`);
+        bot.chat(`${toolName}は作成対象外です（ダイヤモンド/ネザライト除外）`);
+        continue;
+      }
+
       const toolItem = mcData.itemsByName[toolName];
       if (!toolItem) {
         console.log(`[ツールスキル] 不明なツール: ${toolName}`);
@@ -2946,39 +3258,53 @@ class CraftToolsSkill extends Skill {
         continue;
       }
 
-      // Use getRecipeSafe for better recipe handling
-      let recipe = await SkillLibrary.getRecipeSafe(bot, toolName, 1, craftingTable);
-      if (!recipe) {
-        console.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
+      // 素材優先度システムを使用して最適化されたレシピを取得
+      let recipe = await SkillLibrary.getOptimizedToolRecipe(bot, toolName, 1, craftingTable);
+      let actualToolName = toolName;
 
-        // Try alternative recipes or wait for materials
-        const alternativeRecipe = await SkillLibrary.getRecipeSafe(bot, toolItem.id, 1, craftingTable);
-        if (!alternativeRecipe) {
-          console.log(`[ツールスキル] ${toolName}の代替レシピも見つかりません`);
-          bot.chat(`${toolName}のレシピが見つかりません`);
-          return {
-            success: false,
-            reason: 'NO_RECIPE',
-            details: { tool: toolName, message: 'レシピが見つかりません' }
-          };
-        } else {
-          console.log(`[ツールスキル] ${toolName}の代替レシピを使用します`);
-          recipe = alternativeRecipe;
+      if (recipe) {
+        // 最適化されたレシピから実際のツール名を取得
+        const optimizedToolItem = mcData.items[recipe.result.id];
+        if (optimizedToolItem) {
+          actualToolName = optimizedToolItem.name;
+          console.log(`[ツールスキル] 素材優先度システムにより ${toolName} -> ${actualToolName} に最適化`);
         }
-      }
+      } else {
+        // フォールバック: 通常のレシピ取得
+        recipe = await SkillLibrary.getRecipeSafe(bot, toolName, 1, craftingTable);
+        if (!recipe) {
+          console.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
 
-      if (toolName.includes('wooden_') && !recipe) {
-        console.log(`[ツールスキル] 木材ツール用の最適化レシピを再取得: ${toolName}`);
-        recipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, toolName, 1, craftingTable);
-        if (recipe) {
-          console.log(`[ツールスキル] 木材最適化レシピを取得成功: ${toolName}`);
+          // Try alternative recipes or wait for materials
+          const alternativeRecipe = await SkillLibrary.getRecipeSafe(bot, toolItem.id, 1, craftingTable);
+          if (!alternativeRecipe) {
+            console.log(`[ツールスキル] ${toolName}の代替レシピも見つかりません`);
+            bot.chat(`${toolName}のレシピが見つかりません`);
+            return {
+              success: false,
+              reason: 'NO_RECIPE',
+              details: { tool: toolName, message: 'レシピが見つかりません' }
+            };
+          } else {
+            console.log(`[ツールスキル] ${toolName}の代替レシピを使用します`);
+            recipe = alternativeRecipe;
+          }
+        }
+
+        if (toolName.includes('wooden_') && !recipe) {
+          console.log(`[ツールスキル] 木材ツール用の最適化レシピを再取得: ${toolName}`);
+          recipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, toolName, 1, craftingTable);
+          if (recipe) {
+            console.log(`[ツールスキル] 木材最適化レシピを取得成功: ${toolName}`);
+          }
         }
       }
 
       // Check for sufficient materials now that we have a valid recipe
-      const missingMaterials = await this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+      const targetToolItem = mcData.itemsByName[actualToolName] || toolItem;
+      const missingMaterials = await this.getMissingMaterialsForRecipe(bot, targetToolItem.id, craftingTable);
       if (missingMaterials && missingMaterials.length > 0) {
-        console.log(`[ツールスキル] ${toolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
+        console.log(`[ツールスキル] ${actualToolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
 
         // Try to auto-convert materials if possible
         let materialConverted = false;
@@ -3044,14 +3370,14 @@ class CraftToolsSkill extends Skill {
         }
 
         // Re-check materials after conversion
-        const updatedMissingMaterials = await this.getMissingMaterialsForRecipe(bot, toolItem.id, craftingTable);
+        const updatedMissingMaterials = await this.getMissingMaterialsForRecipe(bot, targetToolItem.id, craftingTable);
         if (updatedMissingMaterials && updatedMissingMaterials.length > 0) {
           console.log(`[ツールスキル] 材料変換後も不足: ${updatedMissingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
-          bot.chat(`${toolName}の材料が不足しています`);
+          bot.chat(`${actualToolName}の材料が不足しています`);
           return {
             success: false,
             reason: 'INSUFFICIENT_MATERIALS',
-            details: { missing: updatedMissingMaterials, tool: toolName }
+            details: { missing: updatedMissingMaterials, tool: actualToolName }
           };
         } else {
           console.log('[ツールスキル] 材料変換後、材料が十分になりました');
@@ -3200,13 +3526,13 @@ class CraftToolsSkill extends Skill {
           console.log(`[ツールスキル] bot.craft()内部エラー: ${craftError.message}`);
           throw craftError;
         }
-        console.log(`[ツールスキル] ${toolName}をクラフトしました！`);
-        bot.chat(`${toolName}をクラフトしました！ 🔨`);
-        craftedTools.push(toolName);
+        console.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
+        bot.chat(`${actualToolName}をクラフトしました！ 🔨`);
+        craftedTools.push(actualToolName);
       } catch (error) {
-        console.log(`[ツールスキル] ${toolName}のクラフトに失敗: ${error.message}`);
+        console.log(`[ツールスキル] ${actualToolName}のクラフトに失敗: ${error.message}`);
         console.log('[ツールスキル] レシピ詳細:', recipe ? JSON.stringify(recipe, null, 2) : 'null');
-        return { success: false, error: `Failed to craft ${toolName}: ${error.message}` };
+        return { success: false, error: `Failed to craft ${actualToolName}: ${error.message}` };
       }
     }
 
