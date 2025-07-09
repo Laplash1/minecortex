@@ -3449,9 +3449,35 @@ class CraftToolsSkill extends Skill {
             if (Array.isArray(row)) {
               for (const item of row) {
                 if (item !== 0 && item !== null && item !== undefined) {
-                  const itemData = mcData.items[item];
-                  if (!itemData) {
-                    console.log(`[ツールスキル] 無効なアイテムID: ${item}`);
+                  // Handle object types that shouldn't be here
+                  if (typeof item === 'object') {
+                    console.log(`[ツールスキル] 無効なアイテムID (オブジェクト): ${JSON.stringify(item)}`);
+                    hasInvalidItems = true;
+                    continue;
+                  }
+                  
+                  // Handle string types that shouldn't be here
+                  if (typeof item === 'string') {
+                    console.log(`[ツールスキル] 無効なアイテムID (文字列): ${item}`);
+                    hasInvalidItems = true;
+                    continue;
+                  }
+                  
+                  // Handle number types - check if they exist in mcData
+                  if (typeof item === 'number') {
+                    // -1 is a valid ID in mineflayer representing empty slots
+                    if (item === -1) {
+                      // -1 is valid - represents empty slot in mineflayer
+                      continue;
+                    }
+                    
+                    const itemData = mcData.items[item];
+                    if (!itemData) {
+                      console.log(`[ツールスキル] 無効なアイテムID (数値): ${item}`);
+                      hasInvalidItems = true;
+                    }
+                  } else {
+                    console.log(`[ツールスキル] 無効なアイテムID (不明な型): ${typeof item}, 値: ${item}`);
                     hasInvalidItems = true;
                   }
                 }
@@ -3460,6 +3486,7 @@ class CraftToolsSkill extends Skill {
           }
           if (hasInvalidItems) {
             console.log('[ツールスキル] inShapeに無効なアイテムIDが含まれています');
+            console.log('[ツールスキル] 現在のinShape:', JSON.stringify(recipe.inShape, null, 2));
             return { success: false, error: `Invalid item IDs in recipe for ${toolName}` };
           }
         }
@@ -3477,37 +3504,33 @@ class CraftToolsSkill extends Skill {
           recipe.delta = this.fixDeltaFromInShape(recipe.delta, recipe.inShape);
         }
 
-        // 詳細なデバッグ情報を追加
-        console.log(`[ツールスキル] ${toolName}のクラフト直前デバッグ:`);
-        console.log(`  - craftingTable: ${craftingTable ? 'OK' : 'NULL'}`);
-        console.log(`  - recipe: ${recipe ? 'OK' : 'NULL'}`);
-        console.log(`  - recipe.id: ${recipe?.id}`);
-        console.log(`  - recipe.result: ${recipe?.result ? JSON.stringify(recipe.result) : 'NULL'}`);
-        console.log(`  - recipe.delta: ${recipe?.delta ? JSON.stringify(recipe.delta) : 'NULL'}`);
-        console.log(`  - recipe.inShape: ${recipe?.inShape ? JSON.stringify(recipe.inShape) : 'NULL'}`);
-        console.log(`  - recipe.ingredients: ${recipe?.ingredients ? JSON.stringify(recipe.ingredients) : 'NULL'}`);
-
-        // minecraft-data の状態確認（既存のmcDataを使用）
-        console.log(`  - mcData: ${mcData ? 'OK' : 'NULL'}`);
-        console.log(`  - mcData.version: ${mcData?.version?.minecraftVersion || 'unknown'}`);
-        console.log(`  - bot.version: ${bot.version}`);
-
-        // botの状態確認
-        console.log(`  - bot.entity: ${bot.entity ? 'OK' : 'NULL'}`);
-        console.log(`  - bot.inventory: ${bot.inventory ? 'OK' : 'NULL'}`);
-        console.log(`  - bot.currentWindow: ${bot.currentWindow ? bot.currentWindow.type : 'NULL'}`);
-
-        // レシピ検証を追加
-        if (recipe && recipe.delta) {
-          for (const item of recipe.delta) {
-            if (item && item.id !== null && item.id !== undefined) {
-              const mcItem = mcData.items[item.id];
-              console.log(`  - delta item ${item.id}: ${mcItem ? mcItem.name : 'UNKNOWN'}`);
-            } else {
-              console.log('  - delta item: NULL or invalid');
-            }
-          }
+        // CRITICAL FIX: Ensure recipe.id is set for bot.craft() compatibility
+        if (!recipe.id && recipe.result && recipe.result.id) {
+          recipe.id = recipe.result.id;
+          console.log(`[ツールスキル] recipe.id missing - setting to result.id: ${recipe.id}`);
         }
+
+        // Use official bot.recipesFor() for reliable crafting
+        try {
+          const targetItemId = recipe.result.id;
+          const officialRecipes = bot.recipesFor(targetItemId, null, 1, craftingTable);
+          
+          if (officialRecipes.length > 0) {
+            const officialRecipe = officialRecipes[0];
+            console.log(`[ツールスキル] ${actualToolName}のクラフトを実行中...`);
+            await bot.craft(officialRecipe, 1, craftingTable);
+            console.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
+            bot.chat(`${actualToolName}をクラフトしました！ 🔨`);
+            craftedTools.push(actualToolName);
+            continue;
+          }
+        } catch (officialRecipeError) {
+          console.log(`[ツールスキル] 公式レシピでのクラフトに失敗: ${officialRecipeError.message}`);
+          console.log(`[ツールスキル] 手動レシピでクラフトを続行...`);
+        }
+
+        // Fallback to manual recipe crafting
+        console.log(`[ツールスキル] ${toolName}の手動レシピでクラフトを試行中...`);
 
         // より安全な bot.craft() 呼び出しを実装
         try {
@@ -3556,12 +3579,27 @@ class CraftToolsSkill extends Skill {
             });
           }
 
-          // currentWindowの最終確認
+          // currentWindowの最終確認と追加待機
+          let windowCheckAttempts = 0;
+          const maxWindowCheckAttempts = 10;
+          
+          while (!bot.currentWindow && windowCheckAttempts < maxWindowCheckAttempts) {
+            console.log(`[ツールスキル] currentWindow待機中... (${windowCheckAttempts + 1}/${maxWindowCheckAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            windowCheckAttempts++;
+          }
+          
           if (!bot.currentWindow) {
-            throw new Error('currentWindow is still null after waiting for windowOpen');
+            throw new Error('currentWindow is still null after extended waiting');
           }
 
           console.log(`[ツールスキル] currentWindow確認: ${bot.currentWindow.type}`);
+
+          // クラフト直前の最終材料確認
+          const finalMaterialCheck = await this.verifyMaterialsBeforeCraft(bot, recipe);
+          if (!finalMaterialCheck.success) {
+            throw new Error(`Final material check failed: ${finalMaterialCheck.error}`);
+          }
 
           // bot.craft() 呼び出しをPromiseでラップして適切なエラー処理
           const craftPromise = bot.craft(recipe, 1, craftingTable);
@@ -3574,7 +3612,7 @@ class CraftToolsSkill extends Skill {
 
           console.log(`[ツールスキル] ${toolName}のクラフト結果:`, result);
         } catch (craftError) {
-          console.log(`[ツールスキル] bot.craft()内部エラー: ${craftError.message}`);
+          console.log(`[ツールスキル] 手動レシピでのクラフトに失敗: ${craftError.message}`);
           throw craftError;
         }
         console.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
@@ -3600,6 +3638,63 @@ class CraftToolsSkill extends Skill {
   }
 
   /**
+   * Verify materials are available before crafting
+   * @param {Object} bot - Mineflayer bot instance
+   * @param {Object} recipe - Recipe object to verify
+   * @returns {Object} verification result
+   */
+  async verifyMaterialsBeforeCraft(bot, recipe) {
+    const mcData = require('minecraft-data')(bot.version);
+    
+    if (!recipe || !recipe.delta) {
+      return { success: false, error: 'Recipe or delta is null' };
+    }
+    
+    // Get current inventory
+    const inventory = bot.inventory.items();
+    const inventoryMap = new Map();
+    
+    for (const item of inventory) {
+      if (item && item.type !== null && item.type !== undefined) {
+        inventoryMap.set(item.type, (inventoryMap.get(item.type) || 0) + item.count);
+      }
+    }
+    
+    
+    // Check each required material
+    const missing = [];
+    for (const ingredient of recipe.delta) {
+      if (ingredient.count < 0) {
+        const needed = Math.abs(ingredient.count);
+        const available = inventoryMap.get(ingredient.id) || 0;
+        
+        const itemData = mcData.items[ingredient.id];
+        const itemName = itemData ? itemData.name : `ID:${ingredient.id}`;
+        
+        
+        if (available < needed) {
+          missing.push({
+            item: itemName,
+            needed: needed,
+            available: available,
+            shortage: needed - available
+          });
+        }
+      }
+    }
+    
+    if (missing.length > 0) {
+      return { 
+        success: false, 
+        error: `Missing materials: ${missing.map(m => `${m.item} (need ${m.shortage} more)`).join(', ')}`,
+        missing: missing
+      };
+    }
+    
+    return { success: true };
+  }
+
+  /**
    * Generate ingredients array from inShape for mineflayer compatibility
    * @param {Array} inShape - 3x3 crafting grid shape
    * @returns {Array} ingredients array for mineflayer bot.craft()
@@ -3616,7 +3711,7 @@ class CraftToolsSkill extends Skill {
     for (const row of inShape) {
       if (Array.isArray(row)) {
         for (const item of row) {
-          if (item !== null && item !== undefined && typeof item === 'number' && item !== 0) {
+          if (item !== null && item !== undefined && typeof item === 'number' && item !== 0 && item !== -1) {
             uniqueItems.add(item);
           }
         }
@@ -3652,13 +3747,9 @@ class CraftToolsSkill extends Skill {
     for (const row of inShape) {
       if (Array.isArray(row)) {
         for (const item of row) {
-          console.log(`[レシピ修正] inShapeアイテム: ${item} (type: ${typeof item})`);
-          // Exclude null, undefined, and Air (ID: 0)
-          if (item !== null && item !== undefined && typeof item === 'number' && item !== 0) {
+          // Exclude null, undefined, Air (ID: 0), and empty slots (ID: -1)
+          if (item !== null && item !== undefined && typeof item === 'number' && item !== 0 && item !== -1) {
             itemCounts.set(item, (itemCounts.get(item) || 0) + 1);
-            console.log(`[レシピ修正] カウント: ID:${item}`);
-          } else {
-            console.log(`[レシピ修正] 除外: ${item}`);
           }
         }
       }
@@ -3673,8 +3764,6 @@ class CraftToolsSkill extends Skill {
       });
     }
 
-    console.log(`[レシピ修正] inShape分析: ${Array.from(itemCounts.entries()).map(([id, count]) => `ID:${id}×${count}`).join(', ')}`);
-    console.log('[レシピ修正] 除外されたアイテム: Air(0), null, undefined');
     return correctedDelta;
   }
 
@@ -3689,7 +3778,44 @@ class CraftToolsSkill extends Skill {
   sanitizeInShape(inShape) {
     if (!Array.isArray(inShape)) return inShape;
     return inShape.map(row =>
-      Array.isArray(row) ? row.map(cell => (cell == null ? 0 : cell)) : row
+      Array.isArray(row) ? row.map(cell => {
+        // Handle null, undefined, and empty slots
+        if (cell == null || cell === undefined) return -1;
+        
+        // -1 is a valid empty slot indicator in mineflayer
+        if (cell === -1) return -1;
+        
+        // Handle objects that should be item IDs
+        if (typeof cell === 'object' && cell !== null) {
+          // If it's an object with an id property, use the id
+          if (cell.id !== undefined && typeof cell.id === 'number') {
+            return cell.id;
+          }
+          // Otherwise, this is invalid - return 0 (empty slot)
+          console.log(`[sanitizeInShape] 無効なオブジェクトをスキップ: ${JSON.stringify(cell)}`);
+          return 0;
+        }
+        
+        // Handle string item IDs - convert to number if possible
+        if (typeof cell === 'string') {
+          const numId = parseInt(cell, 10);
+          if (!isNaN(numId)) {
+            return numId;
+          }
+          // Invalid string - return 0
+          console.log(`[sanitizeInShape] 無効な文字列ID: ${cell}`);
+          return 0;
+        }
+        
+        // Handle number item IDs
+        if (typeof cell === 'number') {
+          return cell;
+        }
+        
+        // Unknown type - return 0
+        console.log(`[sanitizeInShape] 未知のタイプ: ${typeof cell}, 値: ${cell}`);
+        return 0;
+      }) : row
     );
   }
 
@@ -4102,16 +4228,26 @@ class CraftToolsSkill extends Skill {
     console.log('[ツールスキル] 地形を整備して作業台設置場所を作成します...');
 
     const botPos = bot.entity.position;
-    const candidatePositions = [
-      new Vec3(2, 0, 0), // East of bot
-      new Vec3(-2, 0, 0), // West of bot
-      new Vec3(0, 0, 2), // South of bot
-      new Vec3(0, 0, -2), // North of bot
-      new Vec3(2, 0, 2), // Southeast
-      new Vec3(-2, 0, 2), // Southwest
-      new Vec3(2, 0, -2), // Northeast
-      new Vec3(-2, 0, -2) // Northwest
-    ];
+    // First try to find existing solid ground
+    const candidatePositions = [];
+    
+    // Add positions in expanding circles
+    for (let radius = 1; radius <= 4; radius++) {
+      for (let x = -radius; x <= radius; x++) {
+        for (let z = -radius; z <= radius; z++) {
+          if (Math.abs(x) === radius || Math.abs(z) === radius) {
+            candidatePositions.push(new Vec3(x, 0, z));
+          }
+        }
+      }
+    }
+    
+    // Sort by distance from bot
+    candidatePositions.sort((a, b) => {
+      const distA = Math.sqrt(a.x * a.x + a.z * a.z);
+      const distB = Math.sqrt(b.x * b.x + b.z * b.z);
+      return distA - distB;
+    });
 
     for (const offset of candidatePositions) {
       const targetPos = botPos.offset(offset.x, offset.y, offset.z);
@@ -4132,6 +4268,29 @@ class CraftToolsSkill extends Skill {
         const aboveBlock = bot.blockAt(targetPos.offset(0, 1, 0));
 
         console.log(`[ツールスキル] 地形状況: 地面=${groundBlock?.name || 'null'}, 設置位置=${targetBlock?.name || 'null'}, 上方=${aboveBlock?.name || 'null'}`);
+
+        // If ground block exists and is solid, try to place directly
+        if (groundBlock && groundBlock.name !== 'air' && groundBlock.name !== 'water') {
+          if (targetBlock && targetBlock.name === 'air') {
+            try {
+              const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
+              if (craftingTableItem) {
+                await bot.equip(craftingTableItem, 'hand');
+                await bot.placeBlock(groundBlock, new Vec3(0, 1, 0));
+                
+                // Verify placement
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const placedBlock = bot.blockAt(targetPos);
+                if (placedBlock && placedBlock.name === 'crafting_table') {
+                  console.log('[ツールスキル] 作業台設置に成功しました！');
+                  return { success: true, workbench: placedBlock };
+                }
+              }
+            } catch (placeError) {
+              console.log(`[ツールスキル] 直接設置失敗: ${placeError.message}`);
+            }
+          }
+        }
 
         // If target position is blocked, try to clear it
         if (targetBlock && targetBlock.name !== 'air') {
@@ -4157,23 +4316,56 @@ class CraftToolsSkill extends Skill {
           }
         }
 
-        // If no ground block, try to create one with dirt if available
+        // If no ground block, try to create one with available blocks
         if (!groundBlock || groundBlock.name === 'air') {
-          console.log('[ツールスキル] 地面ブロックがありません。土ブロックで地面を作成します...');
-          const dirtItem = bot.inventory.items().find(item => item && item.name === 'dirt');
-          if (dirtItem) {
+          console.log('[ツールスキル] 地面ブロックがありません。利用可能なブロックで地面を作成します...');
+          
+          // Find any solid block we can use for ground
+          const availableBlocks = bot.inventory.items().filter(item => 
+            item && item.name && ['dirt', 'cobblestone', 'stone', 'oak_planks'].includes(item.name)
+          );
+          
+          if (availableBlocks.length > 0) {
+            const blockToPlace = availableBlocks[0];
             try {
-              await bot.equip(dirtItem, 'hand');
-              // Find a reference block to place dirt against
-              const refBlock = bot.blockAt(groundPos.offset(0, -1, 0));
-              if (refBlock && refBlock.name !== 'air') {
-                await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-                console.log('[ツールスキル] 土ブロックで地面を作成しました');
-                await new Promise(resolve => setTimeout(resolve, 500));
+              await bot.equip(blockToPlace, 'hand');
+              
+              // Find a solid reference block nearby to place against
+              const searchRadius = 3;
+              let refBlock = null;
+              
+              for (let x = -searchRadius; x <= searchRadius; x++) {
+                for (let y = -searchRadius; y <= searchRadius; y++) {
+                  for (let z = -searchRadius; z <= searchRadius; z++) {
+                    const checkPos = groundPos.offset(x, y, z);
+                    const checkBlock = bot.blockAt(checkPos);
+                    if (checkBlock && checkBlock.name !== 'air' && checkBlock.name !== 'water') {
+                      refBlock = checkBlock;
+                      break;
+                    }
+                  }
+                  if (refBlock) break;
+                }
+                if (refBlock) break;
+              }
+              
+              if (refBlock) {
+                // Calculate face vector from reference block to ground position
+                const faceVector = groundPos.minus(refBlock.position);
+                await bot.placeBlock(refBlock, faceVector);
+                console.log(`[ツールスキル] ${blockToPlace.name}で地面を作成しました`);
+                await new Promise(resolve => setTimeout(resolve, 800));
+              } else {
+                console.log('[ツールスキル] 地面作成用の参照ブロックが見つかりません');
+                continue;
               }
             } catch (placeError) {
               console.log(`[ツールスキル] 地面作成失敗: ${placeError.message}`);
+              continue;
             }
+          } else {
+            console.log('[ツールスキル] 地面作成用のブロックがありません');
+            continue;
           }
         }
 
