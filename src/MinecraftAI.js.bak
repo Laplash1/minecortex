@@ -101,11 +101,11 @@ class MinecraftAI {
   async initialize() {
     if (this.isInitialized) return;
 
-    this.logger.log('AIシステムを初期化中...');
+    this.log('AIシステムを初期化中...');
 
     // マルチプレイヤー環境での同期開始チェック
     if (this.coordinator && this.coordinator.syncStartEnabled) {
-      this.logger.log('同期開始モードが有効です。他のプレイヤーを待機中...');
+      this.log('同期開始モードが有効です。他のプレイヤーを待機中...');
 
       // 準備完了を報告
       const result = this.coordinator.reportPlayerReady(this.playerId);
@@ -131,19 +131,19 @@ class MinecraftAI {
     ];
 
     this.isInitialized = true;
-    this.logger.log('AIシステムの初期化が完了しました');
+    this.log('AIシステムの初期化が完了しました');
 
     // Start the main AI loop
     this.startMainLoop();
   }
 
   onSpawn() {
-    this.logger.log('ボットがスポーンしました。探索を開始します...');
+    this.log('ボットがスポーンしました。探索を開始します...');
     this.observer.updatePosition();
   }
 
   async onChat(username, message) {
-    this.logger.log(`${username}からのチャット: ${message}`);
+    this.log(`${username}からのチャット: ${message}`);
 
     // Simple command processing
     if (message.startsWith('!')) {
@@ -152,7 +152,7 @@ class MinecraftAI {
   }
 
   onDeath() {
-    this.logger.log('ボットが死亡しました。状態をリセットします...');
+    this.log('ボットが死亡しました。状態をリセットします...');
     this.currentTask = null;
     this.inventory.clear();
   }
@@ -375,7 +375,7 @@ class MinecraftAI {
 
   setGoal(goal) {
     this.goals.unshift(goal);
-    this.logger.log(`新しい目標を設定: ${goal.type}`);
+    this.log(`新しい目標を設定: ${goal.type}`);
   }
 
   reportStatus() {
@@ -443,7 +443,7 @@ class MinecraftAI {
   }
 
   async startMainLoop() {
-    this.logger.log('メインAIループを開始...');
+    this.log('メインAIループを開始...');
 
     let loopCount = 0;
     let lastPerformanceReport = Date.now();
@@ -472,7 +472,7 @@ class MinecraftAI {
           this.performMaintenanceCleanup();
         }
       } catch (error) {
-        this.logger.log(`メインループでエラー: ${error.message}`);
+        this.log(`メインループでエラー: ${error.message}`);
 
         // Optimized exponential backoff with reduced maximum delay
         // Reduced max from 30s to 10s, base from 1000ms to 500ms
@@ -483,7 +483,7 @@ class MinecraftAI {
 
         // Reset error count after successful iteration
         if (this.consecutiveErrors > 5) {
-          this.logger.log('連続エラーが多すぎます。状態をリセットします。');
+          this.log('連続エラーが多すぎます。状態をリセットします。');
           this.performEmergencyReset();
         }
       }
@@ -548,7 +548,7 @@ class MinecraftAI {
       // Reset consecutive errors on successful cleanup
       this.consecutiveErrors = 0;
 
-      this.logger.log('定期メンテナンスクリーンアップ完了');
+      this.log('定期メンテナンスクリーンアップ完了');
     } catch (error) {
       this.logger.error(`メンテナンスクリーンアップエラー: ${error.message}`);
     }
@@ -574,7 +574,7 @@ class MinecraftAI {
         { type: 'explore', priority: 2, description: '安全な探索' }
       ];
 
-      this.logger.log('緊急リセット完了');
+      this.log('緊急リセット完了');
     } catch (error) {
       this.logger.error(`緊急リセットエラー: ${error.message}`);
     }
@@ -611,12 +611,12 @@ class MinecraftAI {
     const avgTime = Math.round(metrics.averageLoopTime);
     const maxTime = metrics.maxLoopTime;
     const totalLoops = metrics.totalLoops;
-    this.logger.log(`パフォーマンス: 平均ループ時間 ${avgTime}ms, 最大 ${maxTime}ms, 総ループ ${totalLoops}`);
+    this.log(`パフォーマンス: 平均ループ時間 ${avgTime}ms, 最大 ${maxTime}ms, 総ループ ${totalLoops}`);
 
     // Report state manager stats if available
     if (this.stateManager) {
       const stats = this.stateManager.getPerformanceStats();
-      this.logger.log(`状態統計: スキル ${stats.totalSkills}, 成功率 ${Math.round(stats.overallSuccessRate)}%`);
+      this.log(`状態統計: スキル ${stats.totalSkills}, 成功率 ${Math.round(stats.overallSuccessRate)}%`);
     }
   }
 
@@ -696,7 +696,7 @@ class MinecraftAI {
       }
     } catch (e) {
       // Ignore errors during cleanup
-      this.logger.debug(`Error during EPIPE cleanup: ${e.message}`);
+      this.log(`Error during EPIPE cleanup: ${e.message}`, 'debug');
     }
   }
 
@@ -734,14 +734,14 @@ class MinecraftAI {
 
       // Check if current task is complete or failed
       if (this.currentTask && this.taskPlanner.isTaskComplete(this.currentTask)) {
-        this.logger.log(`タスク完了: ${this.currentTask.type}`);
+        this.log(`タスク完了: ${this.currentTask.type}`);
         this.taskPlanner.addTaskToHistory(this.currentTask, { success: true, completed: true });
         this.currentTask = null;
       }
 
       // Check for task timeout
       if (this.currentTask && this.currentTask.timeout && Date.now() > this.currentTask.timeout) {
-        this.logger.log(`タスクタイムアウト: ${this.currentTask.type}`);
+        this.log(`タスクタイムアウト: ${this.currentTask.type}`);
         this.taskPlanner.addTaskToHistory(this.currentTask, { success: false, reason: 'timeout' });
         this.currentTask = null;
       }
@@ -773,7 +773,7 @@ class MinecraftAI {
           if (this.currentTask && this.currentTask.type) {
             // Add startTime for proper lifecycle tracking
             this.currentTask.startTime = Date.now();
-            this.logger.log(`新しいタスクを開始: ${this.currentTask.type}`);
+            this.log(`新しいタスクを開始: ${this.currentTask.type}`);
           } else {
             this.logger.warn('Task planning returned invalid task');
             this.currentTask = null;
@@ -798,7 +798,7 @@ class MinecraftAI {
       // パフォーマンス測定終了
       this.performanceMonitor.endMeasure('mainLoopIteration');
     } catch (error) {
-      this.logger.log(`メインループエラー: ${error.message}`);
+      this.log(`メインループエラー: ${error.message}`);
       // パフォーマンス測定終了（エラー時）
       this.performanceMonitor.endMeasure('mainLoopIteration');
       // Add delay to prevent rapid error loops
@@ -817,7 +817,7 @@ class MinecraftAI {
       // Handle low health
       const lowHealth = dangers.find(d => d.type === 'low_health');
       if (lowHealth && this.bot.health < 6) {
-        this.logger.log('低体力状態を検出、食料探索を優先');
+        this.log('低体力状態を検出、食料探索を優先');
         this.goals.unshift({
           type: 'find_food',
           priority: 0,
@@ -835,7 +835,7 @@ class MinecraftAI {
         );
 
         if (nearest.distance < 8) {
-          this.logger.log(`敵対MOB ${nearest.entityType} が接近中、回避行動`);
+          this.log(`敵対MOB ${nearest.entityType} が接近中、回避行動`);
           await this.performEvasiveAction(nearest);
           return { shouldContinue: false }; // Skip normal processing
         }
@@ -843,7 +843,7 @@ class MinecraftAI {
 
       return { shouldContinue: true };
     } catch (error) {
-      this.logger.log(`脅威処理エラー: ${error.message}`);
+      this.log(`脅威処理エラー: ${error.message}`);
       return { shouldContinue: true };
     }
   }
@@ -851,12 +851,12 @@ class MinecraftAI {
   async performEvasiveAction(threat) {
     try {
       if (!this.bot?.entity?.position) {
-        this.logger.log('回避行動エラー: プレイヤー位置が取得できません');
+        this.log('回避行動エラー: プレイヤー位置が取得できません');
         return;
       }
 
       if (!threat?.position) {
-        this.logger.log('回避行動エラー: 脅威の位置が不明です');
+        this.log('回避行動エラー: 脅威の位置が不明です');
         return;
       }
 
@@ -867,7 +867,7 @@ class MinecraftAI {
       const escapeX = currentPos.x + (currentPos.x - threatPos.x) * 2;
       const escapeZ = currentPos.z + (currentPos.z - threatPos.z) * 2;
 
-      this.logger.log(`回避行動: (${Math.round(escapeX)}, ${Math.round(escapeZ)})方向に移動`);
+      this.log(`回避行動: (${Math.round(escapeX)}, ${Math.round(escapeZ)})方向に移動`);
 
       // Use move skill for evasion
       const moveSkill = this.skillLibrary.getSkill('move_to');
@@ -878,14 +878,14 @@ class MinecraftAI {
         ]);
       }
     } catch (error) {
-      this.logger.log(`回避行動エラー: ${error.message}`);
+      this.log(`回避行動エラー: ${error.message}`);
     }
   }
 
   // Enhanced movement with terrain-aware navigation
   async smartNavigateTo(x, y, z) {
     try {
-      this.logger.log(`スマートナビゲーション: (${x}, ${y}, ${z})`);
+      this.log(`スマートナビゲーション: (${x}, ${y}, ${z})`);
 
       // Check current environment
       const waterStatus = this.observer.getWaterStatus();
@@ -907,10 +907,10 @@ class MinecraftAI {
 
       if (terrainAnalysis.navigationDifficulty === 'very_difficult' || terrainAnalysis.navigationDifficulty === 'difficult') {
         navigationSkill = this.skillLibrary.getSkill('navigate_terrain');
-        this.logger.log('複雑地形でのナビゲーションスキルを使用');
+        this.log('複雑地形でのナビゲーションスキルを使用');
       } else {
         navigationSkill = this.skillLibrary.getSkill('move_to');
-        this.logger.log('標準移動スキルを使用');
+        this.log('標準移動スキルを使用');
       }
 
       if (!navigationSkill) {
@@ -920,14 +920,14 @@ class MinecraftAI {
       const result = await navigationSkill.execute(this.bot, { target: { x, y, z } });
 
       if (result.success) {
-        this.logger.log('スマートナビゲーション成功');
+        this.log('スマートナビゲーション成功');
       } else {
-        this.logger.log(`スマートナビゲーション失敗: ${result.error}`);
+        this.log(`スマートナビゲーション失敗: ${result.error}`);
       }
 
       return result;
     } catch (error) {
-      this.logger.log(`スマートナビゲーションエラー: ${error.message}`);
+      this.log(`スマートナビゲーションエラー: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -956,7 +956,7 @@ class MinecraftAI {
     this.stateManager.setCurrentTask(this.currentTask);
 
     const taskName = this.currentTask.type;
-    this.logger.log(`タスク実行中: ${taskName}`);
+    this.log(`タスク実行中: ${taskName}`);
 
     try {
       // Check if bot is still connected before executing
@@ -998,12 +998,12 @@ class MinecraftAI {
 
     // If no predefined skill exists, try to generate one with Voyager AI
     if (!skill) {
-      this.logger.log(`${taskName}の事前定義スキルがありません。AIで生成中...`);
+      this.log(`${taskName}の事前定義スキルがありません。AIで生成中...`);
       try {
         const context = this.observer.getObservationSummary();
         skill = await this.voyagerAI.generateSkill(this.currentTask, context);
       } catch (aiError) {
-        this.logger.log(`AIスキル生成に失敗: ${aiError.message}`);
+        this.log(`AIスキル生成に失敗: ${aiError.message}`);
         this.currentTask = null;
         return null;
       }
@@ -1038,10 +1038,10 @@ class MinecraftAI {
         const context = this.observer.getObservationSummary();
         await this.voyagerAI.learnFromExperience(this.currentTask, result, context);
       } else {
-        this.logger.debug('Skipping learning: current task is null or invalid');
+        this.log('Skipping learning: current task is null or invalid', 'debug');
       }
     } catch (learningError) {
-      this.logger.log(`Learning failed: ${learningError.message}`);
+      this.log(`Learning failed: ${learningError.message}`);
     }
 
     // Calculate execution time safely
@@ -1066,7 +1066,7 @@ class MinecraftAI {
         this.logger.warn('processTaskResult: currentTask lost before success handling');
         return;
       }
-      this.logger.log(`タスクが正常に完了: ${taskName}`);
+      this.log(`タスクが正常に完了: ${taskName}`);
       this.announceTaskCompletion(taskName, result);
 
       // Update state manager with successful task completion
@@ -1077,7 +1077,7 @@ class MinecraftAI {
 
       // Schedule tool crafting check after resource gathering tasks
       if (this.isResourceGatheringTask(taskName)) {
-        this.logger.log('資源収集タスク完了後、ツール作成をチェックします');
+        this.log('資源収集タスク完了後、ツール作成をチェックします');
         // Schedule check in next loop iteration to allow inventory to sync
         setTimeout(async () => {
           if (!this.currentTask) { // Only check if not busy
@@ -1090,7 +1090,7 @@ class MinecraftAI {
         this.logger.warn('processTaskResult: currentTask lost before failure handling');
         return;
       }
-      this.logger.log(`タスクが失敗: ${taskName} - ${result?.error || result?.reason || '不明なエラー'}`);
+      this.log(`タスクが失敗: ${taskName} - ${result?.error || result?.reason || '不明なエラー'}`);
       this.handleTaskFailure(taskName, result);
 
       // Update state manager with failed task
@@ -1102,7 +1102,7 @@ class MinecraftAI {
   }
 
   async handleTaskError(error, taskName) {
-    this.logger.log(`タスク実行で致命的エラー ${taskName}: ${error.message}`);
+    this.log(`タスク実行で致命的エラー ${taskName}: ${error.message}`);
 
     // Enhanced error handling with better logging
     if (!this.currentTask) {
@@ -1127,13 +1127,13 @@ class MinecraftAI {
           context
         );
       } catch (learningError) {
-        this.logger.log(`失敗から学習中にエラー: ${learningError.message}`);
+        this.log(`失敗から学習中にエラー: ${learningError.message}`);
       }
     } else {
-      this.logger.debug('Skipping learning from failure: task name is invalid');
+      this.log('Skipping learning from failure: task name is invalid', 'debug');
     }
 
-    this.logger.log(`タスク ${taskName} が失敗: ${error.message}`);
+    this.log(`タスク ${taskName} が失敗: ${error.message}`);
     this.handleTaskFailure(taskName, error.message);
   }
 
@@ -1179,7 +1179,7 @@ class MinecraftAI {
   handleTaskFailure(taskName, result) { // result is now the detailed failure object
     const reason = result?.reason || 'UNKNOWN';
     const details = result?.details || {};
-    this.logger.log(`タスク ${taskName} が失敗: ${reason}`);
+    this.log(`タスク ${taskName} が失敗: ${reason}`);
 
     // Track failed target to prevent position-based loops
     if (details.position) {
@@ -1188,7 +1188,7 @@ class MinecraftAI {
       this.failedTargets.set(targetKey, failureCount);
 
       if (failureCount >= 3) {
-        this.logger.log(`ターゲット ${targetKey} で3回失敗しました。別の場所を探索します。`);
+        this.log(`ターゲット ${targetKey} で3回失敗しました。別の場所を探索します。`);
         this.failedTargets.delete(targetKey); // Reset counter after taking action
         this.goals.unshift({ type: 'explore', priority: 0, description: '同じ場所での失敗が続いたため、場所を変更します。' });
         return;
@@ -1200,7 +1200,7 @@ class MinecraftAI {
       this.taskFailureCounts.set(taskKey, failureCount);
 
       if (failureCount >= 3) {
-        this.logger.log(`タスク '${taskKey}' が3回連続で失敗しました。探索に切り替えます。`);
+        this.log(`タスク '${taskKey}' が3回連続で失敗しました。探索に切り替えます。`);
         this.taskFailureCounts.delete(taskKey); // Reset counter
         this.goals.unshift({ type: 'explore', priority: 0, description: `タスク'${taskKey}'の失敗が続いたため、気分転換に探索します。` });
         return;
@@ -1209,7 +1209,7 @@ class MinecraftAI {
 
     const recoveryTask = this.generateRecoveryTask(reason, details);
     if (recoveryTask) {
-      this.logger.log(`回復タスクを生成: ${recoveryTask.type} - ${recoveryTask.description}`);
+      this.log(`回復タスクを生成: ${recoveryTask.type} - ${recoveryTask.description}`);
       this.goals.unshift(recoveryTask);
     }
   }
@@ -1250,7 +1250,7 @@ class MinecraftAI {
         description: '緊急: 作業台を作成'
       };
     default:
-      this.logger.log(`不明な失敗理由(${reason})のため、回復タスクを生成できません`);
+      this.log(`不明な失敗理由(${reason})のため、回復タスクを生成できません`);
       return null;
     }
   }
@@ -1263,13 +1263,13 @@ class MinecraftAI {
     try {
       // Check if it's safe to explore
       if (this.observer.isDangerous()) {
-        this.logger.log('危険な状況のため探索を中止');
+        this.log('危険な状況のため探索を中止');
         return;
       }
 
       // Validate bot position before exploration
       if (!this.bot?.entity?.position) {
-        this.logger.log('探索エラー: プレイヤー位置が取得できません');
+        this.log('探索エラー: プレイヤー位置が取得できません');
         return;
       }
 
@@ -1284,11 +1284,11 @@ class MinecraftAI {
 
       // Validate target position (basic safety check)
       if (Math.abs(targetY) > 300) { // Avoid extreme heights
-        this.logger.log('探索目標が安全でないため中止');
+        this.log('探索目標が安全でないため中止');
         return;
       }
 
-      this.logger.log(`安全探索中: (${targetX}, ${targetY}, ${targetZ})に移動`);
+      this.log(`安全探索中: (${targetX}, ${targetY}, ${targetZ})に移動`);
 
       // Add exploration as a goal with timeout (limit queue size to avoid flooding)
       if (this.goals.length < 5) {
@@ -1300,15 +1300,31 @@ class MinecraftAI {
           description: '安全なランダム探索移動'
         });
       } else {
-        this.logger.log('探索ゴールが多すぎるため新規追加をスキップ');
+        this.log('探索ゴールが多すぎるため新規追加をスキップ');
       }
     } catch (error) {
-      this.logger.log(`探索エラー: ${error.message}`);
+      this.log(`探索エラー: ${error.message}`);
     }
   }
 
-  // StateManagerへの重要メッセージ更新のみ保持
-  updateStateWithLog(message, level = 'info') {
+  log(message, level = 'info') {
+    const timestamp = new Date().toISOString();
+    const formattedMessage = `[${timestamp}] [AI-${this.playerId}] [${level.toUpperCase()}] ${message}`;
+
+    switch (level.toLowerCase()) {
+    case 'error':
+      this.logger.error(formattedMessage);
+      break;
+    case 'warn':
+      this.logger.warn(formattedMessage);
+      break;
+    case 'debug':
+      this.logger.debug(formattedMessage);
+      break;
+    default:
+      this.logger.log(formattedMessage);
+    }
+
     if (this.stateManager && (level === 'error' || level === 'warn' || level === 'important')) {
       const state = this.stateManager.getState();
       if (!state.logHistory) {
@@ -1396,9 +1412,9 @@ class MinecraftAI {
     );
 
     if (result.granted) {
-      this.logger.log(`リソースアクセス許可: ${resourceType} at ${JSON.stringify(location)}`);
+      this.log(`リソースアクセス許可: ${resourceType} at ${JSON.stringify(location)}`);
     } else {
-      this.logger.log(`リソースアクセス拒否: ${result.reason}. 待機時間: ${Math.round(result.waitTime / 1000)}秒`);
+      this.log(`リソースアクセス拒否: ${result.reason}. 待機時間: ${Math.round(result.waitTime / 1000)}秒`);
     }
 
     return result;
@@ -1473,12 +1489,12 @@ class MinecraftAI {
       if (!accessResult.granted) {
         // Wait or find alternative
         if (accessResult.waitTime < 20000) { // Reduced from 60000ms to 20000ms for faster response
-          this.logger.log(`リソース待機中: ${accessResult.waitTime / 1000}秒`);
+          this.log(`リソース待機中: ${accessResult.waitTime / 1000}秒`);
           await this.sleep(accessResult.waitTime);
           return await this.executeResourceAwareTask(task); // Retry
         } else {
           // Find alternative task or location
-          this.logger.log('代替リソースを探索中...');
+          this.log('代替リソースを探索中...');
           return { success: false, reason: 'Resource conflict, seeking alternatives' };
         }
       }
@@ -1680,7 +1696,7 @@ class MinecraftAI {
     }
 
     this.goals = goals;
-    this.logger.log(`新しいゴールを生成: ${goals.map(g => g.type).join(', ')}`);
+    this.log(`新しいゴールを生成: ${goals.map(g => g.type).join(', ')}`);
   }
 
   async checkCraftingOpportunities() {
@@ -1696,7 +1712,7 @@ class MinecraftAI {
           priority: 2,
           description: '作業台を作成してクラフトを可能にする'
         });
-        this.logger.log('作業台クラフトの機会を検出');
+        this.log('作業台クラフトの機会を検出');
         return;
       }
 
@@ -1707,10 +1723,10 @@ class MinecraftAI {
           priority: 2,
           description: '基本道具を作成して効率を向上させる'
         });
-        this.logger.log('道具クラフトの機会を検出');
+        this.log('道具クラフトの機会を検出');
       }
     } catch (error) {
-      this.logger.log(`クラフト機会チェックエラー: ${error.message}`);
+      this.log(`クラフト機会チェックエラー: ${error.message}`);
       console.error('Full error details:', error);
       console.error('Error stack:', error.stack);
     }
@@ -1731,7 +1747,7 @@ class MinecraftAI {
           priority: 1,
           description: '体力保持のための食料確保'
         });
-        this.logger.log('アイドル中: 食料不足を検出');
+        this.log('アイドル中: 食料不足を検出');
         return;
       }
 
@@ -1741,7 +1757,7 @@ class MinecraftAI {
           priority: 2,
           description: 'アイドル中の木材収集'
         });
-        this.logger.log('アイドル中: 木材を収集します');
+        this.log('アイドル中: 木材を収集します');
         return;
       }
 
@@ -1751,7 +1767,7 @@ class MinecraftAI {
           priority: 2,
           description: 'アイドル中の石材収集'
         });
-        this.logger.log('アイドル中: 石を採取します');
+        this.log('アイドル中: 石を採取します');
         return;
       }
 
@@ -1763,16 +1779,16 @@ class MinecraftAI {
           description: '短時間の探索活動',
           radius: 30 // Smaller exploration radius
         });
-        this.logger.log('アイドル中: 短時間の探索を実行');
+        this.log('アイドル中: 短時間の探索を実行');
       } else {
         // Most of the time, just rest briefly
-        this.logger.log('アイドル中: リソースが十分なため休憩');
+        this.log('アイドル中: リソースが十分なため休憩');
         // Log inventory summary during idle to monitor resource levels
         InventoryUtils.logInventoryDetails(this.bot, 'アイドル時');
         await this.sleep(2000);
       }
     } catch (error) {
-      this.logger.log(`アイドル処理エラー: ${error.message}`);
+      this.log(`アイドル処理エラー: ${error.message}`);
       // Fallback to short rest
       await this.sleep(3000);
     }
@@ -1780,7 +1796,7 @@ class MinecraftAI {
 
   async checkAutoToolCrafting() {
     try {
-      this.logger.log('自動ツール作成チェック開始');
+      this.log('自動ツール作成チェック開始');
 
       const inventorySummary = InventoryUtils.getInventorySummary(this.bot);
       const {
@@ -1793,7 +1809,7 @@ class MinecraftAI {
         canCraftBasicTools
       } = inventorySummary;
 
-      this.logger.log(`素材状況: 木材${woodCount}個, 利用可能板材${availablePlanks}個, 作業台${hasCraftingTable ? '有' : '無'}`);
+      this.log(`素材状況: 木材${woodCount}個, 利用可能板材${availablePlanks}個, 作業台${hasCraftingTable ? '有' : '無'}`);
 
       // Check if we have enough resources for tool upgrades
       const currentTools = this.getCurrentTools();
@@ -1860,7 +1876,7 @@ class MinecraftAI {
         });
       }
     } catch (error) {
-      this.logger.log(`自動ツール作成チェックエラー: ${error.message}`);
+      this.log(`自動ツール作成チェックエラー: ${error.message}`);
     }
   }
 
@@ -1880,7 +1896,7 @@ class MinecraftAI {
 
       return tools;
     } catch (error) {
-      this.logger.log(`現在のツール取得エラー: ${error.message}`);
+      this.log(`現在のツール取得エラー: ${error.message}`);
       return [];
     }
   }
@@ -1976,7 +1992,7 @@ class MinecraftAI {
           this.bot.chat(`死亡しました... (${this.deathCount}回目) 💀`);
         }
       } catch (chatError) {
-        this.logger.log(`死亡時チャットエラー: ${chatError.message}`);
+        this.log(`死亡時チャットエラー: ${chatError.message}`);
       }
     } catch (error) {
       this.logger.error(`死亡処理エラー: ${error.message}`);
@@ -2011,13 +2027,13 @@ class MinecraftAI {
           this.bot.chat('リスポーンしました！再び冒険を開始します 🌟');
         }
       } catch (chatError) {
-        this.logger.log(`リスポーン時チャットエラー: ${chatError.message}`);
+        this.log(`リスポーン時チャットエラー: ${chatError.message}`);
       }
 
       // Resume AI operations after a short delay
       setTimeout(() => {
         if (!this.isRespawning && this.bot && this.bot.entity) {
-          this.logger.log('AIオペレーション再開');
+          this.log('AIオペレーション再開');
         }
       }, 2000);
     } catch (error) {
@@ -2042,7 +2058,7 @@ class MinecraftAI {
       // Reset death counter after entering safe mode
       setTimeout(() => {
         this.deathCount = Math.max(0, this.deathCount - 1);
-        this.logger.log('安全モード終了、通常動作に復帰');
+        this.log('安全モード終了、通常動作に復帰');
       }, 120000); // 2 minutes safe mode
     } catch (error) {
       this.logger.error(`安全モード移行エラー: ${error.message}`);
@@ -2074,7 +2090,7 @@ class MinecraftAI {
       const canStart = this.coordinator.canStartTasks(this.playerId);
 
       if (canStart.canStart) {
-        this.logger.log(`✅ ${canStart.reason} - タスクを開始します！`);
+        this.log(`✅ ${canStart.reason} - タスクを開始します！`);
         return;
       }
 
@@ -2091,7 +2107,7 @@ class MinecraftAI {
       this.coordinator.forceStart(this.playerId);
     }
 
-    // タイムアウト後もタスクを開始
+    return; // タイムアウト後もタスクを開始
   }
 
   // Enhanced shutdown functionality integrated with main shutdown method above

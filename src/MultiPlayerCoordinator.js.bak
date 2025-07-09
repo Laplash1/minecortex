@@ -131,7 +131,7 @@ class MultiPlayerCoordinator {
         player.resourceClaims.delete(resourceKey);
       }
 
-      this.logger.log(`[Coordinator] Resource ${resourceKey} released by ${playerId}`);
+      console.log(`[Coordinator] Resource ${resourceKey} released by ${playerId}`);
       return true;
     }
     return false;
@@ -222,7 +222,7 @@ class MultiPlayerCoordinator {
     await this.notifyPlayer(player1Id, `Sharing ${resourceType} with ${player2Id}`);
     await this.notifyPlayer(player2Id, `Sharing ${resourceType} with ${player1Id}`);
 
-    this.logger.log(`[Coordinator] Coordinated shared resource: ${resourceType} between ${player1Id} and ${player2Id}`);
+    console.log(`[Coordinator] Coordinated shared resource: ${resourceType} between ${player1Id} and ${player2Id}`);
     return coordination;
   }
 
@@ -256,7 +256,7 @@ class MultiPlayerCoordinator {
     };
 
     await this.notifyPlayer(selectedPlayer.id, `Task assigned: ${taskType}`);
-    this.logger.log(`[Coordinator] Task ${taskType} assigned to ${selectedPlayer.id}`);
+    console.log(`[Coordinator] Task ${taskType} assigned to ${selectedPlayer.id}`);
 
     return { success: true, assignment: taskAssignment };
   }
@@ -331,7 +331,7 @@ class MultiPlayerCoordinator {
       try {
         player.bot.chat(`[Coordinator] ${message}`);
       } catch (error) {
-        this.logger.log(`[Coordinator] Failed to notify ${playerId}: ${error.message}`);
+        console.log(`[Coordinator] Failed to notify ${playerId}: ${error.message}`);
       }
     }
   }
@@ -395,7 +395,7 @@ class MultiPlayerCoordinator {
     this.readyPlayers.clear();
     this.isAllPlayersReady = false;
 
-    this.logger.log(`[Coordinator] 同期開始設定: 期待プレイヤー数=${expectedPlayersCount}, 有効=${enabled}`);
+    console.log(`[Coordinator] 同期開始設定: 期待プレイヤー数=${expectedPlayersCount}, 有効=${enabled}`);
   }
 
   // プレイヤーの準備完了を報告
@@ -407,12 +407,12 @@ class MultiPlayerCoordinator {
     this.readyPlayers.add(playerId);
     const readyCount = this.readyPlayers.size;
 
-    this.logger.log(`[Coordinator] ${playerId} 準備完了 (${readyCount}/${this.expectedPlayersCount})`);
+    console.log(`[Coordinator] ${playerId} 準備完了 (${readyCount}/${this.expectedPlayersCount})`);
 
     // 全員準備完了チェック
     if (readyCount >= this.expectedPlayersCount && !this.isAllPlayersReady) {
       this.isAllPlayersReady = true;
-      this.logger.log(`[Coordinator] 🎉 全${this.expectedPlayersCount}人の準備完了！タスク開始を許可`);
+      console.log(`[Coordinator] 🎉 全${this.expectedPlayersCount}人の準備完了！タスク開始を許可`);
 
       // 全プレイヤーに開始通知
       this.notifyAllPlayers('全員の準備が完了しました！AIタスクを開始します');

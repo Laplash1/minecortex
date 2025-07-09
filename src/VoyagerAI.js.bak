@@ -21,7 +21,7 @@ class VoyagerAI {
 
   async generateSkill(task, context) {
     if (!this.openai) {
-      this.logger.log('OpenAI not configured, using basic skill generation');
+      console.log('OpenAI not configured, using basic skill generation');
       return this.generateBasicSkill(task, context);
     }
 
@@ -47,7 +47,7 @@ class VoyagerAI {
       const skillCode = response.choices[0].message.content;
       return this.parseGeneratedSkill(skillCode);
     } catch (error) {
-      this.logger.log(`Error generating skill: ${error.message}`);
+      console.log(`Error generating skill: ${error.message}`);
       return this.generateBasicSkill(task, context);
     }
   }
@@ -126,7 +126,7 @@ Always prioritize safety and efficiency in your implementations.`;
         generated: true
       };
     } catch (error) {
-      this.logger.log(`Error parsing generated skill: ${error.message}`);
+      console.log(`Error parsing generated skill: ${error.message}`);
       return null;
     }
   }
@@ -245,7 +245,7 @@ Always prioritize safety and efficiency in your implementations.`;
         throw new Error('Cannot read properties of null (reading \'type\')');
       }
     } catch (error) {
-      this.logger.log(`Error in learning analysis: ${error.message}`);
+      console.log(`Error in learning analysis: ${error.message}`);
       return;
     }
 
@@ -327,12 +327,12 @@ Provide specific suggestions for improving task execution and avoiding these err
       });
 
       const suggestions = response.choices[0].message.content;
-      this.logger.log('AI Learning Suggestions:', suggestions);
+      console.log('AI Learning Suggestions:', suggestions);
 
       // Store suggestions for future reference
       this.storeLearnings(suggestions);
     } catch (error) {
-      this.logger.log(`Error in learning analysis: ${error.message}`);
+      console.log(`Error in learning analysis: ${error.message}`);
     }
   }
 
@@ -406,7 +406,7 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
       const curriculumText = response.choices[0].message.content;
       return this.parseCurriculum(curriculumText);
     } catch (error) {
-      this.logger.log(`Error generating curriculum: ${error.message}`);
+      console.log(`Error generating curriculum: ${error.message}`);
       return this.generateBasicCurriculum(currentSkills, goals);
     }
   }
@@ -422,7 +422,7 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
       // Fallback parsing
       return this.generateBasicCurriculum(new Map(), []);
     } catch (error) {
-      this.logger.log(`Error parsing curriculum: ${error.message}`);
+      console.log(`Error parsing curriculum: ${error.message}`);
       return this.generateBasicCurriculum(new Map(), []);
     }
   }
@@ -490,7 +490,7 @@ Format as JSON array of task objects with type, description, and difficulty (1-1
         stats.totalExperiences = validExperiences.length;
       }
     } catch (error) {
-      this.logger.log(`Error in getLearningStats: ${error.message}`);
+      console.log(`Error in getLearningStats: ${error.message}`);
       // Return safe default stats if anything fails
       return {
         totalExperiences: 0,

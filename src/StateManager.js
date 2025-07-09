@@ -202,12 +202,12 @@ class StateManager {
       }
     }
 
-    if (this.bot.health !== this.state.health) {
-      botUpdates.health = this.bot.health;
+    if (this.bot.entity && this.bot.entity.health !== this.state.health) {
+      botUpdates.health = this.bot.entity.health;
     }
 
-    if (this.bot.food !== this.state.food) {
-      botUpdates.food = this.bot.food;
+    if (this.bot.entity && this.bot.entity.food !== this.state.food) {
+      botUpdates.food = this.bot.entity.food;
     }
 
     if (this.bot.experience !== this.state.experience) {
