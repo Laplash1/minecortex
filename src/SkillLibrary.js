@@ -13,6 +13,8 @@ class SkillLibrary {
     this.logger = Logger.createLogger('SkillLibrary');
   }
 
+  static logger = Logger.createLogger('SkillLibrary-Static');
+
   /**
    * Load item alias configuration asynchronously
    */
@@ -25,7 +27,7 @@ class SkillLibrary {
         const configData = await fs.readFile(configPath, 'utf8');
         SkillLibrary._aliasConfig = JSON.parse(configData);
       } catch (error) {
-        this.logger.warn(`[レシピ検索] Alias config load failed: ${error.message}`);
+        SkillLibrary.logger.warn(`[レシピ検索] Alias config load failed: ${error.message}`);
         SkillLibrary._aliasConfig = { common_aliases: {}, material_variants: {} };
       }
     }
@@ -61,13 +63,13 @@ class SkillLibrary {
       // Version compatibility check
       const mcData = require('minecraft-data')(bot.version);
       if (!mcData) {
-        this.logger.error(`[レシピ検索] minecraft-data for version ${bot.version} not found`);
+        SkillLibrary.logger.error(`[レシピ検索] minecraft-data for version ${bot.version} not found`);
         return null;
       }
 
       // Log version info on first call
       if (!SkillLibrary._versionLogged) {
-        this.logger.log(`[RecipeDebug] Bot version: ${bot.version}, mcData version: ${mcData.version?.minecraftVersion || 'unknown'}`);
+        SkillLibrary.logger.log(`[RecipeDebug] Bot version: ${bot.version}, mcData version: ${mcData.version?.minecraftVersion || 'unknown'}`);
         SkillLibrary._versionLogged = true;
       }
 
@@ -83,12 +85,12 @@ class SkillLibrary {
         let resolvedName = itemIdentifier;
         if (aliasConfig.common_aliases[itemIdentifier]) {
           resolvedName = aliasConfig.common_aliases[itemIdentifier];
-          this.logger.log(`[レシピ検索] Using alias: ${itemIdentifier} -> ${resolvedName}`);
+          SkillLibrary.logger.log(`[レシピ検索] Using alias: ${itemIdentifier} -> ${resolvedName}`);
         }
 
         const item = mcData.itemsByName[resolvedName];
         if (!item) {
-          this.logger.warn(`[レシピ検索] Item '${resolvedName}' not found in minecraft-data`);
+          SkillLibrary.logger.warn(`[レシピ検索] Item '${resolvedName}' not found in minecraft-data`);
           return null;
         }
         itemId = item.id;
@@ -3783,40 +3785,40 @@ class CraftToolsSkill extends Skill {
           // Handle null, undefined, and empty slots
           if (cell == null || cell === undefined) return -1;
 
-        // -1 is a valid empty slot indicator in mineflayer
-        if (cell === -1) return -1;
+          // -1 is a valid empty slot indicator in mineflayer
+          if (cell === -1) return -1;
 
-        // Handle objects that should be item IDs
-        if (typeof cell === 'object' && cell !== null) {
+          // Handle objects that should be item IDs
+          if (typeof cell === 'object' && cell !== null) {
           // If it's an object with an id property, use the id
-          if (cell.id !== undefined && typeof cell.id === 'number') {
-            return cell.id;
+            if (cell.id !== undefined && typeof cell.id === 'number') {
+              return cell.id;
+            }
+            // Otherwise, this is invalid - return 0 (empty slot)
+            this.logger.log(`[sanitizeInShape] 無効なオブジェクトをスキップ: ${JSON.stringify(cell)}`);
+            return 0;
           }
-          // Otherwise, this is invalid - return 0 (empty slot)
-          this.logger.log(`[sanitizeInShape] 無効なオブジェクトをスキップ: ${JSON.stringify(cell)}`);
-          return 0;
-        }
 
-        // Handle string item IDs - convert to number if possible
-        if (typeof cell === 'string') {
-          const numId = parseInt(cell, 10);
-          if (!isNaN(numId)) {
-            return numId;
+          // Handle string item IDs - convert to number if possible
+          if (typeof cell === 'string') {
+            const numId = parseInt(cell, 10);
+            if (!isNaN(numId)) {
+              return numId;
+            }
+            // Invalid string - return 0
+            this.logger.log(`[sanitizeInShape] 無効な文字列ID: ${cell}`);
+            return 0;
           }
-          // Invalid string - return 0
-          this.logger.log(`[sanitizeInShape] 無効な文字列ID: ${cell}`);
+
+          // Handle number item IDs
+          if (typeof cell === 'number') {
+            return cell;
+          }
+
+          // Unknown type - return 0
+          this.logger.log(`[sanitizeInShape] 未知のタイプ: ${typeof cell}, 値: ${cell}`);
           return 0;
-        }
-
-        // Handle number item IDs
-        if (typeof cell === 'number') {
-          return cell;
-        }
-
-        // Unknown type - return 0
-        this.logger.log(`[sanitizeInShape] 未知のタイプ: ${typeof cell}, 値: ${cell}`);
-        return 0;
-      })
+        })
         : row
     );
   }
