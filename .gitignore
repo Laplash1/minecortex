@@ -6,6 +6,8 @@ yarn-error.log*
 
 .claude/
 
+test/
+
 # Runtime data
 pids
 *.pid

@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node examples/multiple-players.js",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [
     "minecraft",
@@ -31,7 +34,8 @@
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.29.0",
     "eslint-plugin-n": "^16.4.0",
-    "eslint-plugin-promise": "^6.1.1"
+    "eslint-plugin-promise": "^6.1.1",
+    "jest": "^30.0.4"
   },
   "engines": {
     "node": ">=16.13.0"
