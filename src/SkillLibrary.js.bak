@@ -13,8 +13,6 @@ class SkillLibrary {
     this.logger = Logger.createLogger('SkillLibrary');
   }
 
-  static logger = Logger.createLogger('SkillLibrary-Static');
-
   /**
    * Load item alias configuration asynchronously
    */
@@ -27,7 +25,7 @@ class SkillLibrary {
         const configData = await fs.readFile(configPath, 'utf8');
         SkillLibrary._aliasConfig = JSON.parse(configData);
       } catch (error) {
-        SkillLibrary.logger.warn(`[レシピ検索] Alias config load failed: ${error.message}`);
+        console.warn(`[レシピ検索] Alias config load failed: ${error.message}`);
         SkillLibrary._aliasConfig = { common_aliases: {}, material_variants: {} };
       }
     }
@@ -63,13 +61,13 @@ class SkillLibrary {
       // Version compatibility check
       const mcData = require('minecraft-data')(bot.version);
       if (!mcData) {
-        SkillLibrary.logger.error(`[レシピ検索] minecraft-data for version ${bot.version} not found`);
+        console.error(`[レシピ検索] minecraft-data for version ${bot.version} not found`);
         return null;
       }
 
       // Log version info on first call
       if (!SkillLibrary._versionLogged) {
-        SkillLibrary.logger.log(`[RecipeDebug] Bot version: ${bot.version}, mcData version: ${mcData.version?.minecraftVersion || 'unknown'}`);
+        console.info(`[RecipeDebug] Bot version: ${bot.version}, mcData version: ${mcData.version?.minecraftVersion || 'unknown'}`);
         SkillLibrary._versionLogged = true;
       }
 
@@ -85,12 +83,12 @@ class SkillLibrary {
         let resolvedName = itemIdentifier;
         if (aliasConfig.common_aliases[itemIdentifier]) {
           resolvedName = aliasConfig.common_aliases[itemIdentifier];
-          SkillLibrary.logger.log(`[レシピ検索] Using alias: ${itemIdentifier} -> ${resolvedName}`);
+          console.log(`[レシピ検索] Using alias: ${itemIdentifier} -> ${resolvedName}`);
         }
 
         const item = mcData.itemsByName[resolvedName];
         if (!item) {
-          SkillLibrary.logger.warn(`[レシピ検索] Item '${resolvedName}' not found in minecraft-data`);
+          console.warn(`[レシピ検索] Item '${resolvedName}' not found in minecraft-data`);
           return null;
         }
         itemId = item.id;
@@ -103,7 +101,7 @@ class SkillLibrary {
       if (itemName && itemName.includes('wooden_')) {
         const optimizedRecipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, itemName, count, table);
         if (optimizedRecipe) {
-          this.logger.log(`[レシピ検索] 木材最適化レシピを使用: ${itemName}`);
+          console.log(`[レシピ検索] 木材最適化レシピを使用: ${itemName}`);
           // Cache the optimized recipe
           SkillLibrary._recipeCache.set(cacheKey, {
             recipe: optimizedRecipe,
@@ -128,13 +126,13 @@ class SkillLibrary {
           if (recipes && recipes.length > 0) {
             foundRecipe = recipes[0];
             if (i > 0) {
-              this.logger.log(`[レシピ検索] フォールバック戦略${i}で${itemName}のレシピを発見`);
+              console.log(`[レシピ検索] フォールバック戦略${i}で${itemName}のレシピを発見`);
             }
             break;
           }
         } catch (error) {
           if (i === 0) {
-            this.logger.warn(`[レシピ検索] Primary search failed for ${itemName}: ${error.message}`);
+            console.warn(`[レシピ検索] Primary search failed for ${itemName}: ${error.message}`);
           }
         }
       }
@@ -142,7 +140,7 @@ class SkillLibrary {
       // minecraft-data 3.90.0+ direct recipe search fallback
       if (!foundRecipe && mcData.recipes) {
         try {
-          this.logger.log(`[レシピ検索] minecraft-data直接検索を試行: ${itemName}(id:${itemId})`);
+          console.log(`[レシピ検索] minecraft-data直接検索を試行: ${itemName}(id:${itemId})`);
 
           // minecraft-data 3.90.0の新構造: data.recipes[itemId] が配列
           const directRecipes = mcData.recipes[itemId];
@@ -172,29 +170,29 @@ class SkillLibrary {
               // shapeless recipe
               foundRecipe.delta = rawRecipe.ingredients.map(ingredientId => {
                 const ingredientName = mcData.items[ingredientId]?.name || mcData.blocks[ingredientId]?.name || 'unknown';
-                this.logger.log(`[レシピ検索] 材料変換: ID ${ingredientId} -> ${ingredientName}`);
+                console.log(`[レシピ検索] 材料変換: ID ${ingredientId} -> ${ingredientName}`);
                 return {
                   id: ingredientId,
                   count: 1
                 };
               });
-              this.logger.log(`[レシピ検索] Shapeless recipe found for ${itemName}: ingredients ${rawRecipe.ingredients}`);
+              console.log(`[レシピ検索] Shapeless recipe found for ${itemName}: ingredients ${rawRecipe.ingredients}`);
             } else if (rawRecipe.inShape) {
               // shaped recipe
               const flatIngredients = rawRecipe.inShape.flat().filter(id => id !== null && id !== undefined);
               foundRecipe.delta = flatIngredients.map(ingredientId => {
                 const ingredientName = mcData.items[ingredientId]?.name || mcData.blocks[ingredientId]?.name || 'unknown';
-                this.logger.log(`[レシピ検索] 材料変換: ID ${ingredientId} -> ${ingredientName}`);
+                console.log(`[レシピ検索] 材料変換: ID ${ingredientId} -> ${ingredientName}`);
                 return {
                   id: ingredientId,
                   count: 1
                 };
               });
-              this.logger.log(`[レシピ検索] Shaped recipe found for ${itemName}: shape ${JSON.stringify(rawRecipe.inShape)}`);
+              console.log(`[レシピ検索] Shaped recipe found for ${itemName}: shape ${JSON.stringify(rawRecipe.inShape)}`);
             }
 
-            this.logger.log(`[レシピ検索] minecraft-data直接検索で${itemName}のレシピを発見`);
-            this.logger.log('[レシピ検索] 生成されたレシピ詳細:', {
+            console.log(`[レシピ検索] minecraft-data直接検索で${itemName}のレシピを発見`);
+            console.log('[レシピ検索] 生成されたレシピ詳細:', {
               id: foundRecipe.id,
               result: foundRecipe.result,
               deltaLength: foundRecipe.delta.length,
@@ -204,7 +202,7 @@ class SkillLibrary {
             });
           }
         } catch (directError) {
-          this.logger.warn(`[レシピ検索] Direct minecraft-data search failed: ${directError.message}`);
+          console.warn(`[レシピ検索] Direct minecraft-data search failed: ${directError.message}`);
         }
       }
 
@@ -216,7 +214,7 @@ class SkillLibrary {
 
       if (!foundRecipe) {
         // Enhanced diagnostics for NO_RECIPE cases
-        this.logger.warn(`[レシピ検索] NO_RECIPE: ${itemName}(id:${itemId}) count:${count} table:${table ? 'table' : 'inventory'}`);
+        console.warn(`[レシピ検索] NO_RECIPE: ${itemName}(id:${itemId}) count:${count} table:${table ? 'table' : 'inventory'}`);
 
         // Store failed recipe search for diagnostics
         if (!SkillLibrary._failedRecipes) {
@@ -227,7 +225,7 @@ class SkillLibrary {
 
       return foundRecipe;
     } catch (error) {
-      this.logger.error(`[レシピ検索] エラー: ${error.message}`);
+      console.error(`[レシピ検索] エラー: ${error.message}`);
       return null;
     }
   }
@@ -280,7 +278,7 @@ class SkillLibrary {
     for (const material of materialPriority) {
       // ダイヤモンドやネザライトは除外
       if (excludedMaterials.some(excluded => material.name.includes(excluded))) {
-        this.logger.log(`[ツール作成] ${material.name} は除外対象です`);
+        console.log(`[ツール作成] ${material.name} は除外対象です`);
         continue;
       }
 
@@ -292,7 +290,7 @@ class SkillLibrary {
       const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= stickCount);
 
       if (hasMaterial && hasSticks && material.tools[toolType]) {
-        this.logger.log(`[ツール作成] 最良の利用可能素材として ${material.name} を発見 (${toolType})`);
+        console.log(`[ツール作成] 最良の利用可能素材として ${material.name} を発見 (${toolType})`);
         return { name: material.name, tool: material.tools[toolType] };
       }
     }
@@ -304,11 +302,11 @@ class SkillLibrary {
 
     if (woodenPlanks && hasSticks) {
       const woodenToolName = `wooden_${toolType}`;
-      this.logger.log(`[ツール作成] 最良の利用可能素材として ${woodenPlanks.name} を発見 (${toolType})`);
+      console.log(`[ツール作成] 最良の利用可能素材として ${woodenPlanks.name} を発見 (${toolType})`);
       return { name: woodenPlanks.name, tool: woodenToolName };
     }
 
-    this.logger.log(`[ツール作成] ${toolType}を作成するための適切な素材が見つかりません`);
+    console.log(`[ツール作成] ${toolType}を作成するための適切な素材が見つかりません`);
     return null;
   }
 
@@ -324,14 +322,14 @@ class SkillLibrary {
     const mcData = require('minecraft-data')(bot.version);
 
     if (!mcData) {
-      this.logger.error(`[ツール最適化] minecraft-data for version ${bot.version} not found`);
+      console.error(`[ツール最適化] minecraft-data for version ${bot.version} not found`);
       return null;
     }
 
     // ダイヤモンドツールの除外チェック
     const excludedMaterials = ['diamond', 'netherite'];
     if (excludedMaterials.some(excluded => toolName.includes(excluded))) {
-      this.logger.log(`[ツール最適化] ${toolName} は除外対象です (ダイヤモンド/ネザライト)`);
+      console.log(`[ツール最適化] ${toolName} は除外対象です (ダイヤモンド/ネザライト)`);
       return null;
     }
 
@@ -340,25 +338,25 @@ class SkillLibrary {
     const toolType = toolTypes.find(type => toolName.includes(type));
 
     if (!toolType) {
-      this.logger.log(`[ツール最適化] 不明なツールタイプ: ${toolName}`);
+      console.log(`[ツール最適化] 不明なツールタイプ: ${toolName}`);
       return null;
     }
 
     // 最適な材料を検索
     const bestMaterial = SkillLibrary.findBestAvailableToolMaterial(bot, null, toolType);
     if (!bestMaterial) {
-      this.logger.log(`[ツール最適化] ${toolType}の最適な材料が見つかりません`);
+      console.log(`[ツール最適化] ${toolType}の最適な材料が見つかりません`);
       return null;
     }
 
     // 最適な材料で作成可能なツール名を取得
     const optimizedToolName = bestMaterial.tool;
-    this.logger.log(`[ツール最適化] ${toolName} -> ${optimizedToolName} (${bestMaterial.name})`);
+    console.log(`[ツール最適化] ${toolName} -> ${optimizedToolName} (${bestMaterial.name})`);
 
     // 最適化されたツールのレシピを取得
     const toolItem = mcData.itemsByName[optimizedToolName];
     if (!toolItem) {
-      this.logger.warn(`[ツール最適化] Tool ${optimizedToolName} not found in minecraft-data`);
+      console.warn(`[ツール最適化] Tool ${optimizedToolName} not found in minecraft-data`);
       return null;
     }
 
@@ -370,11 +368,11 @@ class SkillLibrary {
         recipe = recipes[0];
       }
     } catch (error) {
-      this.logger.log(`[ツール最適化] bot.recipesFor failed: ${error.message}`);
+      console.log(`[ツール最適化] bot.recipesFor failed: ${error.message}`);
     }
 
     if (!recipe) {
-      this.logger.log(`[ツール最適化] ${optimizedToolName}のレシピが見つかりません`);
+      console.log(`[ツール最適化] ${optimizedToolName}のレシピが見つかりません`);
       return null;
     }
 
@@ -394,30 +392,30 @@ class SkillLibrary {
     const InventoryUtils = require('./InventoryUtils');
 
     if (!mcData) {
-      this.logger.error(`[木材レシピ最適化] minecraft-data for version ${bot.version} not found`);
+      console.error(`[木材レシピ最適化] minecraft-data for version ${bot.version} not found`);
       return null;
     }
 
     // Check if we have any wood planks available
     const { total, breakdown } = InventoryUtils.getAvailableWoodPlanks(bot);
     if (total === 0) {
-      this.logger.log(`[木材レシピ最適化] 利用可能な木材がありません: ${toolName}`);
+      console.log(`[木材レシピ最適化] 利用可能な木材がありません: ${toolName}`);
       return null;
     }
 
     // Find the best available wood type
     const bestWoodType = InventoryUtils.getBestAvailableWoodPlank(bot);
     if (!bestWoodType) {
-      this.logger.log(`[木材レシピ最適化] 最適な木材タイプが見つかりません: ${toolName}`);
+      console.log(`[木材レシピ最適化] 最適な木材タイプが見つかりません: ${toolName}`);
       return null;
     }
 
-    this.logger.log(`[木材レシピ最適化] 使用する木材: ${bestWoodType} (${breakdown[bestWoodType]}個) for ${toolName}`);
+    console.log(`[木材レシピ最適化] 使用する木材: ${bestWoodType} (${breakdown[bestWoodType]}個) for ${toolName}`);
 
     // Get the standard recipe for the wooden tool
     const toolItem = mcData.itemsByName[toolName];
     if (!toolItem) {
-      this.logger.warn(`[木材レシピ最適化] Tool ${toolName} not found in minecraft-data`);
+      console.warn(`[木材レシピ最適化] Tool ${toolName} not found in minecraft-data`);
       return null;
     }
 
@@ -429,7 +427,7 @@ class SkillLibrary {
         originalRecipe = recipes[0];
       }
     } catch (error) {
-      this.logger.log(`[木材レシピ最適化] bot.recipesFor failed: ${error.message}`);
+      console.log(`[木材レシピ最適化] bot.recipesFor failed: ${error.message}`);
     }
 
     // If bot.recipesFor failed, try minecraft-data direct search
@@ -462,7 +460,7 @@ class SkillLibrary {
     }
 
     if (!originalRecipe) {
-      this.logger.log(`[木材レシピ最適化] No original recipe found for ${toolName}`);
+      console.log(`[木材レシピ最適化] No original recipe found for ${toolName}`);
       return null;
     }
 
@@ -481,21 +479,21 @@ class SkillLibrary {
     for (const searchName of searchNames) {
       bestWoodItem = mcData.itemsByName[searchName];
       if (bestWoodItem) {
-        this.logger.log(`[木材レシピ最適化] 木材アイテム発見: ${bestWoodType} -> ${searchName} (id: ${bestWoodItem.id})`);
+        console.log(`[木材レシピ最適化] 木材アイテム発見: ${bestWoodType} -> ${searchName} (id: ${bestWoodItem.id})`);
         break;
       }
     }
 
     if (!bestWoodItem) {
-      this.logger.warn(`[木材レシピ最適化] Best wood type ${bestWoodType} not found in minecraft-data with any naming pattern`);
-      this.logger.warn(`[木材レシピ最適化] 試行した名前: ${searchNames.join(', ')}`);
+      console.warn(`[木材レシピ最適化] Best wood type ${bestWoodType} not found in minecraft-data with any naming pattern`);
+      console.warn(`[木材レシピ最適化] 試行した名前: ${searchNames.join(', ')}`);
 
       // Debug: Show available wood-related items
       if (mcData.itemsByName) {
         const availableWoodItems = Object.keys(mcData.itemsByName).filter(name =>
           name.includes('plank') || name.includes('wood')
         );
-        this.logger.warn(`[木材レシピ最適化] 利用可能な木材関連アイテム: ${availableWoodItems.slice(0, 10).join(', ')}`);
+        console.warn(`[木材レシピ最適化] 利用可能な木材関連アイテム: ${availableWoodItems.slice(0, 10).join(', ')}`);
       }
       return null;
     }
@@ -512,7 +510,7 @@ class SkillLibrary {
           const isGenericPlank = ingredient.id === 41; // gold_block ID often used as generic plank placeholder
 
           if (isWoodPlank || isGenericPlank) {
-            this.logger.log(`[木材レシピ最適化] 材料置換: ${itemName || 'generic_plank'} (ID:${ingredient.id}) -> ${bestWoodType} (ID:${bestWoodItem.id})`);
+            console.log(`[木材レシピ最適化] 材料置換: ${itemName || 'generic_plank'} (ID:${ingredient.id}) -> ${bestWoodType} (ID:${bestWoodItem.id})`);
             ingredient.id = bestWoodItem.id;
             replacedCount++;
           }
@@ -526,7 +524,7 @@ class SkillLibrary {
         for (let j = 0; j < optimizedRecipe.inShape[i].length; j++) {
           const itemId = optimizedRecipe.inShape[i][j];
           if (itemId === 41) { // Replace generic plank ID with actual available plank
-            this.logger.log(`[木材レシピ最適化] inShape置換: ID:${itemId} -> ${bestWoodType} (ID:${bestWoodItem.id})`);
+            console.log(`[木材レシピ最適化] inShape置換: ID:${itemId} -> ${bestWoodType} (ID:${bestWoodItem.id})`);
             optimizedRecipe.inShape[i][j] = bestWoodItem.id;
             replacedCount++;
           }
@@ -535,18 +533,18 @@ class SkillLibrary {
     }
 
     if (replacedCount > 0) {
-      this.logger.log(`[木材レシピ最適化] ${replacedCount}個の材料を${bestWoodType}に置換しました`);
+      console.log(`[木材レシピ最適化] ${replacedCount}個の材料を${bestWoodType}に置換しました`);
 
       // Regenerate ingredients from the corrected inShape to ensure consistency
       if (optimizedRecipe.inShape) {
         const dummyCraftSkill = new CraftToolsSkill();
         optimizedRecipe.ingredients = dummyCraftSkill.generateIngredientsFromInShape(optimizedRecipe.inShape);
-        this.logger.log(`[木材レシピ最適化] 更新されたingredients: ${JSON.stringify(optimizedRecipe.ingredients)}`);
+        console.log(`[木材レシピ最適化] 更新されたingredients: ${JSON.stringify(optimizedRecipe.ingredients)}`);
       }
 
       return optimizedRecipe;
     } else {
-      this.logger.log(`[木材レシピ最適化] 置換可能な木材材料が見つかりませんでした: ${toolName}`);
+      console.log(`[木材レシピ最適化] 置換可能な木材材料が見つかりませんでした: ${toolName}`);
       return null;
     }
   }
@@ -581,7 +579,7 @@ class SkillLibrary {
     // Building skills
     this.registerSkill('place_blocks', new PlaceBlocksSkill());
 
-    this.logger.log(`${this.skills.size}個のスキルを読み込みました`);
+    console.log(`${this.skills.size}個のスキルを読み込みました`);
   }
 
   registerSkill(name, skill) {
@@ -631,11 +629,11 @@ class MoveToSkill extends Skill {
 
       // If already close enough, don't move
       if (distance < 3) {
-        this.logger.log(`[移動スキル] 既に目的地に近いため移動をスキップ (距離: ${distance.toFixed(1)})`);
+        console.log(`[移動スキル] 既に目的地に近いため移動をスキップ (距離: ${distance.toFixed(1)})`);
         return { success: true, message: '既に目的地付近にいます' };
       }
 
-      this.logger.log(`[移動スキル] (${x}, ${y}, ${z})に移動中... (距離: ${distance.toFixed(1)})`);
+      console.log(`[移動スキル] (${x}, ${y}, ${z})に移動中... (距離: ${distance.toFixed(1)})`);
 
       // Ensure pathfinder and movement settings are ready with proper error handling
       if (!bot.pathfinder) {
@@ -644,14 +642,14 @@ class MoveToSkill extends Skill {
           // Wait for plugin to fully initialize
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (loadError) {
-          this.logger.log(`[移動スキル] Pathfinder読み込み失敗: ${loadError.message}`);
+          console.log(`[移動スキル] Pathfinder読み込み失敗: ${loadError.message}`);
           return { success: false, error: `Pathfinder初期化エラー: ${loadError.message}` };
         }
       }
 
       // Verify pathfinder is properly initialized
       if (!bot.pathfinder || typeof bot.pathfinder !== 'object') {
-        this.logger.log('[移動スキル] Pathfinderが正しく初期化されていません');
+        console.log('[移動スキル] Pathfinderが正しく初期化されていません');
         return { success: false, error: 'Pathfinder初期化が不完全です' };
       }
 
@@ -679,7 +677,7 @@ class MoveToSkill extends Skill {
 
           bot.pathfinder.setMovements(movements);
         } catch (movementError) {
-          this.logger.log(`[移動スキル] Movement設定エラー: ${movementError.message}`);
+          console.log(`[移動スキル] Movement設定エラー: ${movementError.message}`);
           return { success: false, error: `Movement設定失敗: ${movementError.message}` };
         }
       }
@@ -695,7 +693,7 @@ class MoveToSkill extends Skill {
           // Check for water before pathfinding
           const waterCheck = await this.checkAndEscapeWater(bot);
           if (waterCheck.inWater && !waterCheck.success) {
-            this.logger.log('[移動スキル] 水中でpathfinding困難、基本移動にフォールバック');
+            console.log('[移動スキル] 水中でpathfinding困難、基本移動にフォールバック');
             return await this.executeBasicMovement(bot, x, y, z);
           }
 
@@ -725,26 +723,26 @@ class MoveToSkill extends Skill {
 
           return { success: true, message: '目的地に到着しました' };
         } catch (gotoErr) {
-          this.logger.log(`[移動スキル] goto失敗: ${gotoErr.message}`);
+          console.log(`[移動スキル] goto失敗: ${gotoErr.message}`);
 
           // Enhanced error handling with specific fallback strategies
           if (gotoErr.message.includes('timeout') ||
               gotoErr.message.includes('path') ||
               gotoErr.message.includes('goal') ||
               gotoErr.message.includes('changed')) {
-            this.logger.log('[移動スキル] パスファインディング問題を検出、基本移動にフォールバック');
+            console.log('[移動スキル] パスファインディング問題を検出、基本移動にフォールバック');
             return await this.executeBasicMovement(bot, x, y, z);
           }
 
           // For other errors, try basic movement as well
-          this.logger.log('[移動スキル] 未知のエラー、基本移動を試行');
+          console.log('[移動スキル] 未知のエラー、基本移動を試行');
           return await this.executeBasicMovement(bot, x, y, z);
         }
       }
 
       // Manual pathfinding with enhanced safety checks and error handling
       if (!bot.pathfinder.setGoal || !bot.pathfinder.on) {
-        this.logger.log('[移動スキル] Pathfinder APIが利用できません、基本移動を試行');
+        console.log('[移動スキル] Pathfinder APIが利用できません、基本移動を試行');
         return await this.executeBasicMovement(bot, x, y, z);
       }
 
@@ -756,7 +754,7 @@ class MoveToSkill extends Skill {
         const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
         bot.pathfinder.setGoal(goal);
       } catch (setupError) {
-        this.logger.log(`[移動スキル] 目標設定エラー、基本移動を試行: ${setupError.message}`);
+        console.log(`[移動スキル] 目標設定エラー、基本移動を試行: ${setupError.message}`);
         return await this.executeBasicMovement(bot, x, y, z);
       }
 
@@ -797,7 +795,7 @@ class MoveToSkill extends Skill {
               bot.pathfinder.removeListener('path_update', onPathUpdate);
             }
           } catch (cleanupError) {
-            this.logger.log(`[移動スキル] イベントリスナー削除エラー: ${cleanupError.message}`);
+            console.log(`[移動スキル] イベントリスナー削除エラー: ${cleanupError.message}`);
           }
         };
 
@@ -807,7 +805,7 @@ class MoveToSkill extends Skill {
             bot.pathfinder.on('path_update', onPathUpdate);
 
             // Actually set the goal to start pathfinding
-            this.logger.log(`[移動スキル] パスファインディング目標設定: (${x}, ${y}, ${z})`);
+            console.log(`[移動スキル] パスファインディング目標設定: (${x}, ${y}, ${z})`);
             const goal = new goals.GoalBlock(Math.floor(x), Math.floor(y), Math.floor(z));
             bot.pathfinder.setGoal(goal);
           } else {
@@ -816,14 +814,14 @@ class MoveToSkill extends Skill {
             resolve({ success: false, error: 'PathfinderイベントハンドラーまたはsetGoalが利用できません' });
           }
         } catch (eventError) {
-          this.logger.log(`[移動スキル] パスファインディング設定エラー: ${eventError.message}`);
+          console.log(`[移動スキル] パスファインディング設定エラー: ${eventError.message}`);
           resolved = true;
           cleanup();
           resolve({ success: false, error: `パスファインディング設定エラー: ${eventError.message}` });
         }
       });
     } catch (error) {
-      this.logger.log(`[移動スキル] エラー: ${error.message}`);
+      console.log(`[移動スキル] エラー: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -831,7 +829,7 @@ class MoveToSkill extends Skill {
   // Enhanced movement with obstacle detection, stuck detection, and water escape
   async executeBasicMovement(bot, x, y, z) {
     try {
-      this.logger.log(`[移動スキル] 強化基本移動: (${x}, ${y}, ${z})`);
+      console.log(`[移動スキル] 強化基本移動: (${x}, ${y}, ${z})`);
 
       // Check if we're in water and need to escape first
       const waterEscapeResult = await this.checkAndEscapeWater(bot);
@@ -864,7 +862,7 @@ class MoveToSkill extends Skill {
           // Check for water before each step
           const inWater = await this.checkAndEscapeWater(bot);
           if (inWater.inWater && !inWater.success) {
-            this.logger.log('[移動スキル] 水中で移動困難、脱出を試行');
+            console.log('[移動スキル] 水中で移動困難、脱出を試行');
             continue;
           }
 
@@ -874,11 +872,11 @@ class MoveToSkill extends Skill {
           // Check for obstacles ahead
           const obstacleCheck = await this.checkObstacleAhead(bot, targetX, targetZ);
           if (obstacleCheck.hasObstacle) {
-            this.logger.log(`[移動スキル] 障害物検出: ${obstacleCheck.reason}`);
+            console.log(`[移動スキル] 障害物検出: ${obstacleCheck.reason}`);
 
             // Try jumping over obstacle
             if (obstacleCheck.canJump) {
-              this.logger.log('[移動スキル] ジャンプで障害物を回避');
+              console.log('[移動スキル] ジャンプで障害物を回避');
               bot.setControlState('jump', true);
               await new Promise(resolve => setTimeout(resolve, 200));
               bot.setControlState('jump', false);
@@ -899,7 +897,7 @@ class MoveToSkill extends Skill {
 
           if (moved < 0.5) {
             stuckCount++;
-            this.logger.log(`[移動スキル] スタック検出 ${stuckCount}/3`);
+            console.log(`[移動スキル] スタック検出 ${stuckCount}/3`);
 
             if (stuckCount >= 3) {
               // Try unstuck maneuvers
@@ -924,14 +922,14 @@ class MoveToSkill extends Skill {
             return { success: true, message: '強化基本移動で目的地に到着' };
           }
         } catch (moveError) {
-          this.logger.log(`[移動スキル] 移動ステップエラー: ${moveError.message}`);
+          console.log(`[移動スキル] 移動ステップエラー: ${moveError.message}`);
           continue;
         }
       }
 
       return { success: false, error: '強化基本移動でも目的地に到達できませんでした' };
     } catch (error) {
-      this.logger.log(`[移動スキル] 強化基本移動エラー: ${error.message}`);
+      console.log(`[移動スキル] 強化基本移動エラー: ${error.message}`);
       return { success: false, error: `強化基本移動失敗: ${error.message}` };
     }
   }
@@ -939,31 +937,31 @@ class MoveToSkill extends Skill {
   // Handle out-of-sight blocks: approach and clear obstacles
   async handleOutOfSightBlock(bot, targetBlock, _lineOfSightResult) {
     try {
-      this.logger.log(`[視界外対応] ${targetBlock.name}が視界外です。接近と障害物除去を試みます`);
+      console.log(`[視界外対応] ${targetBlock.name}が視界外です。接近と障害物除去を試みます`);
 
       // Step 1: Move closer to target (within 2 blocks)
       const approachResult = await this.approachTarget(bot, targetBlock.position);
       if (!approachResult.success) {
-        this.logger.log(`[視界外対応] 接近に失敗: ${approachResult.error}`);
+        console.log(`[視界外対応] 接近に失敗: ${approachResult.error}`);
         return { success: false, error: '接近失敗' };
       }
 
       // Step 2: Re-check line of sight after approaching
       const newLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
       if (newLineOfSight.clear) {
-        this.logger.log('[視界外対応] 接近後に視界が確保されました');
+        console.log('[視界外対応] 接近後に視界が確保されました');
         return { success: true, approach: true };
       }
 
       // Step 3: Clear obstacles if still blocked
       if (newLineOfSight.obstacleBlocks && newLineOfSight.obstacleBlocks.length > 0) {
-        this.logger.log(`[視界外対応] ${newLineOfSight.obstacleBlocks.length}個の障害物を除去します`);
+        console.log(`[視界外対応] ${newLineOfSight.obstacleBlocks.length}個の障害物を除去します`);
 
         for (const obstacle of newLineOfSight.obstacleBlocks.slice(0, 3)) { // Limit to 3 blocks
           const obstacleDistance = bot.entity.position.distanceTo(obstacle.position);
 
           if (obstacleDistance <= 3.0) {
-            this.logger.log(`[視界外対応] 障害物 ${obstacle.name} を除去中...`);
+            console.log(`[視界外対応] 障害物 ${obstacle.name} を除去中...`);
 
             try {
               // Equip appropriate tool for obstacle
@@ -972,9 +970,9 @@ class MoveToSkill extends Skill {
 
               // Wait for obstacle removal
               await new Promise(resolve => setTimeout(resolve, 500));
-              this.logger.log(`[視界外対応] 障害物 ${obstacle.name} を除去しました`);
+              console.log(`[視界外対応] 障害物 ${obstacle.name} を除去しました`);
             } catch (digError) {
-              this.logger.log(`[視界外対応] 障害物除去失敗: ${digError.message}`);
+              console.log(`[視界外対応] 障害物除去失敗: ${digError.message}`);
               continue; // Try next obstacle
             }
           }
@@ -983,7 +981,7 @@ class MoveToSkill extends Skill {
         // Final check after obstacle removal
         const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, targetBlock.position);
         if (finalLineOfSight.clear) {
-          this.logger.log('[視界外対応] 障害物除去後に視界が確保されました');
+          console.log('[視界外対応] 障害物除去後に視界が確保されました');
           return { success: true, obstaclesCleared: true };
         }
       }
@@ -997,14 +995,14 @@ class MoveToSkill extends Skill {
   // Approach target block within 2 blocks
   async approachTarget(bot, targetPosition) {
     try {
-      this.logger.log(`[接近] 目標位置 ${targetPosition} に接近中...`);
+      console.log(`[接近] 目標位置 ${targetPosition} に接近中...`);
 
       // Use MovementUtils for consistent movement handling
       const moveResult = await moveToPosition(bot, targetPosition, 2.0);
       if (moveResult.success) {
         return { success: true };
       } else {
-        this.logger.log('[接近] 目標位置に到達できませんでした');
+        console.log('[接近] 目標位置に到達できませんでした');
         return { success: false, error: moveResult.error };
       }
     } catch (error) {
@@ -1033,12 +1031,12 @@ class MoveToSkill extends Skill {
       }
 
       const fluidType = inLava || headInLava ? 'マグマ' : '水';
-      this.logger.log(`[移動スキル] ${fluidType}中検出、強化脱出システム開始`);
+      console.log(`[移動スキル] ${fluidType}中検出、強化脱出システム開始`);
 
       // Priority 1: Find nearby land blocks
       const landResult = await this.findNearestLand(bot, pos);
       if (landResult.found) {
-        this.logger.log(`[移動スキル] 陸地を発見: ${landResult.direction}方向`);
+        console.log(`[移動スキル] 陸地を発見: ${landResult.direction}方向`);
         const escapeResult = await this.escapeToLand(bot, landResult);
         if (escapeResult.success) {
           return { success: true, inWater: false };
@@ -1057,17 +1055,17 @@ class MoveToSkill extends Skill {
         return { success: true, inWater: false };
       }
 
-      this.logger.log('[移動スキル] 全ての脱出方法が失敗');
+      console.log('[移動スキル] 全ての脱出方法が失敗');
       return { success: false, inWater: true, error: `${fluidType}中脱出に失敗` };
     } catch (error) {
-      this.logger.log(`[移動スキル] 水中脱出エラー: ${error.message}`);
+      console.log(`[移動スキル] 水中脱出エラー: ${error.message}`);
       return { success: false, inWater: true, error: error.message };
     }
   }
 
   async findNearestLand(bot, currentPos) {
     try {
-      this.logger.log('[移動スキル] 周辺の陸地検索中...');
+      console.log('[移動スキル] 周辺の陸地検索中...');
 
       // Check 8 directions for land within 16 blocks
       const directions = [
@@ -1094,7 +1092,7 @@ class MoveToSkill extends Skill {
           if (landBlock && landBlock.name !== 'air' &&
               !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(landBlock.name) &&
               blockAbove && blockAbove.name === 'air') {
-            this.logger.log(`[移動スキル] 陸地発見: ${dir.name}方向 ${distance}ブロック先`);
+            console.log(`[移動スキル] 陸地発見: ${dir.name}方向 ${distance}ブロック先`);
             return {
               found: true,
               direction: dir.name,
@@ -1107,14 +1105,14 @@ class MoveToSkill extends Skill {
 
       return { found: false };
     } catch (error) {
-      this.logger.log(`[移動スキル] 陸地検索エラー: ${error.message}`);
+      console.log(`[移動スキル] 陸地検索エラー: ${error.message}`);
       return { found: false };
     }
   }
 
   async escapeToLand(bot, landInfo) {
     try {
-      this.logger.log(`[移動スキル] ${landInfo.direction}の陸地へ脱出中...`);
+      console.log(`[移動スキル] ${landInfo.direction}の陸地へ脱出中...`);
 
       const currentPos = bot.entity.position;
       const targetPos = landInfo.position;
@@ -1153,7 +1151,7 @@ class MoveToSkill extends Skill {
         if (newBlock && newBlock.name !== 'water' && newBlock.name !== 'flowing_water' &&
             newBlock.name !== 'lava' && newBlock.name !== 'flowing_lava') {
           bot.setControlState('jump', false);
-          this.logger.log(`[移動スキル] ${landInfo.direction}陸地への脱出成功`);
+          console.log(`[移動スキル] ${landInfo.direction}陸地への脱出成功`);
           return { success: true };
         }
 
@@ -1178,14 +1176,14 @@ class MoveToSkill extends Skill {
       return { success: false };
     } catch (error) {
       bot.setControlState('jump', false);
-      this.logger.log(`[移動スキル] 陸地脱出エラー: ${error.message}`);
+      console.log(`[移動スキル] 陸地脱出エラー: ${error.message}`);
       return { success: false };
     }
   }
 
   async performEnhancedEscape(bot, pos, _fluidType) {
     try {
-      this.logger.log('[移動スキル] 強化方向脱出を実行中...');
+      console.log('[移動スキル] 強化方向脱出を実行中...');
 
       // Try 12 directions (more granular than before)
       for (let i = 0; i < 12; i++) {
@@ -1193,7 +1191,7 @@ class MoveToSkill extends Skill {
         const escapeX = Math.cos(escapeAngle);
         const escapeZ = Math.sin(escapeAngle);
 
-        this.logger.log(`[移動スキル] 方向 ${i + 1}/12 での脱出試行`);
+        console.log(`[移動スキル] 方向 ${i + 1}/12 での脱出試行`);
 
         bot.setControlState('jump', true);
 
@@ -1220,7 +1218,7 @@ class MoveToSkill extends Skill {
 
         if (newBlock && !['water', 'flowing_water', 'lava', 'flowing_lava'].includes(newBlock.name)) {
           bot.setControlState('jump', false);
-          this.logger.log(`[移動スキル] 方向脱出成功 (方向 ${i + 1})`);
+          console.log(`[移動スキル] 方向脱出成功 (方向 ${i + 1})`);
           return { success: true };
         }
 
@@ -1232,14 +1230,14 @@ class MoveToSkill extends Skill {
       return { success: false };
     } catch (error) {
       bot.setControlState('jump', false);
-      this.logger.log(`[移動スキル] 強化脱出エラー: ${error.message}`);
+      console.log(`[移動スキル] 強化脱出エラー: ${error.message}`);
       return { success: false };
     }
   }
 
   async performVerticalEscape(bot, pos, _fluidType) {
     try {
-      this.logger.log('[移動スキル] 垂直脱出を実行中...');
+      console.log('[移動スキル] 垂直脱出を実行中...');
 
       // Pure vertical escape - swim straight up
       for (let i = 0; i < 15; i++) {
@@ -1262,13 +1260,13 @@ class MoveToSkill extends Skill {
         if (blockAtPos && blockAtPos.name === 'air' &&
             blockAbove && blockAbove.name === 'air') {
           bot.setControlState('jump', false);
-          this.logger.log(`[移動スキル] 垂直脱出成功 (${i + 1}回試行)`);
+          console.log(`[移動スキル] 垂直脱出成功 (${i + 1}回試行)`);
           return { success: true };
         }
 
         // Check if we're making progress upward
         if (newPos.y > pos.y + 2) {
-          this.logger.log(`[移動スキル] 上昇中... Y: ${pos.y.toFixed(1)} → ${newPos.y.toFixed(1)}`);
+          console.log(`[移動スキル] 上昇中... Y: ${pos.y.toFixed(1)} → ${newPos.y.toFixed(1)}`);
           pos = newPos; // Update position reference
         }
       }
@@ -1277,7 +1275,7 @@ class MoveToSkill extends Skill {
       return { success: false };
     } catch (error) {
       bot.setControlState('jump', false);
-      this.logger.log(`[移動スキル] 垂直脱出エラー: ${error.message}`);
+      console.log(`[移動スキル] 垂直脱出エラー: ${error.message}`);
       return { success: false };
     }
   }
@@ -1321,7 +1319,7 @@ class MoveToSkill extends Skill {
 
       return { hasObstacle: false };
     } catch (error) {
-      this.logger.log(`[移動スキル] 障害物検出エラー: ${error.message}`);
+      console.log(`[移動スキル] 障害物検出エラー: ${error.message}`);
       return { hasObstacle: false };
     }
   }
@@ -1329,7 +1327,7 @@ class MoveToSkill extends Skill {
   // Unstuck maneuvers when bot gets stuck
   async performUnstuckManeuvers(bot) {
     try {
-      this.logger.log('[移動スキル] スタック解除マニューバを実行');
+      console.log('[移動スキル] スタック解除マニューバを実行');
 
       const maneuvers = [
         // Jump
@@ -1375,17 +1373,17 @@ class MoveToSkill extends Skill {
         );
 
         if (moved > 1) {
-          this.logger.log('[移動スキル] スタック解除成功');
+          console.log('[移動スキル] スタック解除成功');
           return { success: true };
         }
 
         await new Promise(resolve => setTimeout(resolve, 200));
       }
 
-      this.logger.log('[移動スキル] スタック解除失敗');
+      console.log('[移動スキル] スタック解除失敗');
       return { success: false };
     } catch (error) {
-      this.logger.log(`[移動スキル] スタック解除エラー: ${error.message}`);
+      console.log(`[移動スキル] スタック解除エラー: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -1447,7 +1445,7 @@ class MineBlockSkill extends Skill {
 
   async execute(bot, params) {
     const { blockType, position, amount = 1 } = params;
-    this.logger.log(`[マイニング] ${blockType}を${amount}個採取開始`);
+    console.log(`[マイニング] ${blockType}を${amount}個採取開始`);
 
     let successfulMines = 0;
     const targetAmount = amount;
@@ -1456,19 +1454,19 @@ class MineBlockSkill extends Skill {
 
     // Check initial inventory to track collected items
     const initialItems = this.countItemsInInventory(bot, blockType);
-    this.logger.log(`[マイニング] 開始時の${blockType}所持数: ${initialItems}個`);
+    console.log(`[マイニング] 開始時の${blockType}所持数: ${initialItems}個`);
 
     // Mining loop until we have enough items
     while (successfulMines < targetAmount) {
       let block;
 
-      this.logger.log(`[マイニング] 進捗: ${successfulMines}/${targetAmount}個採取済み`);
+      console.log(`[マイニング] 進捗: ${successfulMines}/${targetAmount}個採取済み`);
 
       if (position && successfulMines === 0) {
         // Only use position for first block
         block = bot.blockAt(position);
         if (!block || block.name !== blockType) {
-          this.logger.log(`[マイニング] 指定位置に${blockType}がありません: ${block ? block.name : 'null'}`);
+          console.log(`[マイニング] 指定位置に${blockType}がありません: ${block ? block.name : 'null'}`);
           return { success: false, reason: 'TARGET_NOT_FOUND', details: { type: blockType, position } };
         }
       } else {
@@ -1477,7 +1475,7 @@ class MineBlockSkill extends Skill {
       }
 
       if (!block) {
-        this.logger.log(`[マイニング] ${blockType}が見つかりません。`);
+        console.log(`[マイニング] ${blockType}が見つかりません。`);
         // Stage 2: Try mining downward to find stone/ore
         if (blockType === 'stone' || blockType === 'cobblestone' || blockType.includes('ore')) {
           const result = await this.digDownForStone(bot, blockType);
@@ -1492,17 +1490,17 @@ class MineBlockSkill extends Skill {
       // Check if block is reachable and within mining distance
       const reachabilityCheck = await this.checkBlockReachability(bot, block);
       if (!reachabilityCheck.canReach) {
-        this.logger.log(`[マイニング] ${block.name}は採掘可能範囲外: ${reachabilityCheck.reason}`);
+        console.log(`[マイニング] ${block.name}は採掘可能範囲外: ${reachabilityCheck.reason}`);
 
         // 視線が遮られている場合、障害物除去を試行
         if (reachabilityCheck.reason.includes('視線が遮られています')) {
-          this.logger.log('[マイニング] 視線を遮る障害物の除去を試みます...');
+          console.log('[マイニング] 視線を遮る障害物の除去を試みます...');
           const clearResult = await this.handleOutOfSightBlock(bot, block, reachabilityCheck);
           if (clearResult.success) {
-            this.logger.log('[マイニング] 障害物除去成功、再試行します。');
+            console.log('[マイニング] 障害物除去成功、再試行します。');
             continue; // 同じブロックで再試行
           } else {
-            this.logger.log('[マイニング] 障害物除去失敗、このブロックは諦めます。');
+            console.log('[マイニング] 障害物除去失敗、このブロックは諦めます。');
             if (block && block.position) {
               blacklist.add(block.position.toString());
             }
@@ -1513,7 +1511,7 @@ class MineBlockSkill extends Skill {
         // Try to move closer to the block
         const moveResult = await this.moveToMiningPosition(bot, block);
         if (!moveResult.success) {
-          this.logger.log(`[マイニング] 移動失敗、次のブロックを探します: ${moveResult.error}`);
+          console.log(`[マイニング] 移動失敗、次のブロックを探します: ${moveResult.error}`);
           if (block && block.position) {
             blacklist.add(block.position.toString()); // 移動失敗でもブラックリストへ
           }
@@ -1528,7 +1526,7 @@ class MineBlockSkill extends Skill {
         // Re-check reachability after movement
         const recheckResult = await this.checkBlockReachability(bot, block);
         if (!recheckResult.canReach) {
-          this.logger.log(`[マイニング] 移動後も採掘不可、次のブロックを探します: ${recheckResult.reason}`);
+          console.log(`[マイニング] 移動後も採掘不可、次のブロックを探します: ${recheckResult.reason}`);
           if (block && block.position) {
             blacklist.add(block.position.toString()); // 再チェック失敗でもブラックリストへ
           }
@@ -1539,7 +1537,7 @@ class MineBlockSkill extends Skill {
       // Additional strict line of sight check before mining
       const finalLineOfSight = this.checkLineOfSight(bot, bot.entity.position, block.position);
       if (!finalLineOfSight.clear) {
-        this.logger.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}`);
+        console.log(`[マイニング] 採掘直前の視線チェック失敗: ${finalLineOfSight.obstacle}`);
         if (block && block.position) {
           blacklist.add(block.position.toString()); // 最終チェック失敗でもブラックリストへ
         }
@@ -1549,10 +1547,10 @@ class MineBlockSkill extends Skill {
       // Check inventory space before mining
       const inventoryCheck = this.checkInventorySpace(bot);
       if (!inventoryCheck.hasSpace) {
-        this.logger.log('[マイニング] インベントリが満杯です。整理を試みます...');
+        console.log('[マイニング] インベントリが満杯です。整理を試みます...');
         const cleanupResult = await this.cleanupInventory(bot);
         if (!cleanupResult.success) {
-          this.logger.log('[マイニング] インベントリ整理失敗、次のブロックを探します');
+          console.log('[マイニング] インベントリ整理失敗、次のブロックを探します');
           continue; // Try to continue rather than fail completely
         }
       }
@@ -1560,12 +1558,12 @@ class MineBlockSkill extends Skill {
       try {
         // Final distance check before mining - prevent mining from 3+ blocks away
         if (!block || !block.position) {
-          this.logger.log('[マイニング] ブロックまたはポジションが無効です');
+          console.log('[マイニング] ブロックまたはポジションが無効です');
           continue;
         }
         const finalDistance = bot.entity.position.distanceTo(block.position);
         if (finalDistance >= 3.0) {
-          this.logger.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+          console.log(`[マイニング] 採掘距離が遠すぎます: ${finalDistance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
           if (block && block.position) {
             blacklist.add(block.position.toString());
           }
@@ -1575,12 +1573,12 @@ class MineBlockSkill extends Skill {
         // Check if block requires a tool and equip appropriate tool
         const toolCheck = await this.equipAppropriateToolForBlock(bot, block);
         if (!toolCheck.success) {
-          this.logger.log(`[マイニング] ツール装備失敗: ${toolCheck.error}`);
+          console.log(`[マイニング] ツール装備失敗: ${toolCheck.error}`);
           return { success: false, reason: toolCheck.reason || 'NO_TOOL', details: toolCheck.details };
         }
 
         const toolInfo = toolCheck.toolUsed ? ` - ツール: ${toolCheck.toolUsed}` : '';
-        this.logger.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)${toolInfo}`);
+        console.log(`[マイニング] ${block.position}で${block.name}を採掘中... (距離: ${finalDistance.toFixed(2)}ブロック)${toolInfo}`);
 
         // Store position for item collection
         const miningPosition = block.position.clone();
@@ -1589,18 +1587,18 @@ class MineBlockSkill extends Skill {
         if (toolCheck.toolUsed) {
           const toolDurabilityCheck = this.checkToolDurability(bot);
           if (!toolDurabilityCheck.usable) {
-            this.logger.log(`[マイニング] ツール耐久度不足: ${toolDurabilityCheck.warning}`);
+            console.log(`[マイニング] ツール耐久度不足: ${toolDurabilityCheck.warning}`);
             // Try to craft or find a replacement tool before critical failure
             const replacementResult = await this.handleLowDurabilityTool(bot, toolCheck.toolUsed);
             if (!replacementResult.success) {
-              this.logger.log(`[マイニング] ツール交換失敗、次のブロックを探します: ${toolDurabilityCheck.warning}`);
+              console.log(`[マイニング] ツール交換失敗、次のブロックを探します: ${toolDurabilityCheck.warning}`);
               continue; // Try to continue with next block
             }
           }
         }
 
         await bot.dig(block);
-        this.logger.log(`[マイニング] ${block.name}を採掘完了`);
+        console.log(`[マイニング] ${block.name}を採掘完了`);
 
         // Wait for items to drop and settle
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -1608,7 +1606,7 @@ class MineBlockSkill extends Skill {
         // Collect dropped items
         const collectionResult = await this.collectDroppedItems(bot, miningPosition);
         if (collectionResult.itemsCollected > 0) {
-          this.logger.log(`[マイニング] ${collectionResult.itemsCollected}個のアイテムを回収しました`);
+          console.log(`[マイニング] ${collectionResult.itemsCollected}個のアイテムを回収しました`);
           bot.chat(`${block.name}を採掘して${collectionResult.itemsCollected}個のアイテムを回収！ ⛏️`);
         } else {
           bot.chat(`${block.name}を採掘しました！ ⛏️`);
@@ -1616,21 +1614,21 @@ class MineBlockSkill extends Skill {
 
         successfulMines++;
         consecutiveFailures = 0; // 成功したらリセット
-        this.logger.log(`[マイニング] 採掘成功! 進捗: ${successfulMines}/${targetAmount}個`);
+        console.log(`[マイニング] 採掘成功! 進捗: ${successfulMines}/${targetAmount}個`);
 
         // Check if we have enough items in inventory (more accurate than just counting mines)
         const currentItems = this.countItemsInInventory(bot, blockType);
         const itemsGained = currentItems - initialItems;
 
         if (itemsGained >= targetAmount) {
-          this.logger.log(`[マイニング] 目標達成! ${blockType}を${itemsGained}個取得しました`);
+          console.log(`[マイニング] 目標達成! ${blockType}を${itemsGained}個取得しました`);
           break;
         }
 
         // Short wait before next mining attempt
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
-        this.logger.log(`[マイニング] 採掘に失敗: ${error.message}`);
+        console.log(`[マイニング] 採掘に失敗: ${error.message}`);
         if (block && block.position) {
           blacklist.add(block.position.toString()); // 採掘失敗でもブラックリストへ
         }
@@ -1644,7 +1642,7 @@ class MineBlockSkill extends Skill {
     const totalItemsGained = finalItems - initialItems;
 
     if (totalItemsGained >= targetAmount) {
-      this.logger.log(`[マイニング] タスク完了! ${blockType}を${totalItemsGained}個取得 (目標: ${targetAmount}個)`);
+      console.log(`[マイニング] タスク完了! ${blockType}を${totalItemsGained}個取得 (目標: ${targetAmount}個)`);
       bot.chat(`${blockType}採取完了! ${totalItemsGained}個取得しました！ ⛏️`);
       return {
         success: true,
@@ -1653,7 +1651,7 @@ class MineBlockSkill extends Skill {
         targetReached: true
       };
     } else {
-      this.logger.log(`[マイニング] 部分的成功: ${blockType}を${totalItemsGained}個取得 (目標: ${targetAmount}個)`);
+      console.log(`[マイニング] 部分的成功: ${blockType}を${totalItemsGained}個取得 (目標: ${targetAmount}個)`);
       return {
         success: totalItemsGained > 0,
         message: `${blockType}を${totalItemsGained}個採取しました (目標未達成)`,
@@ -1664,7 +1662,7 @@ class MineBlockSkill extends Skill {
   }
 
   async digDownForStone(bot, blockType) {
-    this.logger.log(`[マイニング] ${blockType}を求めて地下探索開始...`);
+    console.log(`[マイニング] ${blockType}を求めて地下探索開始...`);
 
     const maxDepth = 10; // Maximum blocks to dig down
 
@@ -1678,12 +1676,12 @@ class MineBlockSkill extends Skill {
             blockBelow.name.includes(blockType) ||
             (blockType === 'stone' && blockBelow.name === 'cobblestone')) {
           try {
-            this.logger.log(`[マイニング] 地下で${blockBelow.name}を発見！`);
+            console.log(`[マイニング] 地下で${blockBelow.name}を発見！`);
             await bot.dig(blockBelow);
             bot.chat(`地下で${blockBelow.name}を採掘しました！ ⛏️`);
             return { success: true, message: `地下で${blockBelow.name}を採掘しました` };
           } catch (error) {
-            this.logger.log(`[マイニング] 地下採掘失敗: ${error.message}`);
+            console.log(`[マイニング] 地下採掘失敗: ${error.message}`);
             continue;
           }
         }
@@ -1692,7 +1690,7 @@ class MineBlockSkill extends Skill {
         try {
           await bot.dig(blockBelow);
         } catch (error) {
-          this.logger.log(`[マイニング] 掘削失敗: ${error.message}`);
+          console.log(`[マイニング] 掘削失敗: ${error.message}`);
           break;
         }
 
@@ -1704,18 +1702,18 @@ class MineBlockSkill extends Skill {
       }
     }
 
-    this.logger.log(`[マイニング] 地下探索でも${blockType}が見つかりませんでした`);
+    console.log(`[マイニング] 地下探索でも${blockType}が見つかりませんでした`);
     return { success: false, error: `地下探索でも${blockType}が見つかりません` };
   }
 
   findBlockWithProgressiveSearch(bot, blockType, blacklist = new Set()) {
-    this.logger.log(`[マイニング] ${blockType}の段階的探索を開始...`);
+    console.log(`[マイニング] ${blockType}の段階的探索を開始...`);
 
     // Start with close-range search and expand for better coverage
     const searchRadii = [16, 32, 64, 128]; // Extended search range
 
     for (const radius of searchRadii) {
-      this.logger.log(`[マイニング] ${radius}ブロック範囲で${blockType}を探索中...`);
+      console.log(`[マイニング] ${radius}ブロック範囲で${blockType}を探索中...`);
 
       const block = bot.findBlock({
         matching: (candidate) => {
@@ -1728,7 +1726,7 @@ class MineBlockSkill extends Skill {
             }
           } catch (positionError) {
             // position.toString()でエラーが発生した場合は除外
-            this.logger.log(`[マイニング] ポジション参照エラー: ${positionError.message}`);
+            console.log(`[マイニング] ポジション参照エラー: ${positionError.message}`);
             return false;
           }
 
@@ -1770,23 +1768,23 @@ class MineBlockSkill extends Skill {
       });
 
       if (block) {
-        this.logger.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name} at ${block.position}`);
+        console.log(`[マイニング] ${radius}ブロック範囲で発見: ${block.name} at ${block.position}`);
         return block;
       }
     }
 
     // Enhanced fallback search for specific block types
-    this.logger.log('[マイニング] 標準探索失敗、特殊検索開始...');
+    console.log('[マイニング] 標準探索失敗、特殊検索開始...');
 
     if (typeof blockType === 'string') {
       const fallbackBlock = this.findSimilarBlocks(bot, blockType, blacklist);
       if (fallbackBlock) {
-        this.logger.log(`[マイニング] 代替ブロック発見: ${fallbackBlock.name}`);
+        console.log(`[マイニング] 代替ブロック発見: ${fallbackBlock.name}`);
         return fallbackBlock;
       }
     }
 
-    this.logger.log(`[マイニング] 全ての探索方法で${blockType}が見つかりませんでした`);
+    console.log(`[マイニング] 全ての探索方法で${blockType}が見つかりませんでした`);
     return null;
   }
 
@@ -1816,7 +1814,7 @@ class MineBlockSkill extends Skill {
       return null;
     }
 
-    this.logger.log(`[マイニング] ${blockType}の代替ブロックを検索中: ${targetGroup.join(', ')}`);
+    console.log(`[マイニング] ${blockType}の代替ブロックを検索中: ${targetGroup.join(', ')}`);
 
     // Search for any block in the same group
     for (const radius of [32, 64, 96]) {
@@ -1831,7 +1829,7 @@ class MineBlockSkill extends Skill {
             }
           } catch (positionError) {
             // position.toString()でエラーが発生した場合は除外
-            this.logger.log(`[マイニング] ポジション参照エラー: ${positionError.message}`);
+            console.log(`[マイニング] ポジション参照エラー: ${positionError.message}`);
             return false;
           }
 
@@ -1847,10 +1845,10 @@ class MineBlockSkill extends Skill {
         // Check distance before returning the fallback block
         const distance = bot.entity.position.distanceTo(block.position);
         if (distance < 3.0) {
-          this.logger.log(`[マイニング] ${radius}ブロック範囲で代替発見: ${block.name} (距離: ${distance.toFixed(2)})`);
+          console.log(`[マイニング] ${radius}ブロック範囲で代替発見: ${block.name} (距離: ${distance.toFixed(2)})`);
           return block;
         } else {
-          this.logger.log(`[マイニング] 代替ブロック発見したが距離が遠すぎます: ${distance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
+          console.log(`[マイニング] 代替ブロック発見したが距離が遠すぎます: ${distance.toFixed(2)}ブロック (制限: 3.0ブロック未満)`);
         }
       }
     }
@@ -1898,7 +1896,7 @@ class MineBlockSkill extends Skill {
 
       return visibleBlocks;
     } catch (error) {
-      this.logger.log(`[マイニング] 視界内ブロック検索エラー: ${error.message}`);
+      console.log(`[マイニング] 視界内ブロック検索エラー: ${error.message}`);
       return [];
     }
   }
@@ -1999,17 +1997,17 @@ class MineBlockSkill extends Skill {
     try {
       const blockPos = block.position;
 
-      this.logger.log(`[マイニング] 採掘位置への移動開始: ${blockPos}`);
+      console.log(`[マイニング] 採掘位置への移動開始: ${blockPos}`);
 
       // Move to within 2.5 blocks of the block for reliable mining
-      this.logger.log(`[マイニング] 採掘可能距離内(2.5ブロック)への移動を実行: ${blockPos}`);
+      console.log(`[マイニング] 採掘可能距離内(2.5ブロック)への移動を実行: ${blockPos}`);
 
       // Use MovementUtils for consistent movement handling
       const moveResult = await moveToPosition(bot, blockPos, 2.5);
       if (moveResult.success) {
         return { success: true };
       } else {
-        this.logger.log(`[マイニング] 採掘位置への移動に失敗: ${moveResult.error}`);
+        console.log(`[マイニング] 採掘位置への移動に失敗: ${moveResult.error}`);
         return { success: false, error: moveResult.error };
       }
     } catch (error) {
@@ -2032,7 +2030,7 @@ class MineBlockSkill extends Skill {
         totalSlots
       };
     } catch (error) {
-      this.logger.log(`[マイニング] インベントリチェックエラー: ${error.message}`);
+      console.log(`[マイニング] インベントリチェックエラー: ${error.message}`);
       return {
         hasSpace: true, // Assume space available on error
         freeSlots: 5,
@@ -2044,7 +2042,7 @@ class MineBlockSkill extends Skill {
   // Clean up inventory by dropping less important items
   async cleanupInventory(bot) {
     try {
-      this.logger.log('[マイニング] インベントリ整理開始');
+      console.log('[マイニング] インベントリ整理開始');
 
       const inventory = bot.inventory.items();
       const lowPriorityItems = ['dirt', 'cobblestone', 'gravel', 'sand'];
@@ -2059,7 +2057,7 @@ class MineBlockSkill extends Skill {
             const dropCount = Math.min(item.count - 8, 32); // Keep at least 8, drop max 32
             await bot.toss(item.type, null, dropCount);
             itemsDropped += dropCount;
-            this.logger.log(`[マイニング] ${item.name}を${dropCount}個破棄しました`);
+            console.log(`[マイニング] ${item.name}を${dropCount}個破棄しました`);
 
             // Check if we have enough space now
             const spaceCheck = this.checkInventorySpace(bot);
@@ -2067,13 +2065,13 @@ class MineBlockSkill extends Skill {
               break;
             }
           } catch (error) {
-            this.logger.log(`[マイニング] アイテム破棄エラー: ${error.message}`);
+            console.log(`[マイニング] アイテム破棄エラー: ${error.message}`);
           }
         }
       }
 
       if (itemsDropped > 0) {
-        this.logger.log(`[マイニング] インベントリ整理完了: ${itemsDropped}個のアイテムを破棄`);
+        console.log(`[マイニング] インベントリ整理完了: ${itemsDropped}個のアイテムを破棄`);
         return { success: true, itemsDropped };
       } else {
         return { success: false, error: '整理可能なアイテムがありません' };
@@ -2086,7 +2084,7 @@ class MineBlockSkill extends Skill {
   // Collect dropped items after mining
   async collectDroppedItems(bot, miningPosition) {
     try {
-      this.logger.log('[マイニング] ドロップアイテム回収開始');
+      console.log('[マイニング] ドロップアイテム回収開始');
 
       let itemsCollected = 0;
       const maxCollectionTime = 15000; // Increased to 15 seconds for thorough collection
@@ -2096,7 +2094,7 @@ class MineBlockSkill extends Skill {
 
       // Store initial inventory count for accurate tracking
       const initialInventoryCount = bot.inventory.items().length;
-      this.logger.log(`[マイニング] 回収前インベントリアイテム数: ${initialInventoryCount}`);
+      console.log(`[マイニング] 回収前インベントリアイテム数: ${initialInventoryCount}`);
 
       // Wait longer initially for items to spawn and settle
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -2110,13 +2108,13 @@ class MineBlockSkill extends Skill {
         });
 
         const coords = `${miningPosition.x}, ${miningPosition.y}, ${miningPosition.z}`;
-        this.logger.log(`[マイニング] 発見したアイテム: ${droppedItems.length}個 (座標: ${coords})`);
+        console.log(`[マイニング] 発見したアイテム: ${droppedItems.length}個 (座標: ${coords})`);
 
         if (droppedItems.length === 0) {
           consecutiveNoItemChecks++;
           // If no items found multiple times, likely no more items to collect
           if (consecutiveNoItemChecks >= 3 && Date.now() - startTime > 3000) {
-            this.logger.log('[マイニング] アイテムが見つからないため回収終了');
+            console.log('[マイニング] アイテムが見つからないため回収終了');
             break;
           }
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -2144,11 +2142,11 @@ class MineBlockSkill extends Skill {
         for (const itemEntity of droppedItems) {
           try {
             if (!itemEntity || !itemEntity.position) {
-              this.logger.log('[マイニング] アイテムエンティティまたはポジションが無効です');
+              console.log('[マイニング] アイテムエンティティまたはポジションが無効です');
               continue;
             }
             const distance = bot.entity.position.distanceTo(itemEntity.position);
-            this.logger.log(`[マイニング] アイテムまでの距離: ${distance.toFixed(2)}ブロック`);
+            console.log(`[マイニング] アイテムまでの距離: ${distance.toFixed(2)}ブロック`);
 
             if (distance > 2.0) { // Increased pickup distance threshold for better collection
               // Move closer to the item with improved positioning
@@ -2167,7 +2165,7 @@ class MineBlockSkill extends Skill {
                 while (Date.now() - moveStartTime < 5000) {
                   const newDistance = bot.entity.position.distanceTo(itemEntity.position);
                   if (newDistance <= 2.0) {
-                    this.logger.log(`[マイニング] アイテムに接近完了: ${newDistance.toFixed(2)}ブロック`);
+                    console.log(`[マイニング] アイテムに接近完了: ${newDistance.toFixed(2)}ブロック`);
                     break;
                   }
                   await new Promise(resolve => setTimeout(resolve, 150));
@@ -2192,15 +2190,15 @@ class MineBlockSkill extends Skill {
 
             if (!stillExists) {
               itemsCollected++;
-              this.logger.log(`[マイニング] アイテム回収成功: ${itemsCollected}個目`);
+              console.log(`[マイニング] アイテム回収成功: ${itemsCollected}個目`);
             } else {
-              this.logger.log(`[マイニング] アイテム回収失敗: アイテムID ${itemEntity.id} がまだ存在`);
+              console.log(`[マイニング] アイテム回収失敗: アイテムID ${itemEntity.id} がまだ存在`);
               // Try additional pickup attempts for stubborn items
               await bot.lookAt(itemEntity.position);
               await new Promise(resolve => setTimeout(resolve, 500));
             }
           } catch (error) {
-            this.logger.log(`[マイニング] アイテム回収エラー: ${error.message}`);
+            console.log(`[マイニング] アイテム回収エラー: ${error.message}`);
           }
         }
 
@@ -2212,16 +2210,16 @@ class MineBlockSkill extends Skill {
       const finalInventoryCount = bot.inventory.items().length;
       const actualItemsGained = finalInventoryCount - initialInventoryCount;
 
-      this.logger.log(`[マイニング] 回収後インベントリアイテム数: ${finalInventoryCount}`);
-      this.logger.log(`[マイニング] 実際に増加したアイテム数: ${actualItemsGained}`);
-      this.logger.log(`[マイニング] アイテム回収完了: 検出${itemsCollected}個, 実際${actualItemsGained}個`);
+      console.log(`[マイニング] 回収後インベントリアイテム数: ${finalInventoryCount}`);
+      console.log(`[マイニング] 実際に増加したアイテム数: ${actualItemsGained}`);
+      console.log(`[マイニング] アイテム回収完了: 検出${itemsCollected}個, 実際${actualItemsGained}個`);
 
       return {
         success: true,
         itemsCollected: Math.max(itemsCollected, actualItemsGained)
       };
     } catch (error) {
-      this.logger.log(`[マイニング] アイテム回収処理エラー: ${error.message}`);
+      console.log(`[マイニング] アイテム回収処理エラー: ${error.message}`);
       return {
         success: false,
         itemsCollected: 0,
@@ -2232,7 +2230,7 @@ class MineBlockSkill extends Skill {
 
   // Tool management for mining different block types
   async equipAppropriateToolForBlock(bot, block) {
-    this.logger.log(`[ツール管理] ${block.name}の採掘に適したツールを装備します`);
+    console.log(`[ツール管理] ${block.name}の採掘に適したツールを装備します`);
     const blockName = block.name;
 
     // Tool hierarchy with mining levels and durability (Gemini collaboration)
@@ -2282,11 +2280,11 @@ class MineBlockSkill extends Skill {
                        (blockName.includes('ore') ? blockMiningRequirements.iron_ore : blockMiningRequirements.default);
     const requiredLevel = requirement.requiredLevel;
 
-    this.logger.log(`[ツール管理] ${blockName}の採掘に必要なレベル: ${requiredLevel}`);
+    console.log(`[ツール管理] ${blockName}の採掘に必要なレベル: ${requiredLevel}`);
 
     // If hand-minable
     if (requiredLevel === 0) {
-      this.logger.log(`[ツール管理] ${blockName}は素手で採掘可能`);
+      console.log(`[ツール管理] ${blockName}は素手で採掘可能`);
       return { success: true, toolUsed: 'hand' };
     }
 
@@ -2314,16 +2312,16 @@ class MineBlockSkill extends Skill {
     if (bestTool) {
       try {
         await bot.equip(bestTool, 'hand');
-        this.logger.log(`[ツール管理] ${bestTool.name}を装備しました (レベル${bestLevel})`);
+        console.log(`[ツール管理] ${bestTool.name}を装備しました (レベル${bestLevel})`);
         return { success: true, toolUsed: bestTool.name };
       } catch (err) {
-        this.logger.error(`[ツール管理] ${bestTool.name}の装備に失敗: ${err.message}`);
+        console.error(`[ツール管理] ${bestTool.name}の装備に失敗: ${err.message}`);
         return { success: false, error: 'ツールの装備に失敗しました' };
       }
     }
 
     // No appropriate tool found - try to craft one
-    this.logger.log(`[ツール管理] ${blockName}の採掘に適したツールがありません。作成を試みます...`);
+    console.log(`[ツール管理] ${blockName}の採掘に適したツールがありません。作成を試みます...`);
     bot.chat(`${blockName}を掘るための適切な道具がないので、作ってみます。`);
 
     const craftResult = await this.craftBestAvailablePickaxe(bot);
@@ -2332,7 +2330,7 @@ class MineBlockSkill extends Skill {
       if (newTool) {
         try {
           await bot.equip(newTool, 'hand');
-          this.logger.log(`[ツール管理] 新しく作成した ${craftResult.toolName}を装備しました`);
+          console.log(`[ツール管理] 新しく作成した ${craftResult.toolName}を装備しました`);
           return { success: true, toolUsed: craftResult.toolName };
         } catch (err) {
           return { success: false, error: '作成したツールの装備に失敗しました' };
@@ -2340,7 +2338,7 @@ class MineBlockSkill extends Skill {
       }
     }
 
-    this.logger.error(`[ツール管理] ${blockName}に必要なツールの作成に失敗しました`);
+    console.error(`[ツール管理] ${blockName}に必要なツールの作成に失敗しました`);
     bot.chat('適切な道具の作成に失敗しました。');
     return { success: false, error: '適切なツールがなく、作成もできませんでした', reason: 'NO_TOOL' };
   }
@@ -2348,12 +2346,12 @@ class MineBlockSkill extends Skill {
 
   // Craft best available pickaxe (Gemini collaboration)
   async craftBestAvailablePickaxe(bot) {
-    this.logger.log('[ツール作成] 利用可能な最良のピッケルの作成を開始...');
+    console.log('[ツール作成] 利用可能な最良のピッケルの作成を開始...');
 
     // Check if we have sticks, if not try to create them
     const hasSticks = bot.inventory.items().some(item => item.name === 'stick' && item.count >= 2);
     if (!hasSticks) {
-      this.logger.log('[ツール作成] 棒が不足しているため、作成を試みます');
+      console.log('[ツール作成] 棒が不足しているため、作成を試みます');
       const craftSticksSkill = this.getSkill('craft_tools');
       if (craftSticksSkill) {
         const stickResult = await craftSticksSkill.execute(bot, { toolName: 'stick', amount: 4 });
@@ -2374,17 +2372,17 @@ class MineBlockSkill extends Skill {
       return { success: false, error: 'CraftToolsSkillが見つかりません' };
     }
 
-    this.logger.log(`[ツール作成] ${toolToCraft} の作成を試みます...`);
+    console.log(`[ツール作成] ${toolToCraft} の作成を試みます...`);
     const craftResult = await craftSkill.execute(bot, {
       toolName: toolToCraft,
       amount: 1
     });
 
     if (craftResult.success) {
-      this.logger.log(`[ツール作成] ${toolToCraft} の作成に成功しました`);
+      console.log(`[ツール作成] ${toolToCraft} の作成に成功しました`);
       return { success: true, toolName: toolToCraft };
     } else {
-      this.logger.error(`[ツール作成] ${toolToCraft} の作成に失敗しました: ${craftResult.error}`);
+      console.error(`[ツール作成] ${toolToCraft} の作成に失敗しました: ${craftResult.error}`);
       return { success: false, error: `${toolToCraft}の作成に失敗: ${craftResult.error}` };
     }
   }
@@ -2449,14 +2447,14 @@ class MineBlockSkill extends Skill {
 
     // If no specific tool is required, no tool needed (like dirt, grass, etc.)
     if (!requiredTools) {
-      this.logger.log(`[ツール管理] ${blockName}は素手で採掘可能`);
+      console.log(`[ツール管理] ${blockName}は素手で採掘可能`);
       return { success: true, toolUsed: null };
     }
 
     // Check current equipped item
     const currentItem = bot.heldItem;
     if (currentItem && requiredTools.includes(currentItem.name)) {
-      this.logger.log(`[ツール管理] 適切なツールが既に装備されています: ${currentItem.name}`);
+      console.log(`[ツール管理] 適切なツールが既に装備されています: ${currentItem.name}`);
       return { success: true, toolUsed: currentItem.name };
     }
 
@@ -2466,12 +2464,12 @@ class MineBlockSkill extends Skill {
     );
 
     if (availableTools.length === 0) {
-      this.logger.log(`[ツール管理] ${blockName}に必要なツールがありません: ${requiredTools.join(', ')}`);
+      console.log(`[ツール管理] ${blockName}に必要なツールがありません: ${requiredTools.join(', ')}`);
 
       // Try to craft basic tools if we have materials
       const craftResult = await this.tryToCraftBasicPickaxe(bot);
       if (craftResult.success) {
-        this.logger.log(`[ツール管理] 基本ツールを作成しました: ${craftResult.toolName}`);
+        console.log(`[ツール管理] 基本ツールを作成しました: ${craftResult.toolName}`);
         // Try to equip the newly crafted tool
         const newTool = bot.inventory.items().find(item => item.name === craftResult.toolName);
         if (newTool) {
@@ -2500,33 +2498,33 @@ class MineBlockSkill extends Skill {
 
     try {
       await bot.equip(bestTool, 'hand');
-      this.logger.log(`[ツール管理] ${bestTool.name}を装備しました (${blockName}採掘用)`);
+      console.log(`[ツール管理] ${bestTool.name}を装備しました (${blockName}採掘用)`);
       return { success: true, toolUsed: bestTool.name };
     } catch (error) {
-      this.logger.log(`[ツール管理] ツール装備に失敗: ${error.message}`);
+      console.log(`[ツール管理] ツール装備に失敗: ${error.message}`);
       return { success: false, error: `ツール装備失敗: ${error.message}` };
     }
   }
 
   // Try to craft a basic pickaxe if materials are available
   async tryToCraftBasicPickaxe(bot) {
-    this.logger.log('[ツール作成] 基本ピッケルの作成を試みます...');
+    console.log('[ツール作成] 基本ピッケルの作成を試みます...');
 
     // Step 1: Ensure we have or can get a workbench
     const workbenchResult = await this.ensureWorkbench(bot);
     if (!workbenchResult.success) {
-      this.logger.log(`[ツール作成] 作業台の確保に失敗: ${workbenchResult.error}`);
+      console.log(`[ツール作成] 作業台の確保に失敗: ${workbenchResult.error}`);
 
       // Try to gather materials automatically
       if (workbenchResult.error.includes('材料不足')) {
-        this.logger.log('[ツール作成] 材料不足のため自動収集を試みます...');
+        console.log('[ツール作成] 材料不足のため自動収集を試みます...');
         const gatherResult = await this.simpleWoodGathering(bot);
 
         if (gatherResult.success) {
-          this.logger.log('[ツール作成] 材料収集成功、作業台確保を再試行...');
+          console.log('[ツール作成] 材料収集成功、作業台確保を再試行...');
           const retryWorkbenchResult = await this.ensureWorkbench(bot);
           if (retryWorkbenchResult.success) {
-            this.logger.log('[ツール作成] 材料収集後の作業台確保成功');
+            console.log('[ツール作成] 材料収集後の作業台確保成功');
           } else {
             return { success: false, error: `材料収集後も作業台確保失敗: ${retryWorkbenchResult.error}` };
           }
@@ -2545,7 +2543,7 @@ class MineBlockSkill extends Skill {
     const totalSticks = sticks.reduce((sum, item) => sum + item.count, 0);
 
     if (totalSticks < 2) {
-      this.logger.log(`[ツール作成] スティック不足: 必要2本, 現在${totalSticks}本`);
+      console.log(`[ツール作成] スティック不足: 必要2本, 現在${totalSticks}本`);
 
       // Try to craft sticks from planks
       const planks = inventory.filter(item =>
@@ -2554,7 +2552,7 @@ class MineBlockSkill extends Skill {
       const totalPlanks = planks.reduce((sum, item) => sum + item.count, 0);
 
       if (totalPlanks >= 2) {
-        this.logger.log('[ツール作成] 板材からスティックを作成します...');
+        console.log('[ツール作成] 板材からスティックを作成します...');
         try {
           const mcData = require('minecraft-data')(bot.version);
           const stickItem = mcData.itemsByName.stick;
@@ -2562,18 +2560,18 @@ class MineBlockSkill extends Skill {
             const stickRecipes = bot.recipesFor(stickItem.id, null, 1, null);
             if (stickRecipes.length > 0) {
               await bot.craft(stickRecipes[0], 1, null);
-              this.logger.log('[ツール作成] スティックを作成しました');
+              console.log('[ツール作成] スティックを作成しました');
             }
           }
         } catch (error) {
-          this.logger.log(`[ツール作成] スティック作成に失敗: ${error.message}`);
+          console.log(`[ツール作成] スティック作成に失敗: ${error.message}`);
         }
       } else {
         // No planks available, try to get wood
-        this.logger.log('[ツール作成] 板材不足、木材の収集を試みます...');
+        console.log('[ツール作成] 板材不足、木材の収集を試みます...');
         const woodResult = await this.gatherWoodForCrafting(bot);
         if (woodResult.success) {
-          this.logger.log('[ツール作成] 木材収集成功、板材を作成します...');
+          console.log('[ツール作成] 木材収集成功、板材を作成します...');
           await this.craftPlanksFromLogs(bot);
           // Retry stick crafting after getting planks
           const planksAfterWood = bot.inventory.items().filter(item =>
@@ -2587,11 +2585,11 @@ class MineBlockSkill extends Skill {
                 const stickRecipes = bot.recipesFor(stickItem.id, null, 1, null);
                 if (stickRecipes.length > 0) {
                   await bot.craft(stickRecipes[0], 1, null);
-                  this.logger.log('[ツール作成] 木材から板材経由でスティックを作成しました');
+                  console.log('[ツール作成] 木材から板材経由でスティックを作成しました');
                 }
               }
             } catch (error) {
-              this.logger.log(`[ツール作成] 板材からスティック作成失敗: ${error.message}`);
+              console.log(`[ツール作成] 板材からスティック作成失敗: ${error.message}`);
             }
           }
         }
@@ -2636,7 +2634,7 @@ class MineBlockSkill extends Skill {
         maxDurability = itemData.maxDurability;
       }
     } catch (error) {
-      this.logger.log(`[ツール耐久度] 耐久度情報取得エラー: ${error.message}`);
+      console.log(`[ツール耐久度] 耐久度情報取得エラー: ${error.message}`);
       return { usable: true, durability: null };
     }
 
@@ -2648,7 +2646,7 @@ class MineBlockSkill extends Skill {
     const durabilityPercentage = (remainingDurability / maxDurability) * 100;
 
     const durabilityInfo = `${remainingDurability}/${maxDurability} (${durabilityPercentage.toFixed(1)}%)`;
-    this.logger.log(`[ツール耐久度] ${currentTool.name}: ${durabilityInfo}`);
+    console.log(`[ツール耐久度] ${currentTool.name}: ${durabilityInfo}`);
 
     if (remainingDurability <= 1) {
       return {
@@ -2669,7 +2667,7 @@ class MineBlockSkill extends Skill {
 
   // Handle low durability tool situation
   async handleLowDurabilityTool(bot, currentToolName) {
-    this.logger.log(`[ツール管理] ${currentToolName}の交換または修理を試みます`);
+    console.log(`[ツール管理] ${currentToolName}の交換または修理を試みます`);
 
     // First, try to find a replacement tool of the same type
     const replacementTool = bot.inventory.items().find(item =>
@@ -2677,30 +2675,30 @@ class MineBlockSkill extends Skill {
     );
 
     if (replacementTool) {
-      this.logger.log(`[ツール管理] 代替ツールを発見: ${replacementTool.name}`);
+      console.log(`[ツール管理] 代替ツールを発見: ${replacementTool.name}`);
       try {
         await bot.equip(replacementTool, 'hand');
-        this.logger.log(`[ツール管理] ${replacementTool.name}に交換しました`);
+        console.log(`[ツール管理] ${replacementTool.name}に交換しました`);
         return { success: true, action: 'replaced' };
       } catch (error) {
-        this.logger.log(`[ツール管理] ツール交換失敗: ${error.message}`);
+        console.log(`[ツール管理] ツール交換失敗: ${error.message}`);
       }
     }
 
     // If no replacement found, try to craft a new one
-    this.logger.log('[ツール管理] 代替ツールが見つかりません。新しいツールの作成を試みます');
+    console.log('[ツール管理] 代替ツールが見つかりません。新しいツールの作成を試みます');
     const craftResult = await this.tryToCraftBasicPickaxe(bot);
 
     if (craftResult.success) {
-      this.logger.log(`[ツール管理] 新しいツールを作成しました: ${craftResult.toolName}`);
+      console.log(`[ツール管理] 新しいツールを作成しました: ${craftResult.toolName}`);
       const newTool = bot.inventory.items().find(item => item.name === craftResult.toolName);
       if (newTool) {
         try {
           await bot.equip(newTool, 'hand');
-          this.logger.log(`[ツール管理] 新しいツール ${newTool.name} を装備しました`);
+          console.log(`[ツール管理] 新しいツール ${newTool.name} を装備しました`);
           return { success: true, action: 'crafted' };
         } catch (error) {
-          this.logger.log(`[ツール管理] 新ツール装備失敗: ${error.message}`);
+          console.log(`[ツール管理] 新ツール装備失敗: ${error.message}`);
         }
       }
     }
@@ -2710,7 +2708,7 @@ class MineBlockSkill extends Skill {
 
   // Ensure a workbench is available for crafting
   async ensureWorkbench(bot) {
-    this.logger.log('[作業台管理] 作業台の確保を開始...');
+    console.log('[作業台管理] 作業台の確保を開始...');
 
     // Check if a workbench is already placed nearby
     const workbench = bot.findBlock({
@@ -2719,11 +2717,11 @@ class MineBlockSkill extends Skill {
     });
 
     if (workbench) {
-      this.logger.log(`[作業台管理] 近くに作業台を発見: ${workbench.position}`);
+      console.log(`[作業台管理] 近くに作業台を発見: ${workbench.position}`);
       return { success: true, workbench };
     }
 
-    this.logger.log('[作業台検索] 周辺に作業台が見つかりませんでした');
+    console.log('[作業台検索] 周辺に作業台が見つかりませんでした');
 
     // Check if we have a workbench in inventory
     const inventoryWorkbench = bot.inventory.items().find(item =>
@@ -2731,25 +2729,25 @@ class MineBlockSkill extends Skill {
     );
 
     if (inventoryWorkbench) {
-      this.logger.log('[作業台管理] インベントリに作業台があります。設置を試みます...');
+      console.log('[作業台管理] インベントリに作業台があります。設置を試みます...');
       try {
         // Find a suitable place to put the workbench
         const placePosition = bot.entity.position.offset(1, 0, 0);
         await bot.equip(inventoryWorkbench, 'hand');
         await bot.placeBlock(bot.blockAt(placePosition), new Vec3(0, 1, 0));
-        this.logger.log(`[作業台管理] 作業台を設置しました: ${placePosition}`);
+        console.log(`[作業台管理] 作業台を設置しました: ${placePosition}`);
         return { success: true, workbench: bot.blockAt(placePosition) };
       } catch (error) {
-        this.logger.log(`[作業台管理] 作業台の設置に失敗: ${error.message}`);
+        console.log(`[作業台管理] 作業台の設置に失敗: ${error.message}`);
         return { success: false, error: `作業台設置失敗: ${error.message}` };
       }
     }
 
     // If no workbench, try to craft one
-    this.logger.log('[作業台管理] 作業台の作成を試みます...');
+    console.log('[作業台管理] 作業台の作成を試みます...');
     const craftResult = await this.craftWorkbench(bot);
     if (craftResult.success) {
-      this.logger.log('[作業台管理] 作業台の作成に成功しました');
+      console.log('[作業台管理] 作業台の作成に成功しました');
       // Now try to place it
       const newWorkbench = bot.inventory.items().find(item =>
         item && item.name === 'crafting_table'
@@ -2759,10 +2757,10 @@ class MineBlockSkill extends Skill {
           const placePosition = bot.entity.position.offset(1, 0, 0);
           await bot.equip(newWorkbench, 'hand');
           await bot.placeBlock(bot.blockAt(placePosition), new Vec3(0, 1, 0));
-          this.logger.log(`[作業台管理] 新しい作業台を設置しました: ${placePosition}`);
+          console.log(`[作業台管理] 新しい作業台を設置しました: ${placePosition}`);
           return { success: true, workbench: bot.blockAt(placePosition) };
         } catch (error) {
-          this.logger.log(`[作業台管理] 新しい作業台の設置に失敗: ${error.message}`);
+          console.log(`[作業台管理] 新しい作業台の設置に失敗: ${error.message}`);
           return { success: false, error: `新作業台設置失敗: ${error.message}` };
         }
       }
@@ -2773,7 +2771,7 @@ class MineBlockSkill extends Skill {
 
   // Craft a workbench if materials are available
   async craftWorkbench(bot) {
-    this.logger.log('[作業台作成] 作業台のクラフトを開始...');
+    console.log('[作業台作成] 作業台のクラフトを開始...');
 
     // Check for planks
     const planks = bot.inventory.items().filter(item =>
@@ -2782,11 +2780,11 @@ class MineBlockSkill extends Skill {
     const totalPlanks = planks.reduce((sum, item) => sum + item.count, 0);
 
     if (totalPlanks < 4) {
-      this.logger.log(`[作業台作成] 板材不足: 必要4枚, 現在${totalPlanks}枚`);
+      console.log(`[作業台作成] 板材不足: 必要4枚, 現在${totalPlanks}枚`);
       // Try to get wood to make planks
       const woodResult = await this.gatherWoodForCrafting(bot);
       if (woodResult.success) {
-        this.logger.log('[作業台作成] 木材収集成功、板材を作成します...');
+        console.log('[作業台作成] 木材収集成功、板材を作成します...');
         await this.craftPlanksFromLogs(bot);
       } else {
         return { success: false, error: '板材不足で作業台作成不可' };
@@ -2810,20 +2808,20 @@ class MineBlockSkill extends Skill {
         const workbenchRecipes = bot.recipesFor(workbenchItem.id, null, 1, null);
         if (workbenchRecipes.length > 0) {
           await bot.craft(workbenchRecipes[0], 1, null);
-          this.logger.log('[作業台作成] 作業台を作成しました');
+          console.log('[作業台作成] 作業台を作成しました');
           return { success: true };
         }
       }
       return { success: false, error: '作業台のレシピが見つかりません' };
     } catch (error) {
-      this.logger.log(`[作業台作成] 作業台作成に失敗: ${error.message}`);
+      console.log(`[作業台作成] 作業台作成に失敗: ${error.message}`);
       return { success: false, error: `作業台作成失敗: ${error.message}` };
     }
   }
 
   // Gather wood for crafting purposes
   async gatherWoodForCrafting(bot) {
-    this.logger.log('[木材収集] クラフト用木材の収集を開始...');
+    console.log('[木材収集] クラフト用木材の収集を開始...');
 
     // Find a nearby tree
     const tree = bot.findBlock({
@@ -2832,7 +2830,7 @@ class MineBlockSkill extends Skill {
     });
 
     if (!tree) {
-      this.logger.log('[木材収集] 近くに木が見つかりません。探索を試みます...');
+      console.log('[木材収集] 近くに木が見つかりません。探索を試みます...');
       // Try to explore to find trees
       const exploreResult = await this.exploreForTrees(bot);
       if (!exploreResult.success) {
@@ -2853,17 +2851,17 @@ class MineBlockSkill extends Skill {
     // Mine the tree
     try {
       await bot.dig(tree);
-      this.logger.log(`[木材収集] ${tree.name}を収集しました`);
+      console.log(`[木材収集] ${tree.name}を収集しました`);
       return { success: true };
     } catch (error) {
-      this.logger.log(`[木材収集] 木材収集に失敗: ${error.message}`);
+      console.log(`[木材収集] 木材収集に失敗: ${error.message}`);
       return { success: false, error: `木材収集失敗: ${error.message}` };
     }
   }
 
   // Explore to find trees
   async exploreForTrees(bot) {
-    this.logger.log('[探索] 木材探索を開始...');
+    console.log('[探索] 木材探索を開始...');
 
     const originalPosition = bot.entity.position.clone();
     const searchDirections = [
@@ -2875,7 +2873,7 @@ class MineBlockSkill extends Skill {
 
     for (const direction of searchDirections) {
       const targetPos = originalPosition.offset(direction.x, 0, direction.z);
-      this.logger.log(`[探索] ${direction.x}, ${direction.z}方向を探索中...`);
+      console.log(`[探索] ${direction.x}, ${direction.z}方向を探索中...`);
 
       try {
         // Basic movement toward the direction
@@ -2893,11 +2891,11 @@ class MineBlockSkill extends Skill {
         });
 
         if (tree) {
-          this.logger.log(`[探索] 木材を発見: ${tree.position}`);
+          console.log(`[探索] 木材を発見: ${tree.position}`);
           return { success: true, tree };
         }
       } catch (error) {
-        this.logger.log(`[探索] 探索エラー: ${error.message}`);
+        console.log(`[探索] 探索エラー: ${error.message}`);
         continue;
       }
     }
@@ -2909,7 +2907,7 @@ class MineBlockSkill extends Skill {
       await new Promise(resolve => setTimeout(resolve, 2000));
       bot.setControlState('forward', false);
     } catch (error) {
-      this.logger.log(`[探索] 復帰エラー: ${error.message}`);
+      console.log(`[探索] 復帰エラー: ${error.message}`);
     }
 
     return { success: false, error: '探索でも木材が見つかりませんでした' };
@@ -2932,11 +2930,11 @@ class MineBlockSkill extends Skill {
         const plankRecipes = bot.recipesFor(plankItem.id, null, 1, null);
         if (plankRecipes.length > 0) {
           await bot.craft(plankRecipes[0], logs[0].count, null);
-          this.logger.log(`[板材作成] ${logs[0].count}個の丸太から板材を作成しました`);
+          console.log(`[板材作成] ${logs[0].count}個の丸太から板材を作成しました`);
         }
       }
     } catch (error) {
-      this.logger.log(`[板材作成] 板材作成に失敗: ${error.message}`);
+      console.log(`[板材作成] 板材作成に失敗: ${error.message}`);
     }
   }
 
@@ -2961,13 +2959,13 @@ class MineBlockSkill extends Skill {
             await bot.activateBlock(workbench);
           }
           await bot.craft(pickaxeRecipes[0], 1, workbench);
-          this.logger.log('[ツール作成] 木製のピッケルを作成しました');
+          console.log('[ツール作成] 木製のピッケルを作成しました');
           return { success: true, toolName: 'wooden_pickaxe' };
         }
       }
       return { success: false, error: 'ピッケルのレシピが見つかりません' };
     } catch (error) {
-      this.logger.log(`[ツール作成] ピッケル作成に失敗: ${error.message}`);
+      console.log(`[ツール作成] ピッケル作成に失敗: ${error.message}`);
       return { success: false, error: `ピッケル作成失敗: ${error.message}` };
     }
   }
@@ -3111,7 +3109,7 @@ class SimpleGatherWoodSkill extends Skill {
           return { success: false, error: 'No new trees found nearby' };
         }
         if (!bot.pathfinder) {
-          this.logger.log('[木材収集] パスファインダーが利用不可。基本移動を使用します');
+          console.log('[木材収集] パスファインダーが利用不可。基本移動を使用します');
           // 基本移動で対応
           const distance = bot.entity.position.distanceTo(tree.position);
           if (distance > 4) {
@@ -3121,14 +3119,14 @@ class SimpleGatherWoodSkill extends Skill {
               await new Promise(resolve => setTimeout(resolve, Math.min(distance * 500, 3000)));
               await bot.setControlState('forward', false);
             } catch (moveError) {
-              this.logger.log(`[木材収集] 基本移動エラー: ${moveError.message}`);
+              console.log(`[木材収集] 基本移動エラー: ${moveError.message}`);
               return { success: false, error: `移動に失敗: ${moveError.message}` };
             }
           }
         } else {
           const moveResult = await moveToBlock(bot, tree, 1);
           if (!moveResult.success) {
-            this.logger.log(`[木材収集] 木への移動に失敗: ${moveResult.error}`);
+            console.log(`[木材収集] 木への移動に失敗: ${moveResult.error}`);
             return { success: false, error: `木への移動に失敗: ${moveResult.error}` };
           }
         }
@@ -3151,10 +3149,10 @@ class SimpleFindFoodSkill extends Skill {
     try {
       // Check current food level
       const currentFood = bot.food;
-      this.logger.log(`[食料確保] 現在の食料レベル: ${currentFood}/20`);
+      console.log(`[食料確保] 現在の食料レベル: ${currentFood}/20`);
 
       if (currentFood >= 20) {
-        this.logger.log('[食料確保] 食料レベルは十分です');
+        console.log('[食料確保] 食料レベルは十分です');
         bot.chat('食料は満タンです！');
         return { success: true, message: '食料は十分です' };
       }
@@ -3166,12 +3164,12 @@ class SimpleFindFoodSkill extends Skill {
       );
 
       if (!target) {
-        this.logger.log('[食料確保] 近くに食料源が見つかりません');
+        console.log('[食料確保] 近くに食料源が見つかりません');
         bot.chat('近くに食料が見つかりません...');
         return { success: false, error: '近くに食料源が見つかりません' };
       }
 
-      this.logger.log(`[食料確保] ${target.name}を発見、攻撃します`);
+      console.log(`[食料確保] ${target.name}を発見、攻撃します`);
       bot.chat(`${target.name}を発見！食料確保！`);
 
       // Attack the animal
@@ -3188,15 +3186,15 @@ class SimpleFindFoodSkill extends Skill {
       for (const item of droppedItems) {
         const moveResult = await moveToEntity(bot, item, 1);
         if (!moveResult.success) {
-          this.logger.log(`[食料確保] アイテムへの移動に失敗: ${moveResult.error}`);
+          console.log(`[食料確保] アイテムへの移動に失敗: ${moveResult.error}`);
         }
       }
 
-      this.logger.log('[食料確保] 食料を確保しました');
+      console.log('[食料確保] 食料を確保しました');
       bot.chat('食料を確保しました！ 🍖');
       return { success: true, message: '食料を確保しました' };
     } catch (error) {
-      this.logger.log(`[食料確保] 食料確保に失敗: ${error.message}`);
+      console.log(`[食料確保] 食料確保に失敗: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -3212,14 +3210,14 @@ class CraftToolsSkill extends Skill {
     const { tools } = params;
     const mcData = require('minecraft-data')(bot.version);
 
-    this.logger.log(`[ツールスキル] ${tools.join(', ')}の作成を開始します...`);
+    console.log(`[ツールスキル] ${tools.join(', ')}の作成を開始します...`);
 
     // インベントリの事前チェック
     const inventoryItems = InventoryUtils.getAllItems(bot);
-    this.logger.log(`[ツールスキル] インベントリアイテム数: ${inventoryItems.length}`);
+    console.log(`[ツールスキル] インベントリアイテム数: ${inventoryItems.length}`);
 
     if (inventoryItems.length === 0) {
-      this.logger.log('[ツールスキル] インベントリが空です。ツール作成を中止します。');
+      console.log('[ツールスキル] インベントリが空です。ツール作成を中止します。');
       return { success: false, error: 'インベントリが空です。まず基本的な素材を集めてください。' };
     }
 
@@ -3230,25 +3228,25 @@ class CraftToolsSkill extends Skill {
         itemCounts[item.name] = (itemCounts[item.name] || 0) + item.count;
       }
     });
-    this.logger.log('[ツールスキル] インベントリ内容:', JSON.stringify(itemCounts, null, 2));
+    console.log('[ツールスキル] インベントリ内容:', JSON.stringify(itemCounts, null, 2));
 
     // Ensure we have a crafting table nearby or in inventory
     const workbenchResult = await this.ensureWorkbench(bot);
 
     if (!workbenchResult.success) {
-      this.logger.log(`[ツールスキル] 作業台の確保に失敗: ${workbenchResult.error}`);
+      console.log(`[ツールスキル] 作業台の確保に失敗: ${workbenchResult.error}`);
 
       // Try to gather materials automatically
       if (workbenchResult.error.includes('材料不足')) {
-        this.logger.log('[ツールスキル] 材料不足のため自動収集を試みます...');
+        console.log('[ツールスキル] 材料不足のため自動収集を試みます...');
         // Use a simple wood gathering approach
         const gatherResult = await this.simpleWoodGathering(bot);
 
         if (gatherResult.success) {
-          this.logger.log('[ツールスキル] 材料収集成功、作業台確保を再試行...');
+          console.log('[ツールスキル] 材料収集成功、作業台確保を再試行...');
           const retryWorkbenchResult = await this.ensureWorkbench(bot);
           if (retryWorkbenchResult.success) {
-            this.logger.log('[ツールスキル] 材料収集後の作業台確保成功');
+            console.log('[ツールスキル] 材料収集後の作業台確保成功');
           } else {
             return { success: false, error: `材料収集後も作業台確保失敗: ${retryWorkbenchResult.error}` };
           }
@@ -3264,32 +3262,32 @@ class CraftToolsSkill extends Skill {
     // 距離チェック: 作業台に接近
     const proximityCheck = await ensureProximity(bot, craftingTable, 3);
     if (!proximityCheck.success) {
-      this.logger.log('[ツールスキル] 作業台まで接近できません');
+      console.log('[ツールスキル] 作業台まで接近できません');
       return { success: false, reason: 'UNREACHABLE_WORKBENCH', error: '作業台に接近できません' };
     }
 
     const craftedTools = [];
     for (const toolName of tools) {
-      this.logger.log(`[ツールスキル] ${toolName}の作成を試みます`);
+      console.log(`[ツールスキル] ${toolName}の作成を試みます`);
 
       // ダイヤモンドツールの除外チェック
       const excludedMaterials = ['diamond', 'netherite'];
       if (excludedMaterials.some(excluded => toolName.includes(excluded))) {
-        this.logger.log(`[ツールスキル] ${toolName} は除外対象です (ダイヤモンド/ネザライト)`);
+        console.log(`[ツールスキル] ${toolName} は除外対象です (ダイヤモンド/ネザライト)`);
         bot.chat(`${toolName}は作成対象外です（ダイヤモンド/ネザライト除外）`);
         continue;
       }
 
       const toolItem = mcData.itemsByName[toolName];
       if (!toolItem) {
-        this.logger.log(`[ツールスキル] 不明なツール: ${toolName}`);
-        this.logger.log(`[ツールスキル] 利用可能なツールアイテム: ${Object.keys(mcData.itemsByName).filter(name => name.includes('pickaxe')).join(', ')}`);
+        console.log(`[ツールスキル] 不明なツール: ${toolName}`);
+        console.log(`[ツールスキル] 利用可能なツールアイテム: ${Object.keys(mcData.itemsByName).filter(name => name.includes('pickaxe')).join(', ')}`);
         continue;
       }
 
       // Check if tool already exists in inventory
       if (InventoryUtils.hasItem(bot, toolName)) {
-        this.logger.log(`[ツールスキル] ${toolName}は既にインベントリにあります`);
+        console.log(`[ツールスキル] ${toolName}は既にインベントリにあります`);
         craftedTools.push(toolName);
         continue;
       }
@@ -3297,7 +3295,7 @@ class CraftToolsSkill extends Skill {
       // ツール作成前のインベントリ状態再チェック
       const currentItems = InventoryUtils.getAllItems(bot);
       if (currentItems.length === 0) {
-        this.logger.log(`[ツールスキル] ${toolName}作成時にインベントリが空です`);
+        console.log(`[ツールスキル] ${toolName}作成時にインベントリが空です`);
         return { success: false, error: `${toolName}作成時にインベントリが空です` };
       }
 
@@ -3311,21 +3309,21 @@ class CraftToolsSkill extends Skill {
           const optimizedToolItem = mcData.items[recipe.result.id];
           if (optimizedToolItem) {
             actualToolName = optimizedToolItem.name;
-            this.logger.log(`[ツールスキル] 素材優先度システムにより ${toolName} -> ${actualToolName} に最適化`);
+            console.log(`[ツールスキル] 素材優先度システムにより ${toolName} -> ${actualToolName} に最適化`);
           }
         } else {
-          this.logger.warn(`[ツールスキル] 最適化レシピの result.id が無効です: ${JSON.stringify(recipe.result)}`);
+          console.warn(`[ツールスキル] 最適化レシピの result.id が無効です: ${JSON.stringify(recipe.result)}`);
         }
       } else {
         // フォールバック: 通常のレシピ取得
         recipe = await SkillLibrary.getRecipeSafe(bot, toolName, 1, craftingTable);
         if (!recipe) {
-          this.logger.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
+          console.log(`[ツールスキル] ${toolName}のレシピが見つかりません`);
 
           // Try alternative recipes or wait for materials
           const alternativeRecipe = await SkillLibrary.getRecipeSafe(bot, toolItem.id, 1, craftingTable);
           if (!alternativeRecipe) {
-            this.logger.log(`[ツールスキル] ${toolName}の代替レシピも見つかりません`);
+            console.log(`[ツールスキル] ${toolName}の代替レシピも見つかりません`);
             bot.chat(`${toolName}のレシピが見つかりません`);
             return {
               success: false,
@@ -3333,16 +3331,16 @@ class CraftToolsSkill extends Skill {
               details: { tool: toolName, message: 'レシピが見つかりません' }
             };
           } else {
-            this.logger.log(`[ツールスキル] ${toolName}の代替レシピを使用します`);
+            console.log(`[ツールスキル] ${toolName}の代替レシピを使用します`);
             recipe = alternativeRecipe;
           }
         }
 
         if (toolName.includes('wooden_') && !recipe) {
-          this.logger.log(`[ツールスキル] 木材ツール用の最適化レシピを再取得: ${toolName}`);
+          console.log(`[ツールスキル] 木材ツール用の最適化レシピを再取得: ${toolName}`);
           recipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, toolName, 1, craftingTable);
           if (recipe) {
-            this.logger.log(`[ツールスキル] 木材最適化レシピを取得成功: ${toolName}`);
+            console.log(`[ツールスキル] 木材最適化レシピを取得成功: ${toolName}`);
           }
         }
       }
@@ -3350,41 +3348,41 @@ class CraftToolsSkill extends Skill {
       // Check for sufficient materials using the actual recipe we'll use
       const missingMaterials = await this.getMissingMaterialsForActualRecipe(bot, recipe);
       if (missingMaterials && missingMaterials.length > 0) {
-        this.logger.log(`[ツールスキル] ${actualToolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
+        console.log(`[ツールスキル] ${actualToolName}の材料が不足しています。不足: ${missingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
 
         // Try to auto-convert materials if possible
         let materialConverted = false;
         for (const missing of missingMaterials) {
           // Check if this is a planks material and we have logs
           if (missing.item.includes('_planks') || missing.item.includes('planks')) {
-            this.logger.log(`[ツールスキル] 板材不足検出: ${missing.item} ${missing.needed}個`);
+            console.log(`[ツールスキル] 板材不足検出: ${missing.item} ${missing.needed}個`);
             const logs = InventoryUtils.getAllItems(bot).filter(item => item.name && item.name.includes('_log'));
             if (logs.length > 0) {
-              this.logger.log(`[ツールスキル] 木材が利用可能: ${logs.length}種類`);
+              console.log(`[ツールスキル] 木材が利用可能: ${logs.length}種類`);
               const convertResult = await this.convertLogsToPlanksDynamic(bot, missing.needed);
               if (convertResult.success) {
-                this.logger.log(`[ツールスキル] 板材変換成功: ${convertResult.converted}個`);
+                console.log(`[ツールスキル] 板材変換成功: ${convertResult.converted}個`);
                 materialConverted = true;
                 break;
               } else {
-                this.logger.log(`[ツールスキル] 板材変換失敗: ${convertResult.error}`);
+                console.log(`[ツールスキル] 板材変換失敗: ${convertResult.error}`);
               }
             }
           } else if (missing.item === 'stick') {
             // Check if this is a stick material and we have planks
-            this.logger.log(`[ツールスキル] スティック不足検出: ${missing.needed}個`);
+            console.log(`[ツールスキル] スティック不足検出: ${missing.needed}個`);
 
             // 不足分のスティックを作成
             const sticksNeeded = missing.needed;
-
-            this.logger.log(`[ツールスキル] 追加で${sticksNeeded}個のスティックが必要。板材から作成します。`);
+            
+            console.log(`[ツールスキル] 追加で${sticksNeeded}個のスティックが必要。板材から作成します。`);
             const stickResult = await this.createStickFromPlanks(bot, sticksNeeded);
             if (stickResult.success) {
-              this.logger.log(`[ツールスキル] スティック作成成功: ${stickResult.created}個`);
+              console.log(`[ツールスキル] スティック作成成功: ${stickResult.created}個`);
               materialConverted = true;
               break;
             } else {
-              this.logger.log(`[ツールスキル] スティック作成失敗: ${stickResult.error}`);
+              console.log(`[ツールスキル] スティック作成失敗: ${stickResult.error}`);
             }
           }
         }
@@ -3401,7 +3399,7 @@ class CraftToolsSkill extends Skill {
         // Re-check materials after conversion
         const updatedMissingMaterials = await this.getMissingMaterialsForActualRecipe(bot, recipe);
         if (updatedMissingMaterials && updatedMissingMaterials.length > 0) {
-          this.logger.log(`[ツールスキル] 材料変換後も不足: ${updatedMissingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
+          console.log(`[ツールスキル] 材料変換後も不足: ${updatedMissingMaterials.map(m => `${m.item} (${m.needed}個)`).join(', ')}`);
           bot.chat(`${actualToolName}の材料が不足しています`);
           return {
             success: false,
@@ -3409,12 +3407,12 @@ class CraftToolsSkill extends Skill {
             details: { missing: updatedMissingMaterials, tool: actualToolName }
           };
         } else {
-          this.logger.log('[ツールスキル] 材料変換後、材料が十分になりました');
+          console.log('[ツールスキル] 材料変換後、材料が十分になりました');
         }
       }
 
       // Debug: Log recipe state before crafting
-      this.logger.log(`[ツールスキル] ${toolName}クラフト前のレシピ状態:`, {
+      console.log(`[ツールスキル] ${toolName}クラフト前のレシピ状態:`, {
         hasRecipe: !!recipe,
         recipeId: recipe?.id,
         recipeResult: recipe?.result,
@@ -3422,23 +3420,23 @@ class CraftToolsSkill extends Skill {
       });
 
       try {
-        this.logger.log(`[ツールスキル] ${toolName}をクラフト中...`);
+        console.log(`[ツールスキル] ${toolName}をクラフト中...`);
 
         if (!recipe) {
-          this.logger.log(`[ツールスキル] ${toolName}のレシピがnullです - クラフトをスキップ`);
+          console.log(`[ツールスキル] ${toolName}のレシピがnullです - クラフトをスキップ`);
           return { success: false, error: `Recipe is null for ${toolName}` };
         }
 
         if (!recipe.id && !recipe.result) {
-          this.logger.log(`[ツールスキル] ${toolName}のレシピが不正な形式です`);
-          this.logger.log('[ツールスキル] レシピ詳細:', JSON.stringify(recipe, null, 2));
+          console.log(`[ツールスキル] ${toolName}のレシピが不正な形式です`);
+          console.log('[ツールスキル] レシピ詳細:', JSON.stringify(recipe, null, 2));
           return { success: false, error: `Invalid recipe format for ${toolName}` };
         }
 
         // 追加の安全性チェック
         if (recipe.result && recipe.result.id === undefined) {
-          this.logger.log(`[ツールスキル] ${toolName}のレシピ結果IDが未定義です`);
-          this.logger.log('[ツールスキル] レシピ結果:', JSON.stringify(recipe.result, null, 2));
+          console.log(`[ツールスキル] ${toolName}のレシピ結果IDが未定義です`);
+          console.log('[ツールスキル] レシピ結果:', JSON.stringify(recipe.result, null, 2));
           return { success: false, error: `Recipe result ID is undefined for ${toolName}` };
         }
 
@@ -3453,18 +3451,18 @@ class CraftToolsSkill extends Skill {
                 if (item !== 0 && item !== null && item !== undefined) {
                   // Handle object types that shouldn't be here
                   if (typeof item === 'object') {
-                    this.logger.log(`[ツールスキル] 無効なアイテムID (オブジェクト): ${JSON.stringify(item)}`);
+                    console.log(`[ツールスキル] 無効なアイテムID (オブジェクト): ${JSON.stringify(item)}`);
                     hasInvalidItems = true;
                     continue;
                   }
-
+                  
                   // Handle string types that shouldn't be here
                   if (typeof item === 'string') {
-                    this.logger.log(`[ツールスキル] 無効なアイテムID (文字列): ${item}`);
+                    console.log(`[ツールスキル] 無効なアイテムID (文字列): ${item}`);
                     hasInvalidItems = true;
                     continue;
                   }
-
+                  
                   // Handle number types - check if they exist in mcData
                   if (typeof item === 'number') {
                     // -1 is a valid ID in mineflayer representing empty slots
@@ -3472,14 +3470,14 @@ class CraftToolsSkill extends Skill {
                       // -1 is valid - represents empty slot in mineflayer
                       continue;
                     }
-
+                    
                     const itemData = mcData.items[item];
                     if (!itemData) {
-                      this.logger.log(`[ツールスキル] 無効なアイテムID (数値): ${item}`);
+                      console.log(`[ツールスキル] 無効なアイテムID (数値): ${item}`);
                       hasInvalidItems = true;
                     }
                   } else {
-                    this.logger.log(`[ツールスキル] 無効なアイテムID (不明な型): ${typeof item}, 値: ${item}`);
+                    console.log(`[ツールスキル] 無効なアイテムID (不明な型): ${typeof item}, 値: ${item}`);
                     hasInvalidItems = true;
                   }
                 }
@@ -3487,17 +3485,17 @@ class CraftToolsSkill extends Skill {
             }
           }
           if (hasInvalidItems) {
-            this.logger.log('[ツールスキル] inShapeに無効なアイテムIDが含まれています');
-            this.logger.log('[ツールスキル] 現在のinShape:', JSON.stringify(recipe.inShape, null, 2));
+            console.log('[ツールスキル] inShapeに無効なアイテムIDが含まれています');
+            console.log('[ツールスキル] 現在のinShape:', JSON.stringify(recipe.inShape, null, 2));
             return { success: false, error: `Invalid item IDs in recipe for ${toolName}` };
           }
         }
 
         // Fix missing ingredients field by generating from inShape
         if (!recipe.ingredients && recipe.inShape) {
-          this.logger.log(`[ツールスキル] ${toolName}のingredientsがnullのため、inShapeから生成します`);
+          console.log(`[ツールスキル] ${toolName}のingredientsがnullのため、inShapeから生成します`);
           recipe.ingredients = this.generateIngredientsFromInShape(recipe.inShape);
-          this.logger.log('[ツールスキル] 生成されたingredients:', recipe.ingredients);
+          console.log('[ツールスキル] 生成されたingredients:', recipe.ingredients);
         }
 
         // Fix delta/inShape ID inconsistency that causes crafting errors
@@ -3509,30 +3507,30 @@ class CraftToolsSkill extends Skill {
         // CRITICAL FIX: Ensure recipe.id is set for bot.craft() compatibility
         if (!recipe.id && recipe.result && recipe.result.id) {
           recipe.id = recipe.result.id;
-          this.logger.log(`[ツールスキル] recipe.id missing - setting to result.id: ${recipe.id}`);
+          console.log(`[ツールスキル] recipe.id missing - setting to result.id: ${recipe.id}`);
         }
 
         // Use official bot.recipesFor() for reliable crafting
         try {
           const targetItemId = recipe.result.id;
           const officialRecipes = bot.recipesFor(targetItemId, null, 1, craftingTable);
-
+          
           if (officialRecipes.length > 0) {
             const officialRecipe = officialRecipes[0];
-            this.logger.log(`[ツールスキル] ${actualToolName}のクラフトを実行中...`);
+            console.log(`[ツールスキル] ${actualToolName}のクラフトを実行中...`);
             await bot.craft(officialRecipe, 1, craftingTable);
-            this.logger.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
+            console.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
             bot.chat(`${actualToolName}をクラフトしました！ 🔨`);
             craftedTools.push(actualToolName);
             continue;
           }
         } catch (officialRecipeError) {
-          this.logger.log(`[ツールスキル] 公式レシピでのクラフトに失敗: ${officialRecipeError.message}`);
-          this.logger.log('[ツールスキル] 手動レシピでクラフトを続行...');
+          console.log(`[ツールスキル] 公式レシピでのクラフトに失敗: ${officialRecipeError.message}`);
+          console.log(`[ツールスキル] 手動レシピでクラフトを続行...`);
         }
 
         // Fallback to manual recipe crafting
-        this.logger.log(`[ツールスキル] ${toolName}の手動レシピでクラフトを試行中...`);
+        console.log(`[ツールスキル] ${toolName}の手動レシピでクラフトを試行中...`);
 
         // より安全な bot.craft() 呼び出しを実装
         try {
@@ -3552,11 +3550,11 @@ class CraftToolsSkill extends Skill {
 
           // currentWindowがNULLの場合、まず作業台を開いてからwindowOpenイベントを待機
           if (!bot.currentWindow) {
-            this.logger.log('[ツールスキル] currentWindowがNULL - 作業台を開いてwindowOpenイベントを待機中...');
+            console.log('[ツールスキル] currentWindowがNULL - 作業台を開いてwindowOpenイベントを待機中...');
 
             try {
               await bot.activateBlock(craftingTable);
-              this.logger.log('[ツールスキル] 作業台を開きました');
+              console.log('[ツールスキル] 作業台を開きました');
             } catch (activateError) {
               throw new Error(`作業台の開放に失敗: ${activateError.message}`);
             }
@@ -3571,7 +3569,7 @@ class CraftToolsSkill extends Skill {
                 if (window.type === 'minecraft:crafting' || window.type === 'generic_3x3') {
                   clearTimeout(timeout);
                   bot.removeListener('windowOpen', onWindowOpen);
-                  this.logger.log(`[ツールスキル] windowOpen確認: ${window.type}`);
+                  console.log(`[ツールスキル] windowOpen確認: ${window.type}`);
                   // 少し待ってからresolve to ensure window is fully initialized
                   setTimeout(resolve, 100);
                 }
@@ -3584,18 +3582,18 @@ class CraftToolsSkill extends Skill {
           // currentWindowの最終確認と追加待機
           let windowCheckAttempts = 0;
           const maxWindowCheckAttempts = 10;
-
+          
           while (!bot.currentWindow && windowCheckAttempts < maxWindowCheckAttempts) {
-            this.logger.log(`[ツールスキル] currentWindow待機中... (${windowCheckAttempts + 1}/${maxWindowCheckAttempts})`);
+            console.log(`[ツールスキル] currentWindow待機中... (${windowCheckAttempts + 1}/${maxWindowCheckAttempts})`);
             await new Promise(resolve => setTimeout(resolve, 200));
             windowCheckAttempts++;
           }
-
+          
           if (!bot.currentWindow) {
             throw new Error('currentWindow is still null after extended waiting');
           }
 
-          this.logger.log(`[ツールスキル] currentWindow確認: ${bot.currentWindow.type}`);
+          console.log(`[ツールスキル] currentWindow確認: ${bot.currentWindow.type}`);
 
           // クラフト直前の最終材料確認
           const finalMaterialCheck = await this.verifyMaterialsBeforeCraft(bot, recipe);
@@ -3612,29 +3610,29 @@ class CraftToolsSkill extends Skill {
             )
           ]);
 
-          this.logger.log(`[ツールスキル] ${toolName}のクラフト結果:`, result);
+          console.log(`[ツールスキル] ${toolName}のクラフト結果:`, result);
         } catch (craftError) {
-          this.logger.log(`[ツールスキル] 手動レシピでのクラフトに失敗: ${craftError.message}`);
+          console.log(`[ツールスキル] 手動レシピでのクラフトに失敗: ${craftError.message}`);
           throw craftError;
         }
-        this.logger.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
+        console.log(`[ツールスキル] ${actualToolName}をクラフトしました！`);
         bot.chat(`${actualToolName}をクラフトしました！ 🔨`);
         craftedTools.push(actualToolName);
       } catch (error) {
-        this.logger.log(`[ツールスキル] ${actualToolName}のクラフトに失敗: ${error.message}`);
-        this.logger.log('[ツールスキル] レシピ詳細:', recipe ? JSON.stringify(recipe, null, 2) : 'null');
+        console.log(`[ツールスキル] ${actualToolName}のクラフトに失敗: ${error.message}`);
+        console.log('[ツールスキル] レシピ詳細:', recipe ? JSON.stringify(recipe, null, 2) : 'null');
         return { success: false, error: `Failed to craft ${actualToolName}: ${error.message}` };
       }
     }
 
     if (craftedTools.length === tools.length) {
-      this.logger.log('[ツールスキル] 全てのツールを正常にクラフトしました。');
+      console.log('[ツールスキル] 全てのツールを正常にクラフトしました。');
       return { success: true, crafted: craftedTools };
     } else if (craftedTools.length > 0) {
-      this.logger.log('[ツールスキル] 一部のツールをクラフトしました。');
+      console.log('[ツールスキル] 一部のツールをクラフトしました。');
       return { success: true, crafted: craftedTools, message: '一部のツールをクラフトしました' };
     } else {
-      this.logger.log('[ツールスキル] ツールをクラフトできませんでした。');
+      console.log('[ツールスキル] ツールをクラフトできませんでした。');
       return { success: false, error: 'ツールをクラフトできませんでした' };
     }
   }
@@ -3647,52 +3645,52 @@ class CraftToolsSkill extends Skill {
    */
   async verifyMaterialsBeforeCraft(bot, recipe) {
     const mcData = require('minecraft-data')(bot.version);
-
+    
     if (!recipe || !recipe.delta) {
       return { success: false, error: 'Recipe or delta is null' };
     }
-
+    
     // Get current inventory
     const inventory = bot.inventory.items();
     const inventoryMap = new Map();
-
+    
     for (const item of inventory) {
       if (item && item.type !== null && item.type !== undefined) {
         inventoryMap.set(item.type, (inventoryMap.get(item.type) || 0) + item.count);
       }
     }
-
-
+    
+    
     // Check each required material
     const missing = [];
     for (const ingredient of recipe.delta) {
       if (ingredient.count < 0) {
         const needed = Math.abs(ingredient.count);
         const available = inventoryMap.get(ingredient.id) || 0;
-
+        
         const itemData = mcData.items[ingredient.id];
         const itemName = itemData ? itemData.name : `ID:${ingredient.id}`;
-
-
+        
+        
         if (available < needed) {
           missing.push({
             item: itemName,
-            needed,
-            available,
+            needed: needed,
+            available: available,
             shortage: needed - available
           });
         }
       }
     }
-
+    
     if (missing.length > 0) {
-      return {
-        success: false,
+      return { 
+        success: false, 
         error: `Missing materials: ${missing.map(m => `${m.item} (need ${m.shortage} more)`).join(', ')}`,
-        missing
+        missing: missing
       };
     }
-
+    
     return { success: true };
   }
 
@@ -3742,7 +3740,7 @@ class CraftToolsSkill extends Skill {
       return delta;
     }
 
-    this.logger.log('[レシピ修正] 元のinShape:', JSON.stringify(inShape));
+    console.log('[レシピ修正] 元のinShape:', JSON.stringify(inShape));
 
     // Count items in inShape
     const itemCounts = new Map();
@@ -3780,46 +3778,44 @@ class CraftToolsSkill extends Skill {
   sanitizeInShape(inShape) {
     if (!Array.isArray(inShape)) return inShape;
     return inShape.map(row =>
-      Array.isArray(row)
-        ? row.map(cell => {
-          // Handle null, undefined, and empty slots
-          if (cell == null || cell === undefined) return -1;
-
-          // -1 is a valid empty slot indicator in mineflayer
-          if (cell === -1) return -1;
-
-          // Handle objects that should be item IDs
-          if (typeof cell === 'object' && cell !== null) {
+      Array.isArray(row) ? row.map(cell => {
+        // Handle null, undefined, and empty slots
+        if (cell == null || cell === undefined) return -1;
+        
+        // -1 is a valid empty slot indicator in mineflayer
+        if (cell === -1) return -1;
+        
+        // Handle objects that should be item IDs
+        if (typeof cell === 'object' && cell !== null) {
           // If it's an object with an id property, use the id
-            if (cell.id !== undefined && typeof cell.id === 'number') {
-              return cell.id;
-            }
-            // Otherwise, this is invalid - return 0 (empty slot)
-            this.logger.log(`[sanitizeInShape] 無効なオブジェクトをスキップ: ${JSON.stringify(cell)}`);
-            return 0;
+          if (cell.id !== undefined && typeof cell.id === 'number') {
+            return cell.id;
           }
-
-          // Handle string item IDs - convert to number if possible
-          if (typeof cell === 'string') {
-            const numId = parseInt(cell, 10);
-            if (!isNaN(numId)) {
-              return numId;
-            }
-            // Invalid string - return 0
-            this.logger.log(`[sanitizeInShape] 無効な文字列ID: ${cell}`);
-            return 0;
-          }
-
-          // Handle number item IDs
-          if (typeof cell === 'number') {
-            return cell;
-          }
-
-          // Unknown type - return 0
-          this.logger.log(`[sanitizeInShape] 未知のタイプ: ${typeof cell}, 値: ${cell}`);
+          // Otherwise, this is invalid - return 0 (empty slot)
+          console.log(`[sanitizeInShape] 無効なオブジェクトをスキップ: ${JSON.stringify(cell)}`);
           return 0;
-        })
-        : row
+        }
+        
+        // Handle string item IDs - convert to number if possible
+        if (typeof cell === 'string') {
+          const numId = parseInt(cell, 10);
+          if (!isNaN(numId)) {
+            return numId;
+          }
+          // Invalid string - return 0
+          console.log(`[sanitizeInShape] 無効な文字列ID: ${cell}`);
+          return 0;
+        }
+        
+        // Handle number item IDs
+        if (typeof cell === 'number') {
+          return cell;
+        }
+        
+        // Unknown type - return 0
+        console.log(`[sanitizeInShape] 未知のタイプ: ${typeof cell}, 値: ${cell}`);
+        return 0;
+      }) : row
     );
   }
 
@@ -3853,14 +3849,14 @@ class CraftToolsSkill extends Skill {
           });
         } else if (substitutionInfo.substitutionType === 'wood_plank') {
           // Log successful wood plank substitution
-          this.logger.log(`[材料チェック] 木材代替可能: ${itemName} (必要:${needed}) -> 利用可能合計:${substitutionInfo.availableCount}`);
-          this.logger.log(`[材料チェック] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
+          console.log(`[材料チェック] 木材代替可能: ${itemName} (必要:${needed}) -> 利用可能合計:${substitutionInfo.availableCount}`);
+          console.log(`[材料チェック] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
         } else if (substitutionInfo.substitutionType === 'stick_from_planks') {
           // Need to craft sticks from planks - add to missing for processing
           const currentSticks = substitutionInfo.substitutes.stick || 0;
           const sticksNeeded = needed - currentSticks;
           if (sticksNeeded > 0) {
-            this.logger.log(`[材料チェック] スティック不足: ${itemName} (必要:${needed}, 現在:${currentSticks}) -> ${sticksNeeded}個を板材から作成が必要`);
+            console.log(`[材料チェック] スティック不足: ${itemName} (必要:${needed}, 現在:${currentSticks}) -> ${sticksNeeded}個を板材から作成が必要`);
             missing.push({
               item: itemName,
               needed: sticksNeeded,
@@ -3869,11 +3865,11 @@ class CraftToolsSkill extends Skill {
               possibleSubstitutes: substitutionInfo.substitutes
             });
           } else {
-            this.logger.log(`[材料チェック] スティック十分: ${itemName} (必要:${needed}) -> 利用可能:${currentSticks}`);
+            console.log(`[材料チェック] スティック十分: ${itemName} (必要:${needed}) -> 利用可能:${currentSticks}`);
           }
         } else if (substitutionInfo.substitutionType === 'exact_match') {
           // Log successful exact match
-          this.logger.log(`[材料チェック] 材料十分: ${itemName} (必要:${needed}) -> 利用可能:${substitutionInfo.availableCount}`);
+          console.log(`[材料チェック] 材料十分: ${itemName} (必要:${needed}) -> 利用可能:${substitutionInfo.availableCount}`);
         }
       }
     }
@@ -3891,7 +3887,7 @@ class CraftToolsSkill extends Skill {
     if (itemName && itemName.includes('wooden_')) {
       recipe = await SkillLibrary.getOptimizedWoodenToolRecipe(bot, itemName, 1, craftingTable);
       if (recipe) {
-        this.logger.log(`[材料チェック] 木材最適化レシピを使用: ${itemName}`);
+        console.log(`[材料チェック] 木材最適化レシピを使用: ${itemName}`);
       }
     }
 
@@ -3902,7 +3898,7 @@ class CraftToolsSkill extends Skill {
           recipe = recipes[0];
         }
       } catch (error) {
-        this.logger.log(`[材料チェック] bot.recipesFor failed: ${error.message}`);
+        console.log(`[材料チェック] bot.recipesFor failed: ${error.message}`);
       }
     }
 
@@ -3926,7 +3922,7 @@ class CraftToolsSkill extends Skill {
             ingredientCounts.set(ingredientId, (ingredientCounts.get(ingredientId) || 0) + 1);
           });
           recipe.delta = Array.from(ingredientCounts.entries()).map(([id, count]) => ({
-            id,
+            id: id,
             count: -count // Negative count means required material
           }));
         } else if (rawRecipe.inShape) {
@@ -3937,7 +3933,7 @@ class CraftToolsSkill extends Skill {
             }
           });
           recipe.delta = Array.from(ingredientCounts.entries()).map(([id, count]) => ({
-            id,
+            id: id,
             count: -count // Negative count means required material
           }));
         }
@@ -3971,15 +3967,15 @@ class CraftToolsSkill extends Skill {
           });
         } else if (substitutionInfo.substitutionType === 'wood_plank') {
           // Log successful wood plank substitution
-          this.logger.log(`[材料チェック] 木材代替可能: ${itemName} (必要:${needed}) -> 利用可能合計:${substitutionInfo.availableCount}`);
-          this.logger.log(`[材料チェック] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
+          console.log(`[材料チェック] 木材代替可能: ${itemName} (必要:${needed}) -> 利用可能合計:${substitutionInfo.availableCount}`);
+          console.log(`[材料チェック] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
         } else if (substitutionInfo.substitutionType === 'stick_from_planks') {
           // Log successful stick substitution using planks
-          this.logger.log(`[材料チェック] スティック代替可能: ${itemName} (必要:${needed}) -> 現在のスティック:${substitutionInfo.substitutes.stick}, 板材から作成可能`);
-          this.logger.log(`[材料チェック] 板材利用可能: ${substitutionInfo.substitutes.planks_available}個, 必要: ${substitutionInfo.substitutes.planks_needed}個`);
+          console.log(`[材料チェック] スティック代替可能: ${itemName} (必要:${needed}) -> 現在のスティック:${substitutionInfo.substitutes.stick}, 板材から作成可能`);
+          console.log(`[材料チェック] 板材利用可能: ${substitutionInfo.substitutes.planks_available}個, 必要: ${substitutionInfo.substitutes.planks_needed}個`);
         } else if (substitutionInfo.substitutionType === 'exact_match') {
           // Log successful exact match
-          this.logger.log(`[材料チェック] 材料十分: ${itemName} (必要:${needed}) -> 利用可能:${substitutionInfo.availableCount}`);
+          console.log(`[材料チェック] 材料十分: ${itemName} (必要:${needed}) -> 利用可能:${substitutionInfo.availableCount}`);
         }
       }
     }
@@ -3987,7 +3983,7 @@ class CraftToolsSkill extends Skill {
   }
 
   async ensureWorkbench(bot) {
-    this.logger.log('[ツールスキル] 作業台の確保を開始...');
+    console.log('[ツールスキル] 作業台の確保を開始...');
 
     // Check if a workbench is already placed nearby
     const workbench = bot.findBlock({
@@ -3996,44 +3992,44 @@ class CraftToolsSkill extends Skill {
     });
 
     if (workbench) {
-      this.logger.log(`[ツールスキル] 近くに作業台を発見: ${workbench.position}`);
+      console.log(`[ツールスキル] 近くに作業台を発見: ${workbench.position}`);
       return { success: true, workbench };
     }
 
     // Check if we have a crafting table in inventory
     if (InventoryUtils.hasItem(bot, 'crafting_table', 1, true)) {
-      this.logger.log('[ツールスキル] インベントリに作業台があります。設置を試みます...');
+      console.log('[ツールスキル] インベントリに作業台があります。設置を試みます...');
       const placeResult = await this.placeCraftingTable(bot);
       if (placeResult.success) {
         return { success: true, workbench: placeResult.workbench };
       } else {
-        this.logger.log(`[ツールスキル] 作業台の設置に失敗: ${placeResult.error}`);
+        console.log(`[ツールスキル] 作業台の設置に失敗: ${placeResult.error}`);
         return { success: false, error: `作業台の設置に失敗: ${placeResult.error}` };
       }
     }
 
     // If not, try to craft one
-    this.logger.log('[ツールスキル] 作業台がありません。作成を試みます...');
+    console.log('[ツールスキル] 作業台がありません。作成を試みます...');
     const craftWorkbenchSkill = new CraftWorkbenchSkill();
     const craftResult = await craftWorkbenchSkill.execute(bot, {});
 
     if (craftResult.success) {
-      this.logger.log('[ツールスキル] 作業台の作成に成功しました。設置を試みます...');
+      console.log('[ツールスキル] 作業台の作成に成功しました。設置を試みます...');
       const placeResult = await this.placeCraftingTable(bot);
       if (placeResult.success) {
         return { success: true, workbench: placeResult.workbench };
       } else {
-        this.logger.log(`[ツールスキル] 作成した作業台の設置に失敗: ${placeResult.error}`);
+        console.log(`[ツールスキル] 作成した作業台の設置に失敗: ${placeResult.error}`);
         return { success: false, error: `作成した作業台の設置に失敗: ${placeResult.error}` };
       }
     } else {
-      this.logger.log(`[ツールスキル] 作業台の作成に失敗: ${craftResult.error}`);
+      console.log(`[ツールスキル] 作業台の作成に失敗: ${craftResult.error}`);
       return { success: false, error: `作業台の作成に失敗: ${craftResult.error}` };
     }
   }
 
   async placeCraftingTable(bot) {
-    this.logger.log('[ツールスキル] 作業台の設置場所を探しています...');
+    console.log('[ツールスキル] 作業台の設置場所を探しています...');
 
     // Blocks that should be avoided as reference blocks (jungle biome problematic blocks)
     const avoidableBlocks = [
@@ -4065,7 +4061,7 @@ class CraftToolsSkill extends Skill {
       }
     }
 
-    this.logger.log(`[ツールスキル] 設置候補位置を生成: ${placementPositions.length}個`);
+    console.log(`[ツールスキル] 設置候補位置を生成: ${placementPositions.length}個`);
 
     // Try to find suitable placement location
     for (const offset of placementPositions) {
@@ -4105,13 +4101,13 @@ class CraftToolsSkill extends Skill {
         continue;
       }
 
-      this.logger.log(`[ツールスキル] 設置候補位置を検証: ${targetPos.toString()}, 距離: ${distanceToTarget.toFixed(2)}`);
-      this.logger.log(`[ツールスキル] 参照ブロック: ${refBlock.name} at ${refBlock.position.toString()}`);
+      console.log(`[ツールスキル] 設置候補位置を検証: ${targetPos.toString()}, 距離: ${distanceToTarget.toFixed(2)}`);
+      console.log(`[ツールスキル] 参照ブロック: ${refBlock.name} at ${refBlock.position.toString()}`);
 
       try {
         const craftingTableItem = bot.inventory.items().find(item => item && item.name === 'crafting_table');
         if (!craftingTableItem) {
-          this.logger.log('[ツールスキル] インベントリに作業台がありません。');
+          console.log('[ツールスキル] インベントリに作業台がありません。');
           return { success: false, error: 'インベントリに作業台がありません' };
         }
 
@@ -4120,7 +4116,7 @@ class CraftToolsSkill extends Skill {
         // Retry mechanism for blockUpdate timeout with proper event waiting
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            this.logger.log(`[ツールスキル] 作業台設置試行 ${attempt}/3 at ${targetPos}`);
+            console.log(`[ツールスキル] 作業台設置試行 ${attempt}/3 at ${targetPos}`);
 
             // Create blockUpdate promise BEFORE placing block
             let blockUpdateResolve, blockUpdateReject;
@@ -4151,25 +4147,25 @@ class CraftToolsSkill extends Skill {
 
               // Wait for either blockUpdate event or timeout
               const updatedBlock = await blockUpdatePromise;
-              this.logger.log('[ツールスキル] 作業台を正常に設置しました！');
+              console.log('[ツールスキル] 作業台を正常に設置しました！');
               return { success: true, workbench: updatedBlock };
             } catch (eventError) {
               // Clean up listener on error
               clearTimeout(timeout);
               bot.removeListener('blockUpdate', onBlockUpdate);
 
-              this.logger.log(`[ツールスキル] blockUpdate待機エラー: ${eventError.message}`);
+              console.log(`[ツールスキル] blockUpdate待機エラー: ${eventError.message}`);
 
               // Fallback: Direct verification after short delay
               await new Promise(resolve => setTimeout(resolve, 1000));
               const placedBlock = bot.blockAt(targetPos);
               if (placedBlock && placedBlock.name === 'crafting_table') {
-                this.logger.log('[ツールスキル] 作業台設置を直接確認で検証成功！');
+                console.log('[ツールスキル] 作業台設置を直接確認で検証成功！');
                 return { success: true, workbench: placedBlock };
               }
             }
           } catch (error) {
-            this.logger.log(`[ツールスキル] 設置試行 ${attempt} 失敗: ${error.message}`);
+            console.log(`[ツールスキル] 設置試行 ${attempt} 失敗: ${error.message}`);
 
             // Wait before retry
             if (attempt < 3) {
@@ -4179,16 +4175,16 @@ class CraftToolsSkill extends Skill {
         }
 
         // If all retries failed, try next position
-        this.logger.log(`[ツールスキル] 位置 ${targetPos.toString()} での設置に失敗、次の位置を試行...`);
+        console.log(`[ツールスキル] 位置 ${targetPos.toString()} での設置に失敗、次の位置を試行...`);
       } catch (error) {
-        this.logger.log(`[ツールスキル] 設置準備エラー at ${targetPos ? targetPos.toString() : 'unknown'}: ${error.message}`);
-        this.logger.log(`[ツールスキル] エラースタック: ${error.stack}`);
+        console.log(`[ツールスキル] 設置準備エラー at ${targetPos ? targetPos.toString() : 'unknown'}: ${error.message}`);
+        console.log(`[ツールスキル] エラースタック: ${error.stack}`);
         continue;
       }
     }
 
     // If standard placement failed, try terrain modification approach
-    this.logger.log('[ツールスキル] 通常の設置位置が見つかりませんでした。地形を整備して設置場所を作成します...');
+    console.log('[ツールスキル] 通常の設置位置が見つかりませんでした。地形を整備して設置場所を作成します...');
     const terrainResult = await this.createCraftingTableSpot(bot);
     if (terrainResult.success) {
       return terrainResult;
@@ -4198,11 +4194,11 @@ class CraftToolsSkill extends Skill {
     const botPos = bot.entity.position;
     const inventoryItems = bot.inventory.items().map(item => item.name).join(', ');
 
-    this.logger.log('[ツールスキル] 作業台設置失敗の詳細情報:');
-    this.logger.log(`[ツールスキル] - ボット位置: ${botPos.toString()}`);
-    this.logger.log(`[ツールスキル] - 試行した位置数: ${placementPositions.length}`);
-    this.logger.log('[ツールスキル] - インベントリ:', inventoryItems);
-    this.logger.log('[ツールスキル] - 周辺ブロック情報:');
+    console.log('[ツールスキル] 作業台設置失敗の詳細情報:');
+    console.log(`[ツールスキル] - ボット位置: ${botPos.toString()}`);
+    console.log(`[ツールスキル] - 試行した位置数: ${placementPositions.length}`);
+    console.log('[ツールスキル] - インベントリ:', inventoryItems);
+    console.log('[ツールスキル] - 周辺ブロック情報:');
 
     // Show first 10 positions for debugging
     for (let i = 0; i < Math.min(10, placementPositions.length); i++) {
@@ -4213,7 +4209,7 @@ class CraftToolsSkill extends Skill {
 
       const refName = refBlock ? refBlock.name : 'null';
       const targetName = targetBlock ? targetBlock.name : 'null';
-      this.logger.log(`[ツールスキル]   位置${i + 1}: 参照=${refName}, ターゲット=${targetName}`);
+      console.log(`[ツールスキル]   位置${i + 1}: 参照=${refName}, ターゲット=${targetName}`);
     }
 
     return {
@@ -4229,12 +4225,12 @@ class CraftToolsSkill extends Skill {
 
   // New method to create a crafting table spot by modifying terrain
   async createCraftingTableSpot(bot) {
-    this.logger.log('[ツールスキル] 地形を整備して作業台設置場所を作成します...');
+    console.log('[ツールスキル] 地形を整備して作業台設置場所を作成します...');
 
     const botPos = bot.entity.position;
     // First try to find existing solid ground
     const candidatePositions = [];
-
+    
     // Add positions in expanding circles
     for (let radius = 1; radius <= 4; radius++) {
       for (let x = -radius; x <= radius; x++) {
@@ -4245,7 +4241,7 @@ class CraftToolsSkill extends Skill {
         }
       }
     }
-
+    
     // Sort by distance from bot
     candidatePositions.sort((a, b) => {
       const distA = Math.sqrt(a.x * a.x + a.z * a.z);
@@ -4257,7 +4253,7 @@ class CraftToolsSkill extends Skill {
       const targetPos = botPos.offset(offset.x, offset.y, offset.z);
       const groundPos = targetPos.offset(0, -1, 0);
 
-      this.logger.log(`[ツールスキル] 地形整備候補位置: ${targetPos.toString()}`);
+      console.log(`[ツールスキル] 地形整備候補位置: ${targetPos.toString()}`);
 
       try {
         // Check if position is reachable
@@ -4271,7 +4267,7 @@ class CraftToolsSkill extends Skill {
         const groundBlock = bot.blockAt(groundPos);
         const aboveBlock = bot.blockAt(targetPos.offset(0, 1, 0));
 
-        this.logger.log(`[ツールスキル] 地形状況: 地面=${groundBlock?.name || 'null'}, 設置位置=${targetBlock?.name || 'null'}, 上方=${aboveBlock?.name || 'null'}`);
+        console.log(`[ツールスキル] 地形状況: 地面=${groundBlock?.name || 'null'}, 設置位置=${targetBlock?.name || 'null'}, 上方=${aboveBlock?.name || 'null'}`);
 
         // If ground block exists and is solid, try to place directly
         if (groundBlock && groundBlock.name !== 'air' && groundBlock.name !== 'water') {
@@ -4281,63 +4277,63 @@ class CraftToolsSkill extends Skill {
               if (craftingTableItem) {
                 await bot.equip(craftingTableItem, 'hand');
                 await bot.placeBlock(groundBlock, new Vec3(0, 1, 0));
-
+                
                 // Verify placement
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 const placedBlock = bot.blockAt(targetPos);
                 if (placedBlock && placedBlock.name === 'crafting_table') {
-                  this.logger.log('[ツールスキル] 作業台設置に成功しました！');
+                  console.log('[ツールスキル] 作業台設置に成功しました！');
                   return { success: true, workbench: placedBlock };
                 }
               }
             } catch (placeError) {
-              this.logger.log(`[ツールスキル] 直接設置失敗: ${placeError.message}`);
+              console.log(`[ツールスキル] 直接設置失敗: ${placeError.message}`);
             }
           }
         }
 
         // If target position is blocked, try to clear it
         if (targetBlock && targetBlock.name !== 'air') {
-          this.logger.log(`[ツールスキル] 設置位置をクリア: ${targetBlock.name}`);
+          console.log(`[ツールスキル] 設置位置をクリア: ${targetBlock.name}`);
           try {
             await bot.dig(targetBlock);
             await new Promise(resolve => setTimeout(resolve, 500)); // Wait for dig to complete
           } catch (digError) {
-            this.logger.log(`[ツールスキル] ブロック除去失敗: ${digError.message}`);
+            console.log(`[ツールスキル] ブロック除去失敗: ${digError.message}`);
             continue;
           }
         }
 
         // If above position is blocked, try to clear it
         if (aboveBlock && aboveBlock.name !== 'air') {
-          this.logger.log(`[ツールスキル] 上方スペースをクリア: ${aboveBlock.name}`);
+          console.log(`[ツールスキル] 上方スペースをクリア: ${aboveBlock.name}`);
           try {
             await bot.dig(aboveBlock);
             await new Promise(resolve => setTimeout(resolve, 500)); // Wait for dig to complete
           } catch (digError) {
-            this.logger.log(`[ツールスキル] 上方ブロック除去失敗: ${digError.message}`);
+            console.log(`[ツールスキル] 上方ブロック除去失敗: ${digError.message}`);
             continue;
           }
         }
 
         // If no ground block, try to create one with available blocks
         if (!groundBlock || groundBlock.name === 'air') {
-          this.logger.log('[ツールスキル] 地面ブロックがありません。利用可能なブロックで地面を作成します...');
-
+          console.log('[ツールスキル] 地面ブロックがありません。利用可能なブロックで地面を作成します...');
+          
           // Find any solid block we can use for ground
-          const availableBlocks = bot.inventory.items().filter(item =>
+          const availableBlocks = bot.inventory.items().filter(item => 
             item && item.name && ['dirt', 'cobblestone', 'stone', 'oak_planks'].includes(item.name)
           );
-
+          
           if (availableBlocks.length > 0) {
             const blockToPlace = availableBlocks[0];
             try {
               await bot.equip(blockToPlace, 'hand');
-
+              
               // Find a solid reference block nearby to place against
               const searchRadius = 3;
               let refBlock = null;
-
+              
               for (let x = -searchRadius; x <= searchRadius; x++) {
                 for (let y = -searchRadius; y <= searchRadius; y++) {
                   for (let z = -searchRadius; z <= searchRadius; z++) {
@@ -4352,23 +4348,23 @@ class CraftToolsSkill extends Skill {
                 }
                 if (refBlock) break;
               }
-
+              
               if (refBlock) {
                 // Calculate face vector from reference block to ground position
                 const faceVector = groundPos.minus(refBlock.position);
                 await bot.placeBlock(refBlock, faceVector);
-                this.logger.log(`[ツールスキル] ${blockToPlace.name}で地面を作成しました`);
+                console.log(`[ツールスキル] ${blockToPlace.name}で地面を作成しました`);
                 await new Promise(resolve => setTimeout(resolve, 800));
               } else {
-                this.logger.log('[ツールスキル] 地面作成用の参照ブロックが見つかりません');
+                console.log('[ツールスキル] 地面作成用の参照ブロックが見つかりません');
                 continue;
               }
             } catch (placeError) {
-              this.logger.log(`[ツールスキル] 地面作成失敗: ${placeError.message}`);
+              console.log(`[ツールスキル] 地面作成失敗: ${placeError.message}`);
               continue;
             }
           } else {
-            this.logger.log('[ツールスキル] 地面作成用のブロックがありません');
+            console.log('[ツールスキル] 地面作成用のブロックがありません');
             continue;
           }
         }
@@ -4389,16 +4385,16 @@ class CraftToolsSkill extends Skill {
             await new Promise(resolve => setTimeout(resolve, 1000));
             const placedBlock = bot.blockAt(targetPos);
             if (placedBlock && placedBlock.name === 'crafting_table') {
-              this.logger.log('[ツールスキル] 地形整備後の作業台設置に成功しました！');
+              console.log('[ツールスキル] 地形整備後の作業台設置に成功しました！');
               return { success: true, workbench: placedBlock };
             }
           } catch (placeError) {
-            this.logger.log(`[ツールスキル] 地形整備後の設置失敗: ${placeError.message}`);
+            console.log(`[ツールスキル] 地形整備後の設置失敗: ${placeError.message}`);
             continue;
           }
         }
       } catch (error) {
-        this.logger.log(`[ツールスキル] 地形整備エラー: ${error.message}`);
+        console.log(`[ツールスキル] 地形整備エラー: ${error.message}`);
         continue;
       }
     }
@@ -4408,7 +4404,7 @@ class CraftToolsSkill extends Skill {
 
   // Simple wood gathering method for CraftToolsSkill
   async simpleWoodGathering(bot) {
-    this.logger.log('[材料収集] 木材の自動収集を開始...');
+    console.log('[材料収集] 木材の自動収集を開始...');
 
     try {
       // Find a nearby tree
@@ -4418,11 +4414,11 @@ class CraftToolsSkill extends Skill {
       });
 
       if (!tree) {
-        this.logger.log('[材料収集] 近くに木が見つかりません');
+        console.log('[材料収集] 近くに木が見つかりません');
         return { success: false, error: '木が見つかりません' };
       }
 
-      this.logger.log(`[材料収集] 木材を発見: ${tree.position}`);
+      console.log(`[材料収集] 木材を発見: ${tree.position}`);
 
       // Basic movement to the tree
       try {
@@ -4437,25 +4433,25 @@ class CraftToolsSkill extends Skill {
 
         // Mine the tree
         await bot.dig(tree);
-        this.logger.log(`[材料収集] ${tree.name}を収集しました`);
+        console.log(`[材料収集] ${tree.name}を収集しました`);
 
         // Wait for inventory update to sync
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Verify collection with detailed logging
         const postCollectionInventory = bot.inventory.items();
-        this.logger.log(`[材料収集] 収集後インベントリ検査: ${postCollectionInventory.length}個のアイテム`);
+        console.log(`[材料収集] 収集後インベントリ検査: ${postCollectionInventory.length}個のアイテム`);
         postCollectionInventory.forEach(item => {
-          this.logger.log(`[材料収集] - ${item.name}: ${item.count}個`);
+          console.log(`[材料収集] - ${item.name}: ${item.count}個`);
         });
 
         return { success: true };
       } catch (error) {
-        this.logger.log(`[材料収集] 木材収集に失敗: ${error.message}`);
+        console.log(`[材料収集] 木材収集に失敗: ${error.message}`);
         return { success: false, error: `木材収集失敗: ${error.message}` };
       }
     } catch (error) {
-      this.logger.log(`[材料収集] 木材収集中にエラー: ${error.message}`);
+      console.log(`[材料収集] 木材収集中にエラー: ${error.message}`);
       return { success: false, error: `収集エラー: ${error.message}` };
     }
   }
@@ -4464,12 +4460,12 @@ class CraftToolsSkill extends Skill {
   countPlankItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalPlanks = InventoryUtils.getPlanksCount(bot);
-    this.logger.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
+    console.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
 
     // Debug: Show all plank items found
     const plankItems = InventoryUtils.findItemsByPattern(bot, '_planks');
     plankItems.forEach(item => {
-      this.logger.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
+      console.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
     });
 
     return totalPlanks;
@@ -4478,12 +4474,12 @@ class CraftToolsSkill extends Skill {
   countLogItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalLogs = InventoryUtils.getWoodCount(bot);
-    this.logger.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
+    console.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
 
     // Debug: Show all log items found
     const logItems = InventoryUtils.findItemsByPattern(bot, '_log');
     logItems.forEach(item => {
-      this.logger.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
+      console.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
     });
 
     return totalLogs;
@@ -4496,7 +4492,7 @@ class CraftToolsSkill extends Skill {
 
   // On-demand log to plank conversion
   async convertLogsToPlanksDemand(bot, logsToCraft) {
-    this.logger.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
+    console.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
 
     try {
       const mcData = require('minecraft-data')(bot.version);
@@ -4530,9 +4526,9 @@ class CraftToolsSkill extends Skill {
       for (let i = 0; i < totalConversions; i++) {
         try {
           await bot.craft(plankRecipe, 1, null);
-          this.logger.log(`[オンデマンド変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
+          console.log(`[オンデマンド変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
         } catch (craftError) {
-          this.logger.log(`[オンデマンド変換] クラフトエラー: ${craftError.message}`);
+          console.log(`[オンデマンド変換] クラフトエラー: ${craftError.message}`);
           if (i === 0) {
             return { success: false, error: `クラフト失敗: ${craftError.message}` };
           }
@@ -4541,16 +4537,16 @@ class CraftToolsSkill extends Skill {
       }
 
       const convertedPlanks = this.countPlankItems(bot);
-      this.logger.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
+      console.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
       return { success: true, planksConverted: convertedPlanks };
     } catch (error) {
-      this.logger.log(`[オンデマンド変換] エラー: ${error.message}`);
+      console.log(`[オンデマンド変換] エラー: ${error.message}`);
       return { success: false, error: `変換エラー: ${error.message}` };
     }
   }
 
   async convertLogsToPlanksDynamic(bot, planksNeeded) {
-    this.logger.log(`[動的変換] ${planksNeeded}個の板材が必要、原木から変換します`);
+    console.log(`[動的変換] ${planksNeeded}個の板材が必要、原木から変換します`);
 
     try {
       const mcData = require('minecraft-data')(bot.version);
@@ -4587,14 +4583,14 @@ class CraftToolsSkill extends Skill {
         try {
           await bot.craft(plankRecipe, 1, null);
           totalPlanksConverted += 4; // Each log produces 4 planks
-          this.logger.log(`[動的変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
+          console.log(`[動的変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
 
           // Check if we have enough planks now
           if (totalPlanksConverted >= planksNeeded) {
             break;
           }
         } catch (craftError) {
-          this.logger.log(`[動的変換] クラフトエラー: ${craftError.message}`);
+          console.log(`[動的変換] クラフトエラー: ${craftError.message}`);
           if (i === 0) {
             return { success: false, error: `クラフト失敗: ${craftError.message}` };
           }
@@ -4602,16 +4598,16 @@ class CraftToolsSkill extends Skill {
         }
       }
 
-      this.logger.log(`[動的変換] 変換完了: ${totalPlanksConverted}個の板材を作成`);
+      console.log(`[動的変換] 変換完了: ${totalPlanksConverted}個の板材を作成`);
       return { success: true, converted: totalPlanksConverted };
     } catch (error) {
-      this.logger.log(`[動的変換] エラー: ${error.message}`);
+      console.log(`[動的変換] エラー: ${error.message}`);
       return { success: false, error: `変換エラー: ${error.message}` };
     }
   }
 
   async createStickFromPlanks(bot, sticksNeeded) {
-    this.logger.log(`[スティック作成] ${sticksNeeded}本のスティックが必要、板材から作成します`);
+    console.log(`[スティック作成] ${sticksNeeded}本のスティックが必要、板材から作成します`);
 
     try {
       const mcData = require('minecraft-data')(bot.version);
@@ -4650,14 +4646,14 @@ class CraftToolsSkill extends Skill {
         try {
           await bot.craft(stickRecipe, 1, null);
           totalSticksCreated += 4; // Each craft produces 4 sticks
-          this.logger.log(`[スティック作成] 板材 → スティック (${i + 1}/${craftsNeeded})`);
+          console.log(`[スティック作成] 板材 → スティック (${i + 1}/${craftsNeeded})`);
 
           // Check if we have enough sticks now
           if (totalSticksCreated >= sticksNeeded) {
             break;
           }
         } catch (craftError) {
-          this.logger.log(`[スティック作成] クラフトエラー: ${craftError.message}`);
+          console.log(`[スティック作成] クラフトエラー: ${craftError.message}`);
           if (i === 0) {
             return { success: false, error: `クラフト失敗: ${craftError.message}` };
           }
@@ -4665,10 +4661,10 @@ class CraftToolsSkill extends Skill {
         }
       }
 
-      this.logger.log(`[スティック作成] 作成完了: ${totalSticksCreated}本のスティックを作成`);
+      console.log(`[スティック作成] 作成完了: ${totalSticksCreated}本のスティックを作成`);
       return { success: true, created: totalSticksCreated };
     } catch (error) {
-      this.logger.log(`[スティック作成] エラー: ${error.message}`);
+      console.log(`[スティック作成] エラー: ${error.message}`);
       return { success: false, error: `作成エラー: ${error.message}` };
     }
   }
@@ -4683,12 +4679,12 @@ class CraftWorkbenchSkill extends Skill {
   countPlankItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalPlanks = InventoryUtils.getPlanksCount(bot);
-    this.logger.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
+    console.log(`[インベントリ検出] 板材総数: ${totalPlanks}`);
 
     // Debug: Show all plank items found
     const plankItems = InventoryUtils.findItemsByPattern(bot, '_planks');
     plankItems.forEach(item => {
-      this.logger.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
+      console.log(`[インベントリ検出] 発見した板材: ${item.name} x${item.count}`);
     });
 
     return totalPlanks;
@@ -4697,12 +4693,12 @@ class CraftWorkbenchSkill extends Skill {
   countLogItems(bot) {
     // Use InventoryUtils for consistent detection
     const totalLogs = InventoryUtils.getWoodCount(bot);
-    this.logger.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
+    console.log(`[インベントリ検出] 原木総数: ${totalLogs}`);
 
     // Debug: Show all log items found
     const logItems = InventoryUtils.findItemsByPattern(bot, '_log');
     logItems.forEach(item => {
-      this.logger.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
+      console.log(`[インベントリ検出] 発見した原木: ${item.name} x${item.count}`);
     });
 
     return totalLogs;
@@ -4715,7 +4711,7 @@ class CraftWorkbenchSkill extends Skill {
 
   // On-demand log to plank conversion for CraftWorkbenchSkill
   async convertLogsToPlanksDemand(bot, logsToCraft) {
-    this.logger.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
+    console.log(`[オンデマンド変換] ${logsToCraft}個の原木を板材に変換します`);
 
     try {
       const mcData = require('minecraft-data')(bot.version);
@@ -4749,9 +4745,9 @@ class CraftWorkbenchSkill extends Skill {
       for (let i = 0; i < totalConversions; i++) {
         try {
           await bot.craft(plankRecipe, 1, null);
-          this.logger.log(`[オンデマンド変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
+          console.log(`[オンデマンド変換] ${logItem.name} → ${plankName} (${i + 1}/${totalConversions})`);
         } catch (craftError) {
-          this.logger.log(`[オンデマンド変換] クラフトエラー: ${craftError.message}`);
+          console.log(`[オンデマンド変換] クラフトエラー: ${craftError.message}`);
           if (i === 0) {
             return { success: false, error: `クラフト失敗: ${craftError.message}` };
           }
@@ -4760,40 +4756,40 @@ class CraftWorkbenchSkill extends Skill {
       }
 
       const convertedPlanks = this.countPlankItems(bot);
-      this.logger.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
+      console.log(`[オンデマンド変換] 変換完了: ${convertedPlanks}個の板材を確保`);
       return { success: true, planksConverted: convertedPlanks };
     } catch (error) {
-      this.logger.log(`[オンデマンド変換] エラー: ${error.message}`);
+      console.log(`[オンデマンド変換] エラー: ${error.message}`);
       return { success: false, error: `変換エラー: ${error.message}` };
     }
   }
 
   async execute(bot, _params) {
     try {
-      this.logger.log('[作業台スキル] 作業台の作成を開始します...');
+      console.log('[作業台スキル] 作業台の作成を開始します...');
 
       const mcData = require('minecraft-data')(bot.version);
       const requiredPlanks = 4;
 
       // Phase 1: Check if we already have a workbench
       if (InventoryUtils.hasItem(bot, 'crafting_table', 1, true)) {
-        this.logger.log('[作業台スキル] インベントリに作業台が既にあります');
+        console.log('[作業台スキル] インベントリに作業台が既にあります');
         return { success: true, message: 'インベントリに作業台が既にあります' };
       }
 
       // Phase 2: Material assessment (improved inventory detection)
-      this.logger.log('[作業台スキル] 材料評価フェーズ...');
+      console.log('[作業台スキル] 材料評価フェーズ...');
       InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-Start');
 
       const currentPlanks = this.countPlankItems(bot);
       const currentLogs = this.countLogItems(bot);
       const totalAvailablePlanks = currentPlanks + (currentLogs * 4);
 
-      this.logger.log(`[作業台スキル] 材料状況: 板材=${currentPlanks}, 原木=${currentLogs}, 総利用可能板材=${totalAvailablePlanks}`);
+      console.log(`[作業台スキル] 材料状況: 板材=${currentPlanks}, 原木=${currentLogs}, 総利用可能板材=${totalAvailablePlanks}`);
 
       if (totalAvailablePlanks < requiredPlanks) {
         const message = `材料不足: 必要な板材=${requiredPlanks}, 利用可能=${totalAvailablePlanks}`;
-        this.logger.log(`[作業台スキル] ${message}`);
+        console.log(`[作業台スキル] ${message}`);
         return { success: false, reason: 'INSUFFICIENT_MATERIALS', error: message };
       }
 
@@ -4802,7 +4798,7 @@ class CraftWorkbenchSkill extends Skill {
         const planksNeeded = requiredPlanks - currentPlanks;
         const logsToCraft = Math.ceil(planksNeeded / 4);
 
-        this.logger.log(`[作業台スキル] オンデマンド板材変換: ${planksNeeded}個の板材が必要、${logsToCraft}個の原木を変換します`);
+        console.log(`[作業台スキル] オンデマンド板材変換: ${planksNeeded}個の板材が必要、${logsToCraft}個の原木を変換します`);
 
         const plankCraftResult = await this.convertLogsToPlanksDemand(bot, logsToCraft);
         if (!plankCraftResult.success) {
@@ -4811,25 +4807,25 @@ class CraftWorkbenchSkill extends Skill {
 
         // Verify we now have enough planks
         const updatedPlanks = this.countPlankItems(bot);
-        this.logger.log(`[作業台スキル] オンデマンド変換完了: ${updatedPlanks}個の板材を確保`);
+        console.log(`[作業台スキル] オンデマンド変換完了: ${updatedPlanks}個の板材を確保`);
 
         if (updatedPlanks < requiredPlanks) {
           const message = `板材作成後も材料不足: 必要=${requiredPlanks}, 現在=${updatedPlanks}`;
-          this.logger.log(`[作業台スキル] ${message}`);
+          console.log(`[作業台スキル] ${message}`);
           return { success: false, error: message };
         }
       }
 
       // Phase 4: Workbench crafting
-      this.logger.log('[作業台スキル] 作業台作成フェーズ...');
+      console.log('[作業台スキル] 作業台作成フェーズ...');
       const workbenchRecipe = await SkillLibrary.getRecipeSafe(bot, 'crafting_table', 1, null);
       if (!workbenchRecipe) {
         const message = '作業台のレシピが見つかりません';
-        this.logger.log(`[作業台スキル] ${message}`);
+        console.log(`[作業台スキル] ${message}`);
         return { success: false, reason: 'NO_RECIPE', error: message };
       }
 
-      this.logger.log('[作業台スキル] レシピ詳細:', {
+      console.log('[作業台スキル] レシピ詳細:', {
         id: workbenchRecipe.id,
         deltaLength: workbenchRecipe.delta?.length,
         delta: workbenchRecipe.delta
@@ -4843,24 +4839,24 @@ class CraftWorkbenchSkill extends Skill {
           const available = this.countItemsInInventoryByName(bot, ingredientName);
           if (available < requiredCount) {
             const message = `最終確認で材料不足: ${ingredientName} (必要=${requiredCount}, 所持=${available})`;
-            this.logger.log(`[作業台スキル] ${message}`);
+            console.log(`[作業台スキル] ${message}`);
             InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-MaterialError');
             return { success: false, error: message };
           }
-          this.logger.log(`[作業台スキル] 材料確認OK: ${ingredientName} (必要=${requiredCount}, 所持=${available})`);
+          console.log(`[作業台スキル] 材料確認OK: ${ingredientName} (必要=${requiredCount}, 所持=${available})`);
         }
       }
 
       // Execute crafting
       try {
         await bot.craft(workbenchRecipe, 1, null);
-        this.logger.log('[作業台スキル] 作業台のクラフトに成功しました！');
+        console.log('[作業台スキル] 作業台のクラフトに成功しました！');
         bot.chat('作業台をクラフトしました！');
         InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-Success');
 
         // 自動設置を試行（オプション機能）
         if (_params.autoPlace !== false) {
-          this.logger.log('[作業台スキル] 自動設置を試行します...');
+          console.log('[作業台スキル] 自動設置を試行します...');
           const placeResult = await this.tryAutoPlace(bot);
           if (placeResult.success) {
             return {
@@ -4871,20 +4867,20 @@ class CraftWorkbenchSkill extends Skill {
               message: '作業台のクラフトと設置に成功'
             };
           } else {
-            this.logger.log(`[作業台スキル] 自動設置失敗: ${placeResult.error}`);
+            console.log(`[作業台スキル] 自動設置失敗: ${placeResult.error}`);
           }
         }
 
         return { success: true, crafted: 'crafting_table', message: '作業台のクラフトに成功' };
       } catch (error) {
         const message = `作業台クラフト実行エラー: ${error.message}`;
-        this.logger.log(`[作業台スキル] ${message}`);
+        console.log(`[作業台スキル] ${message}`);
         InventoryUtils.logInventoryDetails(bot, 'CraftWorkbench-CraftError');
         return { success: false, error: message };
       }
     } catch (error) {
       const message = `予期せぬエラー: ${error.message}`;
-      this.logger.log(`[作業台スキル] ${message}`);
+      console.log(`[作業台スキル] ${message}`);
       return { success: false, error: message };
     }
   }
@@ -4892,7 +4888,7 @@ class CraftWorkbenchSkill extends Skill {
   // Helper method to craft planks from logs
   async craftPlanksFromLogs(bot, logCount = 1) {
     try {
-      this.logger.log(`[作業台スキル] 原木から板材への変換を開始: ${logCount}個の原木を使用`);
+      console.log(`[作業台スキル] 原木から板材への変換を開始: ${logCount}個の原木を使用`);
 
       const plankRecipe = await SkillLibrary.getRecipeSafe(bot, 'oak_planks', 1, null);
       if (!plankRecipe) {
@@ -4907,10 +4903,10 @@ class CraftWorkbenchSkill extends Skill {
 
       await bot.craft(plankRecipe, logCount, null);
       const planksCreated = logCount * 4;
-      this.logger.log(`[作業台スキル] 板材作成成功: ${planksCreated}個の板材を作成`);
+      console.log(`[作業台スキル] 板材作成成功: ${planksCreated}個の板材を作成`);
       return { success: true, planksCreated };
     } catch (error) {
-      this.logger.log(`[作業台スキル] 板材作成エラー: ${error.message}`);
+      console.log(`[作業台スキル] 板材作成エラー: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -4979,7 +4975,7 @@ class CraftWorkbenchSkill extends Skill {
           await bot.placeBlock(groundBlock, new Vec3(0, 1, 0));
           const placedPosition = groundBlock.position.plus(new Vec3(0, 1, 0));
 
-          this.logger.log(`[作業台スキル] 自動設置成功: ${placedPosition}`);
+          console.log(`[作業台スキル] 自動設置成功: ${placedPosition}`);
           bot.chat('作業台を設置しました！');
 
           return {
@@ -5025,7 +5021,7 @@ class CraftFurnaceSkill extends Skill {
       const item = mcData.itemsByName.furnace;
       const recipe = bot.recipesFor(item.id, null, 1, workbench)[0];
       if (!recipe) {
-        this.logger.log('[かまどスキル] かまどのレシピが見つかりません');
+        console.log('[かまどスキル] かまどのレシピが見つかりません');
         bot.chat('かまどのレシピが見つかりません');
         return {
           success: false,
@@ -5088,7 +5084,7 @@ class ExploreSkill extends Skill {
 
   async execute(bot, params) {
     const { objective = 'general', direction = 'random', distance = 32 } = params;
-    this.logger.log(`[探索スキル] ${objective}目的で${direction}方向に${distance}ブロック探索開始`);
+    console.log(`[探索スキル] ${objective}目的で${direction}方向に${distance}ブロック探索開始`);
 
     try {
       // Determine target position
@@ -5107,35 +5103,35 @@ class ExploreSkill extends Skill {
         targetPos = currentPos.offset(0, 0, -distance); // Default to north
       }
 
-      this.logger.log(`[探索スキル] (${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)})を探索中...`);
+      console.log(`[探索スキル] (${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)})を探索中...`);
 
       // Move to target position using MovementUtils
       const moveResult = await moveToPosition(bot, targetPos, 2);
       if (!moveResult.success) {
-        this.logger.log(`[探索スキル] 探索位置への移動に失敗: ${moveResult.error}`);
+        console.log(`[探索スキル] 探索位置への移動に失敗: ${moveResult.error}`);
         return { success: false, error: moveResult.error };
       }
 
       // Scan for points of interest after reaching destination
-      this.logger.log('[探索スキル] 周辺スキャン中...');
+      console.log('[探索スキル] 周辺スキャン中...');
       const scanResult = this.scanForInterestPoints(bot, objective);
 
       if (scanResult.found.length > 0) {
-        this.logger.log(`[探索スキル] ${scanResult.found.length}個の興味深い地点を発見`);
+        console.log(`[探索スキル] ${scanResult.found.length}個の興味深い地点を発見`);
         return { success: true, result: scanResult };
       } else {
-        this.logger.log('[探索スキル] 興味深い地点は見つかりませんでした');
+        console.log('[探索スキル] 興味深い地点は見つかりませんでした');
         return { success: true, message: '探索完了、興味深い地点なし' };
       }
     } catch (error) {
-      this.logger.log('[探索スキル] 移動失敗、近場で探索続行');
+      console.log('[探索スキル] 移動失敗、近場で探索続行');
       try {
         const scanResult = this.scanForInterestPoints(bot, objective);
         if (scanResult.found.length > 0) {
           return { success: true, result: scanResult, message: '移動失敗したが、近場で発見' };
         }
       } catch (scanError) {
-        this.logger.log(`[探索スキル] スキャンエラー: ${scanError.message}`);
+        console.log(`[探索スキル] スキャンエラー: ${scanError.message}`);
         return { success: false, error: `探索スキャンエラー: ${scanError.message}` };
       }
       return { success: false, error: `探索移動エラー: ${error.message}` };
@@ -5243,7 +5239,7 @@ class PlaceWorkbenchSkill extends Skill {
 
   async execute(bot, _params) {
     try {
-      this.logger.log('[作業台設置] 作業台の設置を開始します...');
+      console.log('[作業台設置] 作業台の設置を開始します...');
 
       // 1. インベントリから作業台を探す
       const workbenchItem = bot.inventory.items().find(item =>
@@ -5265,7 +5261,7 @@ class PlaceWorkbenchSkill extends Skill {
       });
 
       if (existingWorkbench) {
-        this.logger.log('[作業台設置] 近くに既に作業台があります');
+        console.log('[作業台設置] 近くに既に作業台があります');
         return {
           success: true,
           message: '近くに既に作業台があります',
@@ -5283,13 +5279,13 @@ class PlaceWorkbenchSkill extends Skill {
 
       // 4. 作業台を手に持つ
       await bot.equip(workbenchItem, 'hand');
-      this.logger.log('[作業台設置] 作業台を手に持ちました');
+      console.log('[作業台設置] 作業台を手に持ちました');
 
       // 5. 設置実行
       await bot.placeBlock(referenceBlock, face);
       const placedPosition = referenceBlock.position.plus(face);
 
-      this.logger.log(`[作業台設置] 作業台を ${placedPosition} に設置しました`);
+      console.log(`[作業台設置] 作業台を ${placedPosition} に設置しました`);
       bot.chat('作業台を設置しました！');
 
       return {
@@ -5299,7 +5295,7 @@ class PlaceWorkbenchSkill extends Skill {
       };
     } catch (error) {
       const errorMessage = `作業台の設置に失敗: ${error.message}`;
-      this.logger.error(`[作業台設置] ${errorMessage}`);
+      console.error(`[作業台設置] ${errorMessage}`);
       return { success: false, error: errorMessage };
     }
   }
@@ -5331,7 +5327,7 @@ class PlaceWorkbenchSkill extends Skill {
         const aboveBlock = bot.blockAt(abovePos);
 
         if (aboveBlock && aboveBlock.name === 'air') {
-          this.logger.log(`[作業台設置] 設置場所発見: ${checkPos} の上`);
+          console.log(`[作業台設置] 設置場所発見: ${checkPos} の上`);
           return {
             success: true,
             referenceBlock,
@@ -5347,7 +5343,7 @@ class PlaceWorkbenchSkill extends Skill {
         const aboveGroundBlock = bot.blockAt(aboveGround);
 
         if (aboveGroundBlock && aboveGroundBlock.name === 'air') {
-          this.logger.log('[作業台設置] 足元に設置');
+          console.log('[作業台設置] 足元に設置');
           return {
             success: true,
             referenceBlock: groundBlock,
@@ -5386,7 +5382,7 @@ class CraftWithWorkbenchSkill extends Skill {
     }
 
     try {
-      this.logger.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトを開始...`);
+      console.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトを開始...`);
 
       // 1. 近くの作業台を探す
       const workbenchBlock = bot.findBlock({
@@ -5402,7 +5398,7 @@ class CraftWithWorkbenchSkill extends Skill {
         };
       }
 
-      this.logger.log(`[作業台クラフト] 作業台発見: ${workbenchBlock.position}`);
+      console.log(`[作業台クラフト] 作業台発見: ${workbenchBlock.position}`);
 
       // 2. アイテムのレシピを取得（作業台必須のレシピ）
       const recipe = await SkillLibrary.getRecipeSafe(bot, itemName, count, workbenchBlock);
@@ -5415,7 +5411,7 @@ class CraftWithWorkbenchSkill extends Skill {
         };
       }
 
-      this.logger.log(`[作業台クラフト] レシピ取得成功: ${itemName}`);
+      console.log(`[作業台クラフト] レシピ取得成功: ${itemName}`);
 
       // 3. 材料チェック
       const materialCheck = await this.checkMaterials(bot, recipe);
@@ -5435,7 +5431,7 @@ class CraftWithWorkbenchSkill extends Skill {
       }
       await bot.craft(recipe, count, workbenchBlock);
 
-      this.logger.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトしました`);
+      console.log(`[作業台クラフト] ${itemName} を ${count} 個クラフトしました`);
       bot.chat(`${itemName} を ${count} 個クラフトしました！`);
 
       return {
@@ -5445,7 +5441,7 @@ class CraftWithWorkbenchSkill extends Skill {
       };
     } catch (error) {
       const errorMessage = `${itemName} のクラフトに失敗: ${error.message}`;
-      this.logger.error(`[作業台クラフト] ${errorMessage}`);
+      console.error(`[作業台クラフト] ${errorMessage}`);
       return { success: false, error: errorMessage };
     }
   }
@@ -5472,11 +5468,11 @@ class CraftWithWorkbenchSkill extends Skill {
             };
           } else if (substitutionInfo.substitutionType === 'wood_plank') {
             // Log successful wood plank substitution
-            this.logger.log(`[作業台クラフト] 木材代替OK: ${itemName} (必要=${requiredCount}) -> 利用可能合計:${substitutionInfo.availableCount}`);
-            this.logger.log(`[作業台クラフト] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
+            console.log(`[作業台クラフト] 木材代替OK: ${itemName} (必要=${requiredCount}) -> 利用可能合計:${substitutionInfo.availableCount}`);
+            console.log(`[作業台クラフト] 利用可能木材: ${JSON.stringify(substitutionInfo.substitutes)}`);
           }
 
-          this.logger.log(`[作業台クラフト] 材料確認OK: ${itemName} (必要=${requiredCount}, 所持=${substitutionInfo.availableCount})`);
+          console.log(`[作業台クラフト] 材料確認OK: ${itemName} (必要=${requiredCount}, 所持=${substitutionInfo.availableCount})`);
         }
       }
 

@@ -570,7 +570,7 @@ class TaskPlanner {
 
   checkMovementComplete(task) {
     if (!this.bot || !this.bot.entity || !this.bot.entity.position) {
-      this.logger.warn('[タスクプランナー] checkMovementComplete: botまたはpositionが未定義です');
+      console.warn('[タスクプランナー] checkMovementComplete: botまたはpositionが未定義です');
       return false; // Can't determine completion status
     }
 
@@ -603,16 +603,16 @@ class TaskPlanner {
   }
 
   planWorkbenchCrafting(goal) {
-    this.logger.log('[タスクプランナー] 作業台クラフトタスクを計画中...');
+    console.log('[タスクプランナー] 作業台クラフトタスクを計画中...');
 
     // Validate bot instance before proceeding
     if (!this.bot) {
-      this.logger.error('[タスクプランナー] エラー: botインスタンスが未定義です');
+      console.error('[タスクプランナー] エラー: botインスタンスが未定義です');
       return null;
     }
 
     if (!this.bot.inventory) {
-      this.logger.error('[タスクプランナー] エラー: bot.inventoryが未定義です');
+      console.error('[タスクプランナー] エラー: bot.inventoryが未定義です');
       return null;
     }
 
@@ -620,12 +620,12 @@ class TaskPlanner {
     const hasCraftingTable = InventoryUtils.hasItem(this.bot, 'crafting_table');
 
     if (hasCraftingTable) {
-      this.logger.log('[タスクプランナー] 作業台を既に所持しています。タスクをスキップします。');
+      console.log('[タスクプランナー] 作業台を既に所持しています。タスクをスキップします。');
       return null; // Skip if already have one
     }
 
     const needsWood = !this.hasEnoughWoodForWorkbench();
-    this.logger.log(`[タスクプランナー] 作業台クラフトの前提条件: 木材収集が必要=${needsWood}`);
+    console.log(`[タスクプランナー] 作業台クラフトの前提条件: 木材収集が必要=${needsWood}`);
 
     return {
       type: 'craft_workbench',
@@ -643,20 +643,20 @@ class TaskPlanner {
 
   hasEnoughWoodForWorkbench() {
     if (!this.bot || !this.bot.inventory) {
-      this.logger.warn('[タスクプランナー] hasEnoughWoodForWorkbench: botまたはinventoryが未定義です');
+      console.warn('[タスクプランナー] hasEnoughWoodForWorkbench: botまたはinventoryが未定義です');
       return false;
     }
     return InventoryUtils.getAvailablePlanks(this.bot) >= 4; // Need 4 planks for crafting table
   }
 
   planWorkbenchPlacement(goal) {
-    this.logger.log('[タスクプランナー] 作業台設置タスクを計画中...');
+    console.log('[タスクプランナー] 作業台設置タスクを計画中...');
 
     // インベントリに作業台があるかチェック
     const hasWorkbench = InventoryUtils.hasItem(this.bot, 'crafting_table');
 
     if (!hasWorkbench) {
-      this.logger.log('[タスクプランナー] 作業台が必要です');
+      console.log('[タスクプランナー] 作業台が必要です');
       return {
         type: 'place_workbench',
         params: {},
@@ -680,7 +680,7 @@ class TaskPlanner {
 
   planAdvancedCrafting(goal) {
     const { itemName, count = 1 } = goal;
-    this.logger.log(`[タスクプランナー] 高度クラフトタスクを計画中: ${itemName}`);
+    console.log(`[タスクプランナー] 高度クラフトタスクを計画中: ${itemName}`);
 
     // 近くに作業台があるかチェック（実際の実行時に確認されるが、計画段階でも考慮）
     const task = {
@@ -717,7 +717,7 @@ class TaskPlanner {
 
   planStoneToolCrafting(goal) {
     const { tools = ['stone_pickaxe', 'stone_axe', 'stone_sword'] } = goal;
-    this.logger.log(`[タスクプランナー] 石ツールクラフトタスクを計画中: ${tools.join(', ')}`);
+    console.log(`[タスクプランナー] 石ツールクラフトタスクを計画中: ${tools.join(', ')}`);
 
     // 作業台の存在チェック
     const needsWorkbench = !this.hasNearbyWorkbench();
