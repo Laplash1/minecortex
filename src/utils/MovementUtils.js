@@ -20,8 +20,8 @@ const logger = Logger.createLogger('MovementUtils');
 async function ensureProximity(bot, block, maxDist = 3, opts = {}) {
   if (!block) return { success: false, error: 'Block is null' };
 
-  const timeoutMs = opts.timeoutMs ?? 10_000;
-  const retries = opts.retries ?? 2;
+  const timeoutMs = opts.timeoutMs ?? 15_000; // タイムアウトを15秒に延長
+  const retries = opts.retries ?? 3; // リトライ回数を3回に増加
 
   const distance = bot.entity.position.distanceTo(block.position);
   if (distance <= maxDist) return { success: true };
@@ -64,7 +64,11 @@ async function ensureProximity(bot, block, maxDist = 3, opts = {}) {
     }
 
     // small back-off
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // pathfinder がスタックしている場合はリセット
+    if (bot.pathfinder && typeof bot.pathfinder.stop === 'function') {
+      bot.pathfinder.stop();
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 待機時間を2秒に延長
   }
 
   return { success: false, error: 'UNREACHABLE' };
@@ -81,8 +85,8 @@ async function ensureProximity(bot, block, maxDist = 3, opts = {}) {
 async function moveToBlock(bot, block, range = 1, opts = {}) {
   if (!block) return { success: false, error: 'Block is null' };
 
-  const timeoutMs = opts.timeoutMs ?? 10_000;
-  const retries = opts.retries ?? 2;
+  const timeoutMs = opts.timeoutMs ?? 15_000; // タイムアウトを15秒に延長
+  const retries = opts.retries ?? 3; // リトライ回数を3回に増加
 
   const distance = bot.entity.position.distanceTo(block.position);
   if (distance <= range) return { success: true };
@@ -122,7 +126,11 @@ async function moveToBlock(bot, block, range = 1, opts = {}) {
       logger.warn(`movement attempt ${attempt} failed: ${err.message}`);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // pathfinder がスタックしている場合はリセット
+    if (bot.pathfinder && typeof bot.pathfinder.stop === 'function') {
+      bot.pathfinder.stop();
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 待機時間を2秒に延長
   }
 
   return { success: false, error: 'UNREACHABLE' };
@@ -139,8 +147,8 @@ async function moveToBlock(bot, block, range = 1, opts = {}) {
 async function moveToPosition(bot, position, range = 0, opts = {}) {
   if (!position) return { success: false, error: 'Position is null' };
 
-  const timeoutMs = opts.timeoutMs ?? 10_000;
-  const retries = opts.retries ?? 2;
+  const timeoutMs = opts.timeoutMs ?? 15_000; // タイムアウトを15秒に延長
+  const retries = opts.retries ?? 3; // リトライ回数を3回に増加
 
   const distance = bot.entity.position.distanceTo(position);
   if (distance <= range) return { success: true };
@@ -178,7 +186,11 @@ async function moveToPosition(bot, position, range = 0, opts = {}) {
       logger.warn(`movement attempt ${attempt} failed: ${err.message}`);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // pathfinder がスタックしている場合はリセット
+    if (bot.pathfinder && typeof bot.pathfinder.stop === 'function') {
+      bot.pathfinder.stop();
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 待機時間を2秒に延長
   }
 
   return { success: false, error: 'UNREACHABLE' };
@@ -195,8 +207,8 @@ async function moveToPosition(bot, position, range = 0, opts = {}) {
 async function moveToEntity(bot, entity, range = 1, opts = {}) {
   if (!entity) return { success: false, error: 'Entity is null' };
 
-  const timeoutMs = opts.timeoutMs ?? 10_000;
-  const retries = opts.retries ?? 2;
+  const timeoutMs = opts.timeoutMs ?? 15_000; // タイムアウトを15秒に延長
+  const retries = opts.retries ?? 3; // リトライ回数を3回に増加
 
   const distance = bot.entity.position.distanceTo(entity.position);
   if (distance <= range) return { success: true };
@@ -237,7 +249,11 @@ async function moveToEntity(bot, entity, range = 1, opts = {}) {
       logger.warn(`movement attempt ${attempt} failed: ${err.message}`);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // pathfinder がスタックしている場合はリセット
+    if (bot.pathfinder && typeof bot.pathfinder.stop === 'function') {
+      bot.pathfinder.stop();
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 待機時間を2秒に延長
   }
 
   return { success: false, error: 'UNREACHABLE' };

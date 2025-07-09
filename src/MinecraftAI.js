@@ -2082,7 +2082,7 @@ class MinecraftAI {
 
   // 全プレイヤーの準備完了を待機
   async waitForAllPlayersReady() {
-    const maxWaitTime = 300000; // 5分でタイムアウト
+    const maxWaitTime = 120000; // 2分でタイムアウト（5分は長すぎる）
     const checkInterval = 2000; // 2秒間隔でチェック
     const startTime = Date.now();
 
@@ -2098,9 +2098,16 @@ class MinecraftAI {
       await this.sleep(checkInterval);
     }
 
-    // タイムアウト時は強制的に開始
-    this.log('⚠️ 待機タイムアウト - タスクを強制開始します', 'warn');
-    this.coordinator.isAllPlayersReady = true;
+    // タイムアウト後の処理を改善
+    this.log('⚠️ 同期待機がタイムアウトしました。単独でタスクを開始します。', 'warn');
+    this.log('💡 他のプレイヤーが参加していない可能性があります。', 'info');
+
+    // 強制的に開始フラグを設定
+    if (this.coordinator && typeof this.coordinator.forceStart === 'function') {
+      this.coordinator.forceStart(this.playerId);
+    }
+
+    return; // タイムアウト後もタスクを開始
   }
 
   // Enhanced shutdown functionality integrated with main shutdown method above
