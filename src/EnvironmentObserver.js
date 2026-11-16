@@ -46,18 +46,17 @@ class EnvironmentObserver {
     }
   }
 
-  update() {
-    if (this.sharedEnvironment) {
-      // SharedEnvironment使用時は個別データのみ更新
-      this.sharedEnvironment.updateBotSpecificData(this);
-    } else {
-      // 従来通りの個別更新
-      this.updatePosition();
+  update(now = Date.now()) {
+    if (!this.bot?.entity?.position) return;
+    this.updatePosition();
+    this.updateInventory();
+    this.updatePlayerStats();
+    this.updateEnvironment();
+    this.updatedAt = now;
+    if (!this.nearbyUpdatedAt || now - this.nearbyUpdatedAt >= 2000) {
       this.updateNearbyEntities();
       this.updateNearbyBlocks();
-      this.updateInventory();
-      this.updatePlayerStats();
-      this.updateEnvironment();
+      this.nearbyUpdatedAt = now;
       this.recordObservation();
     }
   }
@@ -285,8 +284,8 @@ class EnvironmentObserver {
   }
 
   updatePlayerStats() {
-    this.health = this.bot.health || 20;
-    this.food = this.bot.food || 20;
+    this.health = this.bot.health ?? 20;
+    this.food = this.bot.food ?? 20;
     this.experience = this.bot.experience || 0;
   }
 
@@ -296,7 +295,8 @@ class EnvironmentObserver {
   }
 
   getTimeOfDay() {
-    const time = this.bot.time.timeOfDay;
+    const time = this.bot.time?.timeOfDay;
+    if (time === undefined) return 'unknown';
     if (time < 1000 || time > 23000) return 'night';
     if (time < 6000) return 'morning';
     if (time < 12000) return 'day';
@@ -334,6 +334,8 @@ class EnvironmentObserver {
   recordObservation() {
     const observation = {
       timestamp: Date.now(),
+      updatedAt: this.updatedAt,
+      nearbyUpdatedAt: this.nearbyUpdatedAt,
       position: this.lastPosition,
       health: this.health,
       food: this.food,
@@ -488,6 +490,8 @@ class EnvironmentObserver {
 
   getObservationSummary() {
     return {
+      updatedAt: this.updatedAt,
+      nearbyUpdatedAt: this.nearbyUpdatedAt,
       position: this.lastPosition,
       health: this.health,
       food: this.food,

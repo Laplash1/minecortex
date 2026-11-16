@@ -6,7 +6,6 @@ yarn-error.log*
 
 .claude/
 
-test/
 
 # Runtime data
 pids
@@ -136,3 +135,5 @@ config/local-*.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Local Paper binaries and worlds
+.runtime/

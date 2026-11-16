@@ -55,7 +55,7 @@ class StateManager {
     this.subscribers = new Map(); // Component subscriptions to state changes
     this.stateHistory = []; // For state rollback if needed
     this.maxHistorySize = 100;
-    this.lastSync = Date.now();
+    this.lastSync = 0;
     this.syncInterval = 1000; // 1 second
 
     // Setup real-time inventory updates for immediate cache invalidation
@@ -159,8 +159,6 @@ class StateManager {
 
     // Notify subscribers
     this.notifySubscribers(changedKeys, updates);
-
-    this.lastSync = Date.now();
   }
 
   // Get current state (read-only copy)
@@ -192,6 +190,7 @@ class StateManager {
       return;
     }
 
+    this.lastSync = Date.now();
     const botUpdates = {};
 
     // Sync basic bot properties
@@ -202,12 +201,12 @@ class StateManager {
       }
     }
 
-    if (this.bot.entity && this.bot.entity.health !== this.state.health) {
-      botUpdates.health = this.bot.entity.health;
+    if (Number.isFinite(this.bot.health) && this.bot.health !== this.state.health) {
+      botUpdates.health = this.bot.health;
     }
 
-    if (this.bot.entity && this.bot.entity.food !== this.state.food) {
-      botUpdates.food = this.bot.entity.food;
+    if (Number.isFinite(this.bot.food) && this.bot.food !== this.state.food) {
+      botUpdates.food = this.bot.food;
     }
 
     if (this.bot.experience !== this.state.experience) {

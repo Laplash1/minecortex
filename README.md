@@ -1,12 +1,14 @@
 <div align="center">
 
+> ローカル1体の実機検証と起動手順: [LOCAL_ACCEPTANCE.md](docs/LOCAL_ACCEPTANCE.md)。初回の対象は木材→作業台・木のツルハシ→丸石です。
+
 # 🧠 MineCortex
 
 **Intelligent Minecraft AI Bot System**
 
 *Autonomous gameplay powered by mineflayer and Voyager-inspired AI*
 
-[![Node.js](https://img.shields.io/badge/Node.js-16.13.0+-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21-blue.svg)](https://minecraft.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/Code%20Style-ESLint-purple.svg)](https://eslint.org/)
@@ -38,7 +40,7 @@
 
 ### Prerequisites
 
-- **Node.js** >= 16.13.0
+- **Node.js** >= 22
 - **Minecraft Java Edition 1.21** server (local or remote)
 
 ### Installation

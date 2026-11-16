@@ -7,10 +7,19 @@ const InventoryUtils = require('./InventoryUtils');
 const { NLUProcessor } = require('./NLUProcessor');
 const PerformanceMonitor = require('./PerformanceMonitor');
 const { Logger } = require('./utils/Logger');
+const { OperationRunner, sleep: wait } = require('./utils/OperationRunner');
+const { inventory: inventorySnapshot } = require('./skills/BasicSkills');
 
 class MinecraftAI {
   constructor(bot, coordinator = null, sharedEnvironment = null, pathfindingCache = null) {
     this.bot = bot;
+    this.playerId = bot.username || 'unknown';
+    this.operations = new OperationRunner(bot);
+    this.lifecycle = new AbortController();
+    this.paused = process.env.AI_AUTOSTART === 'false';
+    this.isShuttingDown = false;
+    this.commandEpoch = 0;
+    this.taskResults = [];
     this.stateManager = new StateManager(bot);
     this.pathfindingCache = pathfindingCache;
     this.skillLibrary = new SkillLibrary(pathfindingCache);
@@ -85,6 +94,7 @@ class MinecraftAI {
     // Delay coordinator registration until login so username is defined
     bot.once('login', () => {
       this.playerId = bot.username;
+      this.logger = Logger.createLogger(`MinecraftAI-${this.playerId}`);
 
       // EnvironmentObserverのbotIdを更新してSharedEnvironmentに登録
       this.observer.initializeAfterLogin();
@@ -99,46 +109,73 @@ class MinecraftAI {
   }
 
   async initialize() {
-    if (this.isInitialized) return;
+    if (this.isInitialized || this.isShuttingDown) return;
+    if (this.initializing) return this.initializing;
+    this.initializing = this.initializeOnce().catch(error => {
+      if (!this.isShuttingDown) throw error;
+    });
+    return this.initializing;
+  }
 
+  async initializeOnce() {
     this.logger.log('AIシステムを初期化中...');
-
-    // マルチプレイヤー環境での同期開始チェック
-    if (this.coordinator && this.coordinator.syncStartEnabled) {
-      this.logger.log('同期開始モードが有効です。他のプレイヤーを待機中...');
-
-      // 準備完了を報告
+    if (this.coordinator?.syncStartEnabled) {
       const result = this.coordinator.reportPlayerReady(this.playerId);
-
-      if (!result.canStart) {
-        this.logger.warn(`${result.reason}`);
-        // 全員準備完了まで待機
-        await this.waitForAllPlayersReady();
-      }
+      if (!result.canStart) await this.waitForAllPlayersReady();
     }
-
-    // Load basic skills
+    if (this.isShuttingDown) return;
+    await this.waitForWorldReady();
+    if (this.isShuttingDown) return;
     this.skillLibrary.loadBasicSkills();
-
-    // Set resource-focused goals prioritizing growth and crafting over exploration
-    // リソース採取とクラフトを重視し、探索の比重を下げる
-    this.goals = [
-      { type: 'gather_wood', priority: 1, description: '木材を収集する' },
-      { type: 'find_stone', priority: 2, description: '石を採取する' },
-      { type: 'craft_basic_tools', priority: 3, description: '基本道具を作成する' },
-      { type: 'find_food', priority: 4, description: '食料源を探す' },
-      { type: 'explore', priority: 5, description: '世界を探索する' }
-    ];
-
+    this.goals = this.paused ? [] : this.defaultGoals();
+    this.observer.update();
+    this.stateManager.syncWithBot();
+    this.observationTimer = setInterval(() => {
+      this.observer.update();
+      this.stateManager.syncWithBot();
+    }, 250);
     this.isInitialized = true;
     this.logger.log('AIシステムの初期化が完了しました');
+    this.loopPromise = this.startMainLoop();
+  }
 
-    // Start the main AI loop
-    this.startMainLoop();
+  async waitForWorldReady() {
+    const deadline = Date.now() + 30000;
+    while (!this.isShuttingDown) {
+      const pos = this.bot.entity?.position;
+      let loaded = Boolean(pos && this.bot.entity.height && this.bot.world);
+      if (loaded) {
+        for (let x = -2; x <= 2; x++) {
+          for (let z = -2; z <= 2; z++) {
+            if (!this.bot.world.getColumnAt(pos.offset(x * 16, 0, z * 16))) loaded = false;
+          }
+        }
+      }
+      if (loaded) return;
+      if (Date.now() > deadline) throw new Error('Initial chunks did not load within 30s');
+      await wait(50, this.lifecycle.signal);
+    }
+  }
+
+  defaultGoals() {
+    return [
+      { type: 'gather_wood', amount: 3 },
+      { type: 'craft_workbench' },
+      { type: 'place_workbench' },
+      { type: 'craft_basic_tools', tools: ['wooden_pickaxe'] },
+      { type: 'find_stone', amount: 3 }
+    ];
+  }
+
+  async stop(reason = 'Stopped by command') {
+    this.paused = true;
+    this.commandEpoch++;
+    this.goals = [];
+    await this.operations.cancel(reason);
   }
 
   onSpawn() {
-    this.logger.log('ボットがスポーンしました。探索を開始します...');
+    this.logger.log('ボットがスポーンしました。ワールドを初期化します...');
     this.observer.updatePosition();
   }
 
@@ -152,8 +189,6 @@ class MinecraftAI {
   }
 
   onDeath() {
-    this.logger.log('ボットが死亡しました。状態をリセットします...');
-    this.currentTask = null;
     this.inventory.clear();
   }
 
@@ -161,7 +196,7 @@ class MinecraftAI {
     const [cmd, ...args] = command.split(' ');
 
     // 1. 静的コマンドの処理（後方互換性維持）
-    const staticCommands = ['status', 'goto', 'follow', 'stop', 'learn', 'curriculum', 'coord', 'claim', 'release', 'state', 'perf'];
+    const staticCommands = ['status', 'goto', 'follow', 'stop', 'start', 'resume', 'learn', 'curriculum', 'coord', 'claim', 'release', 'state', 'perf'];
     if (staticCommands.includes(cmd.toLowerCase())) {
       return this.handleStaticCommand(cmd.toLowerCase(), args, username);
     }
@@ -198,6 +233,10 @@ class MinecraftAI {
     case 'goto':
       if (args.length >= 3) {
         const [x, y, z] = args.map(Number);
+        if (![x, y, z].every(Number.isFinite)) {
+          this.bot.chat('座標には数値を指定してください');
+          break;
+        }
         this.setGoal({ type: 'move_to', target: { x, y, z }, priority: 0 });
       }
       break;
@@ -205,8 +244,19 @@ class MinecraftAI {
       this.setGoal({ type: 'follow', target: username, priority: 0 });
       break;
     case 'stop':
-      this.currentTask = null;
-      this.bot.chat('現在のタスクを停止します');
+      await this.stop();
+      this.bot.chat('操作と目標キューを停止しました');
+      break;
+    case 'start': {
+      const epoch = this.commandEpoch + 1;
+      await this.stop('Starting basic sequence');
+      if (this.isShuttingDown || this.commandEpoch !== epoch) return;
+      this.goals = this.defaultGoals();
+      this.paused = false;
+      break;
+    }
+    case 'resume':
+      this.paused = false;
       break;
     case 'learn':
       this.displayLearningStats();
@@ -374,6 +424,8 @@ class MinecraftAI {
   }
 
   setGoal(goal) {
+    if (this.isShuttingDown) return;
+    this.paused = false;
     this.goals.unshift(goal);
     this.logger.log(`新しい目標を設定: ${goal.type}`);
   }
@@ -555,29 +607,8 @@ class MinecraftAI {
   }
 
   performEmergencyReset() {
-    try {
-      // Clear current task and goals
-      this.currentTask = null;
-      this.goals = [];
-
-      // Reset state if needed
-      if (this.stateManager && this.stateManager.rollbackToLastValid) {
-        this.stateManager.rollbackToLastValid();
-      }
-
-      // Reset consecutive errors
-      this.consecutiveErrors = 0;
-
-      // Set basic survival goals
-      this.goals = [
-        { type: 'find_food', priority: 1, description: '緊急：食料確保' },
-        { type: 'explore', priority: 2, description: '安全な探索' }
-      ];
-
-      this.logger.log('緊急リセット完了');
-    } catch (error) {
-      this.logger.error(`緊急リセットエラー: ${error.message}`);
-    }
+    this.consecutiveErrors = 0;
+    this.stop('Repeated loop errors').catch(error => this.logger.error(error.message));
   }
 
   updatePerformanceMetrics(loopTime) {
@@ -701,108 +732,21 @@ class MinecraftAI {
   }
 
   async mainLoopIteration() {
+    this.observer.update();
+    this.stateManager.syncWithBot();
+    if (this.paused || this.isShuttingDown || this.goals.length === 0) return;
+    const epoch = this.commandEpoch;
+    const goal = this.goals.shift();
     try {
-      // パフォーマンス測定開始
-      this.performanceMonitor.startMeasure('mainLoopIteration');
-
-      // Synchronize state with bot
-      this.performanceMonitor.startMeasure('stateSync');
-      this.stateManager.syncWithBot();
-      this.performanceMonitor.endMeasure('stateSync');
-
-      // Update observations with safety checks
-      this.performanceMonitor.startMeasure('observerUpdate');
-      this.observer.updatePosition();
-      this.performanceMonitor.endMeasure('observerUpdate');
-
-      // Update coordinator with current status
-      if (this.coordinator) {
-        const state = this.stateManager.getState(['position', 'health', 'food']);
-        this.coordinator.updatePlayer(this.playerId, {
-          position: state.position,
-          currentTask: this.currentTask?.type || null,
-          health: state.health,
-          food: state.food
-        });
-      }
-
-      // Handle immediate threats first
-      const dangerResult = await this.handleImmediateThreats();
-      if (dangerResult.shouldContinue === false) {
-        return; // Skip normal processing if in danger mode
-      }
-
-      // Check if current task is complete or failed
-      if (this.currentTask && this.taskPlanner.isTaskComplete(this.currentTask)) {
-        this.logger.log(`タスク完了: ${this.currentTask.type}`);
-        this.taskPlanner.addTaskToHistory(this.currentTask, { success: true, completed: true });
-        this.currentTask = null;
-      }
-
-      // Check for task timeout
-      if (this.currentTask && this.currentTask.timeout && Date.now() > this.currentTask.timeout) {
-        this.logger.log(`タスクタイムアウト: ${this.currentTask.type}`);
-        this.taskPlanner.addTaskToHistory(this.currentTask, { success: false, reason: 'timeout' });
-        this.currentTask = null;
-      }
-
-      // Check for crafting opportunities before selecting goals
-      if (!this.currentTask) {
-        await this.checkCraftingOpportunities();
-      }
-
-      // Select next task if none active with enhanced validation
-      if (!this.currentTask && this.goals.length > 0) {
-        const nextGoal = this.goals.shift();
-
-        // Enhanced goal validation with detailed logging
-        if (!nextGoal) {
-          this.logger.warn('Goal is null or undefined, regenerating default goals');
-          this.regenerateDefaultGoals();
-          return;
-        }
-
-        if (!nextGoal.type || typeof nextGoal.type !== 'string') {
-          this.logger.warn(`Invalid goal type detected: ${JSON.stringify(nextGoal)}, skipping`);
-          return;
-        }
-
-        try {
-          this.currentTask = await this.taskPlanner.planTask(nextGoal);
-
-          if (this.currentTask && this.currentTask.type) {
-            // Add startTime for proper lifecycle tracking
-            this.currentTask.startTime = Date.now();
-            this.logger.log(`新しいタスクを開始: ${this.currentTask.type}`);
-          } else {
-            this.logger.warn('Task planning returned invalid task');
-            this.currentTask = null;
-          }
-        } catch (planError) {
-          this.logger.error(`Task planning failed: ${planError.message}`);
-          this.currentTask = null;
-        }
-      }
-
-      // Execute current task
-      if (this.currentTask) {
-        await this.executeCurrentTask();
-      } else {
-        // Check for auto tool crafting opportunities
-        await this.checkAutoToolCrafting();
-
-        // Idle behavior - resource-focused activities instead of exploration
-        await this.performResourceFocusedIdle();
-      }
-
-      // パフォーマンス測定終了
-      this.performanceMonitor.endMeasure('mainLoopIteration');
+      const task = await this.taskPlanner.planTask(goal);
+      if (epoch !== this.commandEpoch || this.isShuttingDown) return;
+      if (!task) throw new Error(`Unsupported goal: ${goal.type}`);
+      this.currentTask = task;
+      this.stateManager.setCurrentTask(task);
+      await this.executeCurrentTask();
     } catch (error) {
-      this.logger.log(`メインループエラー: ${error.message}`);
-      // パフォーマンス測定終了（エラー時）
-      this.performanceMonitor.endMeasure('mainLoopIteration');
-      // Add delay to prevent rapid error loops
-      await this.sleep(5000);
+      this.logger.error(error.message);
+      if (epoch === this.commandEpoch) await this.stop(error.message);
     }
   }
 
@@ -933,64 +877,40 @@ class MinecraftAI {
   }
 
   async executeCurrentTask() {
-    // パフォーマンス測定開始
-    this.performanceMonitor.startMeasure('executeCurrentTask');
-
-    // Enhanced validation to prevent null reference errors
-    if (!this.currentTask || typeof this.currentTask !== 'object') {
-      this.logger.warn('executeCurrentTask: 無効なタスク');
-      this.performanceMonitor.endMeasure('executeCurrentTask');
-      return;
-    }
-
-    if (!this.currentTask.type) {
-      this.logger.warn('executeCurrentTask: タスクタイプが空です');
-      this.currentTask = null;
-      this.stateManager.setCurrentTask(null);
-      this.performanceMonitor.endMeasure('executeCurrentTask');
-      return;
-    }
-
-    // Mark task start time for performance tracking
-    this.currentTask.startTime = Date.now();
-    this.stateManager.setCurrentTask(this.currentTask);
-
-    const taskName = this.currentTask.type;
-    this.logger.log(`タスク実行中: ${taskName}`);
-
+    const task = this.currentTask;
+    const epoch = this.commandEpoch;
+    const before = inventorySnapshot(this.bot);
+    const startedAt = Date.now();
+    let result;
     try {
-      // Check if bot is still connected before executing
-      if (!this.isSocketSafe()) {
-        this.logger.warn('ソケットが安全ではないため、タスクをスキップします');
-        this.currentTask = null;
-        this.stateManager.setCurrentTask(null);
-        return;
-      }
-
-      const skill = await this.getOrGenerateSkill(taskName);
-
-      // Register skill if not already known
-      if (skill && this.stateManager && !this.stateManager.getState('knownSkills').has(taskName)) {
-        this.stateManager.addSkill(taskName, skill);
-      }
-
-      if (!skill) {
-        this.handleTaskFailure(taskName, 'No skill available');
-        return;
-      }
-
-      const result = await this.executeSkillSafely(skill, taskName);
-      await this.processTaskResult(result, taskName);
+      const skill = this.skillLibrary.getSkill(task.type);
+      if (!skill) throw new Error(`Unsupported skill: ${task.type}`);
+      this.stateManager.addSkill(task.type, skill);
+      const timeout = Math.max(1, Math.min(this.calculateSkillTimeout(task), task.timeout - Date.now()));
+      result = await this.executeSkillWithTimeout(skill, task.params, timeout);
     } catch (error) {
-      await this.handleTaskError(error, taskName);
+      result = { success: false, reason: error.code || 'OPERATION_FAILED', error: error.message };
     }
-
-    // Always clear the current task when done
+    const record = {
+      task: task.type,
+      params: task.params,
+      startedAt,
+      completedAt: Date.now(),
+      before,
+      after: inventorySnapshot(this.bot),
+      result,
+      cancelled: epoch !== this.commandEpoch
+    };
+    this.taskResults.push(record);
+    if (this.taskResults.length > 50) this.taskResults.shift();
+    this.logger.log(`TASK_RESULT ${JSON.stringify(record)}`);
+    this.taskPlanner.addTaskToHistory(task, result);
+    this.stateManager.completeCurrentTask(result);
     this.currentTask = null;
-    this.stateManager.setCurrentTask(null);
-
-    // パフォーマンス測定終了
-    this.performanceMonitor.endMeasure('executeCurrentTask');
+    this.observer.update();
+    if (epoch === this.commandEpoch && !result?.success) await this.stop(result?.error || result?.reason);
+    this.bot.emit('taskResult', record);
+    if (!this.paused && this.goals.length === 0) this.bot.emit('goalsComplete', this.taskResults);
   }
 
   async getOrGenerateSkill(taskName) {
@@ -1138,27 +1058,7 @@ class MinecraftAI {
   }
 
   async executeSkillWithTimeout(skill, params, timeoutMs) {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`Skill execution timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      // Execute skill asynchronously
-      skill.execute(this.bot, params)
-        .then(result => {
-          clearTimeout(timeoutId);
-          // Check if result indicates failure and reject accordingly
-          if (result && typeof result === 'object' && result.success === false) {
-            reject(new Error(result.error || 'Skill execution failed'));
-          } else {
-            resolve(result);
-          }
-        })
-        .catch(error => {
-          clearTimeout(timeoutId);
-          reject(error);
-        });
-    });
+    return this.operations.run(skill, params, timeoutMs);
   }
 
   announceTaskCompletion(taskName, result) {
@@ -1595,41 +1495,24 @@ class MinecraftAI {
   // sleep method moved to enhanced version below
 
   // Stop the main AI loop gracefully
-  shutdown(reason = 'manual') {
-    if (!this.isInitialized) return;
-    this.logger.warn(`Shutting down AI loop (${reason})`);
+  async shutdown(reason = 'manual') {
+    if (this.shutdownPromise) return this.shutdownPromise;
+    this.isShuttingDown = true;
     this.isInitialized = false;
-
-    // パフォーマンス監視停止
-    if (this.performanceMonitor) {
-      this.performanceMonitor.stopMonitoring();
-    }
-
-    // Shutdown EnvironmentObserver and SharedEnvironment connection
-    if (this.observer && typeof this.observer.shutdown === 'function') {
-      this.observer.shutdown();
-    }
-
-    // Cleanup wrapped methods to prevent memory leaks
-    if (this.originalMethods) {
-      this.originalMethods.forEach((originalMethod, methodName) => {
-        if (this.bot[methodName]) {
-          this.bot[methodName] = originalMethod;
-        }
-      });
-      this.originalMethods.clear();
-    }
-
-    // Detach all bot listeners and ensure socket closed to avoid EPIPE
-    try {
-      this.bot.removeAllListeners();
-      if (!this.bot._client.socket.destroyed) {
-        // Gracefully end connection; prevents lingering writes
-        this.bot.quit('shutdown');
-      }
-    } catch (e) {
-      // Ignore errors during shutdown
-    }
+    this.lifecycle.abort();
+    this.wakeSleep?.();
+    clearInterval(this.observationTimer);
+    this.performanceMonitor.stopMonitoring();
+    this.taskPlanner.pathfindingCache?.shutdown();
+    this.observer.shutdown();
+    this.releaseAllResourceClaims();
+    this.shutdownPromise = (async () => {
+      await this.stop(reason);
+      await this.initializing?.catch(() => {});
+      await this.loopPromise;
+    })();
+    await this.shutdownPromise;
+    // Manager and mineflayer own their listeners and connection lifecycle.
   }
 
   regenerateDefaultGoals() {
@@ -1952,115 +1835,31 @@ class MinecraftAI {
   }
 
   handleDeath() {
-    try {
-      const currentTime = Date.now();
-      this.deathCount++;
-      this.lastDeathTime = currentTime;
-      this.isRespawning = true;
-
-      this.logger.warn(`⚰️ プレイヤーが死亡しました (${this.deathCount}回目)`);
-
-      // Clear current tasks to prevent confusion after respawn
-      this.stateManager.updateState({ currentTask: null }, 'death_handler');
-      this.goals = [];
-
-      // Check for death loop (3 deaths within 60 seconds)
-      if (this.deathCount >= 3 && (currentTime - this.lastDeathTime) < 60000) {
-        this.logger.error('死亡ループを検出、安全モードに移行');
-        this.enterSafeMode();
-      }
-
-      // Chat death message if possible
-      try {
-        if (this.bot.chat && typeof this.bot.chat === 'function') {
-          this.bot.chat(`死亡しました... (${this.deathCount}回目) 💀`);
-        }
-      } catch (chatError) {
-        this.logger.log(`死亡時チャットエラー: ${chatError.message}`);
-      }
-    } catch (error) {
-      this.logger.error(`死亡処理エラー: ${error.message}`);
-    }
+    this.deathCount++;
+    this.isRespawning = true;
+    this.stop('death').catch(error => this.logger.error(error.message));
   }
 
   handleRespawn() {
-    try {
-      this.logger.log('🚀 リスポーンしました');
-      this.isRespawning = false;
-
-      // Reset state after respawn
-      this.stateManager.updateState({ currentTask: null }, 'respawn_handler');
-      this.goals = [];
-
-      // Add safe initial goals after respawn
-      this.goals.push({
-        type: 'gather_wood',
-        priority: 1,
-        description: 'リスポーン後の基本リソース確保'
-      });
-
-      this.goals.push({
-        type: 'find_food',
-        priority: 2,
-        description: 'リスポーン後の食料確保'
-      });
-
-      // Chat respawn message if possible
-      try {
-        if (this.bot.chat && typeof this.bot.chat === 'function') {
-          this.bot.chat('リスポーンしました！再び冒険を開始します 🌟');
-        }
-      } catch (chatError) {
-        this.logger.log(`リスポーン時チャットエラー: ${chatError.message}`);
-      }
-
-      // Resume AI operations after a short delay
-      setTimeout(() => {
-        if (!this.isRespawning && this.bot && this.bot.entity) {
-          this.logger.log('AIオペレーション再開');
-        }
-      }, 2000);
-    } catch (error) {
-      this.logger.error(`リスポーン処理エラー: ${error.message}`);
-    }
+    this.isRespawning = false;
+    // Respawning never overrides an explicit stop or starts new goals.
   }
 
   enterSafeMode() {
-    try {
-      this.logger.warn('🛡️ 安全モードに移行');
-
-      // Clear all goals
-      this.goals = [];
-
-      // Add only very safe goals
-      this.goals.push({
-        type: 'build_shelter',
-        priority: 1,
-        description: '安全モード: 避難所建設'
-      });
-
-      // Reset death counter after entering safe mode
-      setTimeout(() => {
-        this.deathCount = Math.max(0, this.deathCount - 1);
-        this.logger.log('安全モード終了、通常動作に復帰');
-      }, 120000); // 2 minutes safe mode
-    } catch (error) {
-      this.logger.error(`安全モード移行エラー: ${error.message}`);
-    }
+    return this.stop('safe_mode');
   }
 
   // Enhanced sleep method to handle respawn state
   async sleep(ms) {
-    if (this.isRespawning) {
-      // Don't sleep during respawn process
-      return;
-    }
-
+    if (this.isShuttingDown) return;
     return new Promise(resolve => {
-      this.sleepTimeout = setTimeout(() => {
+      this.wakeSleep = () => {
+        clearTimeout(this.sleepTimeout);
         this.sleepTimeout = null;
+        this.wakeSleep = null;
         resolve();
-      }, ms);
+      };
+      this.sleepTimeout = setTimeout(this.wakeSleep, ms);
     });
   }
 
@@ -2070,7 +1869,7 @@ class MinecraftAI {
     const checkInterval = 2000; // 2秒間隔でチェック
     const startTime = Date.now();
 
-    while (Date.now() - startTime < maxWaitTime) {
+    while (!this.isShuttingDown && Date.now() - startTime < maxWaitTime) {
       const canStart = this.coordinator.canStartTasks(this.playerId);
 
       if (canStart.canStart) {
@@ -2083,6 +1882,7 @@ class MinecraftAI {
     }
 
     // タイムアウト後の処理を改善
+    if (this.isShuttingDown) return;
     this.logger.warn('⚠️ 同期待機がタイムアウトしました。単独でタスクを開始します。');
     this.logger.log('💡 他のプレイヤーが参加していない可能性があります。');
 

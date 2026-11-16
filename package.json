@@ -9,7 +9,10 @@
     "lint:fix": "eslint . --fix",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "server:setup": "node scripts/setup-paper.js",
+    "server:start": "node scripts/start-paper.js",
+    "test:acceptance": "node scripts/acceptance.js"
   },
   "keywords": [
     "minecraft",
@@ -24,9 +27,10 @@
     "cross-env": "^7.0.3",
     "dotenv": "^16.0.0",
     "minecraft-data": "^3.90.0",
-    "mineflayer": "^4.29.0",
+    "mineflayer": "4.39.0",
     "mineflayer-pathfinder": "^2.4.0",
     "openai": "^4.0.0",
+    "prismarine-item": "1.18.0",
     "vec3": "^0.1.8"
   },
   "devDependencies": {
@@ -38,6 +42,6 @@
     "jest": "^30.0.4"
   },
   "engines": {
-    "node": ">=16.13.0"
+    "node": ">=22"
   }
 }

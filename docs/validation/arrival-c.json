@@ -1,0 +1,647 @@
+{
+  "startedAt": "2026-11-15T12:30:36.472Z",
+  "versions": {
+    "node": "v24.22.1",
+    "mineflayer": "4.39.0",
+    "minecraft": "1.21.4",
+    "build": 232,
+    "file": "paper-1.21.4-232.jar",
+    "url": "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar",
+    "sha256": "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc"
+  },
+  "trials": [
+    {
+      "number": 1,
+      "initial": "[21:31:17 INFO]: MineCortexBot1 has the following entity data: []",
+      "loadedPackets": 1,
+      "steps": [
+        {
+          "task": "gather_wood",
+          "params": {
+            "amount": 3
+          },
+          "startedAt": 1794745878169,
+          "completedAt": 1794745889093,
+          "before": {},
+          "after": {
+            "oak_log": 3
+          },
+          "result": {
+            "success": true,
+            "blockType": "oak_log",
+            "itemName": "oak_log",
+            "itemsCollected": 3,
+            "targetReached": true
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:29 INFO]: MineCortexBot1 has the following entity data: [{count: 3, Slot: 0b, id: \"minecraft:oak_log\"}]",
+          "serverCount": {
+            "count": 3,
+            "raw": "[21:31:29 INFO]: Found 3 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "craft_workbench",
+          "params": {},
+          "startedAt": 1794745889494,
+          "completedAt": 1794745889800,
+          "before": {
+            "oak_log": 3
+          },
+          "after": {
+            "crafting_table": 1,
+            "oak_log": 2
+          },
+          "result": {
+            "success": true,
+            "crafted": {
+              "crafting_table": 1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:29 INFO]: MineCortexBot1 has the following entity data: [{count: 2, Slot: 0b, id: \"minecraft:oak_log\"}, {count: 1, Slot: 9b, id: \"minecraft:crafting_table\"}]",
+          "serverCount": {
+            "count": 1,
+            "raw": "[21:31:29 INFO]: Found 1 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "place_workbench",
+          "params": {},
+          "startedAt": 1794745890200,
+          "completedAt": 1794745890395,
+          "before": {
+            "crafting_table": 1,
+            "oak_log": 2
+          },
+          "after": {
+            "oak_log": 2
+          },
+          "result": {
+            "success": true,
+            "placed": "crafting_table",
+            "position": {
+              "x": 6,
+              "y": 64,
+              "z": -1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:30 INFO]: MineCortexBot1 has the following entity data: [{count: 2, Slot: 0b, id: \"minecraft:oak_log\"}]",
+          "serverBlock": "[21:31:30 INFO]: Gamerule doTileDrops is currently set to: true"
+        },
+        {
+          "task": "craft_tools",
+          "params": {
+            "tools": [
+              "wooden_pickaxe"
+            ]
+          },
+          "startedAt": 1794745890797,
+          "completedAt": 1794745890985,
+          "before": {
+            "oak_log": 2
+          },
+          "after": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1
+          },
+          "result": {
+            "success": true,
+            "crafted": {
+              "wooden_pickaxe": 1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:31 INFO]: MineCortexBot1 has the following entity data: [{count: 3, Slot: 9b, id: \"minecraft:oak_planks\"}, {count: 2, Slot: 10b, id: \"minecraft:stick\"}, {count: 1, Slot: 11b, id: \"minecraft:wooden_pickaxe\"}]",
+          "serverCount": {
+            "count": 1,
+            "raw": "[21:31:31 INFO]: Found 1 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "mine_block",
+          "params": {
+            "blockType": "stone",
+            "amount": 3
+          },
+          "startedAt": 1794745891385,
+          "completedAt": 1794745897157,
+          "before": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1
+          },
+          "after": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1,
+            "cobblestone": 3
+          },
+          "result": {
+            "success": true,
+            "blockType": "stone",
+            "itemName": "cobblestone",
+            "itemsCollected": 3,
+            "targetReached": true
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:37 INFO]: MineCortexBot1 has the following entity data: [{count: 1, Slot: 0b, components: {\"minecraft:damage\": 3}, id: \"minecraft:wooden_pickaxe\"}, {count: 3, Slot: 1b, id: \"minecraft:cobblestone\"}, {count: 3, Slot: 9b, id: \"minecraft:oak_planks\"}, {count: 2, Slot: 10b, id: \"minecraft:stick\"}]",
+          "serverCount": {
+            "count": 3,
+            "raw": "[21:31:37 INFO]: Found 3 matching item(s) on player MineCortexBot1"
+          }
+        }
+      ],
+      "finalInventory": {
+        "oak_planks": 3,
+        "stick": 2,
+        "wooden_pickaxe": 1,
+        "cobblestone": 3
+      },
+      "serverDisconnect": "[21:31:37 INFO]: There are 0 of a max of 2 players online: ",
+      "success": true
+    },
+    {
+      "number": 2,
+      "initial": "[21:31:39 INFO]: MineCortexBot1 has the following entity data: []",
+      "loadedPackets": 1,
+      "steps": [
+        {
+          "task": "gather_wood",
+          "params": {
+            "amount": 3
+          },
+          "startedAt": 1794745900196,
+          "completedAt": 1794745910669,
+          "before": {},
+          "after": {
+            "oak_log": 3
+          },
+          "result": {
+            "success": true,
+            "blockType": "oak_log",
+            "itemName": "oak_log",
+            "itemsCollected": 3,
+            "targetReached": true
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:50 INFO]: MineCortexBot1 has the following entity data: [{count: 3, Slot: 0b, id: \"minecraft:oak_log\"}]",
+          "serverCount": {
+            "count": 3,
+            "raw": "[21:31:50 INFO]: Found 3 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "craft_workbench",
+          "params": {},
+          "startedAt": 1794745911070,
+          "completedAt": 1794745911114,
+          "before": {
+            "oak_log": 3
+          },
+          "after": {
+            "crafting_table": 1,
+            "oak_log": 2
+          },
+          "result": {
+            "success": true,
+            "crafted": {
+              "crafting_table": 1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:51 INFO]: MineCortexBot1 has the following entity data: [{count: 2, Slot: 0b, id: \"minecraft:oak_log\"}, {count: 1, Slot: 9b, id: \"minecraft:crafting_table\"}]",
+          "serverCount": {
+            "count": 1,
+            "raw": "[21:31:51 INFO]: Found 1 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "place_workbench",
+          "params": {},
+          "startedAt": 1794745911513,
+          "completedAt": 1794745911523,
+          "before": {
+            "crafting_table": 1,
+            "oak_log": 2
+          },
+          "after": {
+            "oak_log": 2
+          },
+          "result": {
+            "success": true,
+            "placed": "crafting_table",
+            "position": {
+              "x": 5,
+              "y": 64,
+              "z": 0
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:51 INFO]: MineCortexBot1 has the following entity data: [{count: 2, Slot: 0b, id: \"minecraft:oak_log\"}]",
+          "serverBlock": "[21:31:51 INFO]: Gamerule doTileDrops is currently set to: true"
+        },
+        {
+          "task": "craft_tools",
+          "params": {
+            "tools": [
+              "wooden_pickaxe"
+            ]
+          },
+          "startedAt": 1794745911925,
+          "completedAt": 1794745912100,
+          "before": {
+            "oak_log": 2
+          },
+          "after": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1
+          },
+          "result": {
+            "success": true,
+            "crafted": {
+              "wooden_pickaxe": 1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:52 INFO]: MineCortexBot1 has the following entity data: [{count: 3, Slot: 9b, id: \"minecraft:oak_planks\"}, {count: 2, Slot: 10b, id: \"minecraft:stick\"}, {count: 1, Slot: 11b, id: \"minecraft:wooden_pickaxe\"}]",
+          "serverCount": {
+            "count": 1,
+            "raw": "[21:31:52 INFO]: Found 1 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "mine_block",
+          "params": {
+            "blockType": "stone",
+            "amount": 3
+          },
+          "startedAt": 1794745912501,
+          "completedAt": 1794745918505,
+          "before": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1
+          },
+          "after": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1,
+            "cobblestone": 3
+          },
+          "result": {
+            "success": true,
+            "blockType": "stone",
+            "itemName": "cobblestone",
+            "itemsCollected": 3,
+            "targetReached": true
+          },
+          "cancelled": false,
+          "serverInventory": "[21:31:58 INFO]: MineCortexBot1 has the following entity data: [{count: 1, Slot: 0b, components: {\"minecraft:damage\": 3}, id: \"minecraft:wooden_pickaxe\"}, {count: 3, Slot: 1b, id: \"minecraft:cobblestone\"}, {count: 3, Slot: 9b, id: \"minecraft:oak_planks\"}, {count: 2, Slot: 10b, id: \"minecraft:stick\"}]",
+          "serverCount": {
+            "count": 3,
+            "raw": "[21:31:58 INFO]: Found 3 matching item(s) on player MineCortexBot1"
+          }
+        }
+      ],
+      "finalInventory": {
+        "oak_planks": 3,
+        "stick": 2,
+        "wooden_pickaxe": 1,
+        "cobblestone": 3
+      },
+      "serverDisconnect": "[21:31:58 INFO]: There are 0 of a max of 2 players online: ",
+      "success": true
+    },
+    {
+      "number": 3,
+      "initial": "[21:32:01 INFO]: MineCortexBot1 has the following entity data: []",
+      "loadedPackets": 1,
+      "steps": [
+        {
+          "task": "gather_wood",
+          "params": {
+            "amount": 3
+          },
+          "startedAt": 1794745921557,
+          "completedAt": 1794745932432,
+          "before": {},
+          "after": {
+            "oak_log": 3
+          },
+          "result": {
+            "success": true,
+            "blockType": "oak_log",
+            "itemName": "oak_log",
+            "itemsCollected": 3,
+            "targetReached": true
+          },
+          "cancelled": false,
+          "serverInventory": "[21:32:12 INFO]: MineCortexBot1 has the following entity data: [{count: 3, Slot: 0b, id: \"minecraft:oak_log\"}]",
+          "serverCount": {
+            "count": 3,
+            "raw": "[21:32:12 INFO]: Found 3 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "craft_workbench",
+          "params": {},
+          "startedAt": 1794745932833,
+          "completedAt": 1794745932864,
+          "before": {
+            "oak_log": 3
+          },
+          "after": {
+            "crafting_table": 1,
+            "oak_log": 2
+          },
+          "result": {
+            "success": true,
+            "crafted": {
+              "crafting_table": 1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:32:12 INFO]: MineCortexBot1 has the following entity data: [{count: 2, Slot: 0b, id: \"minecraft:oak_log\"}, {count: 1, Slot: 9b, id: \"minecraft:crafting_table\"}]",
+          "serverCount": {
+            "count": 1,
+            "raw": "[21:32:12 INFO]: Found 1 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "place_workbench",
+          "params": {},
+          "startedAt": 1794745933265,
+          "completedAt": 1794745933286,
+          "before": {
+            "crafting_table": 1,
+            "oak_log": 2
+          },
+          "after": {
+            "oak_log": 2
+          },
+          "result": {
+            "success": true,
+            "placed": "crafting_table",
+            "position": {
+              "x": 6,
+              "y": 64,
+              "z": 0
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:32:13 INFO]: MineCortexBot1 has the following entity data: [{count: 2, Slot: 0b, id: \"minecraft:oak_log\"}]",
+          "serverBlock": "[21:32:13 INFO]: Gamerule doTileDrops is currently set to: true"
+        },
+        {
+          "task": "craft_tools",
+          "params": {
+            "tools": [
+              "wooden_pickaxe"
+            ]
+          },
+          "startedAt": 1794745933688,
+          "completedAt": 1794745933914,
+          "before": {
+            "oak_log": 2
+          },
+          "after": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1
+          },
+          "result": {
+            "success": true,
+            "crafted": {
+              "wooden_pickaxe": 1
+            }
+          },
+          "cancelled": false,
+          "serverInventory": "[21:32:13 INFO]: MineCortexBot1 has the following entity data: [{count: 3, Slot: 9b, id: \"minecraft:oak_planks\"}, {count: 2, Slot: 10b, id: \"minecraft:stick\"}, {count: 1, Slot: 11b, id: \"minecraft:wooden_pickaxe\"}]",
+          "serverCount": {
+            "count": 1,
+            "raw": "[21:32:14 INFO]: Found 1 matching item(s) on player MineCortexBot1"
+          }
+        },
+        {
+          "task": "mine_block",
+          "params": {
+            "blockType": "stone",
+            "amount": 3
+          },
+          "startedAt": 1794745934314,
+          "completedAt": 1794745940152,
+          "before": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1
+          },
+          "after": {
+            "oak_planks": 3,
+            "stick": 2,
+            "wooden_pickaxe": 1,
+            "cobblestone": 3
+          },
+          "result": {
+            "success": true,
+            "blockType": "stone",
+            "itemName": "cobblestone",
+            "itemsCollected": 3,
+            "targetReached": true
+          },
+          "cancelled": false,
+          "serverInventory": "[21:32:20 INFO]: MineCortexBot1 has the following entity data: [{count: 1, Slot: 0b, components: {\"minecraft:damage\": 3}, id: \"minecraft:wooden_pickaxe\"}, {count: 3, Slot: 1b, id: \"minecraft:cobblestone\"}, {count: 3, Slot: 9b, id: \"minecraft:oak_planks\"}, {count: 2, Slot: 10b, id: \"minecraft:stick\"}]",
+          "serverCount": {
+            "count": 3,
+            "raw": "[21:32:20 INFO]: Found 3 matching item(s) on player MineCortexBot1"
+          }
+        }
+      ],
+      "finalInventory": {
+        "oak_planks": 3,
+        "stick": 2,
+        "wooden_pickaxe": 1,
+        "cobblestone": 3
+      },
+      "serverDisconnect": "[21:32:20 INFO]: There are 0 of a max of 2 players online: ",
+      "success": true
+    }
+  ],
+  "checks": [
+    {
+      "check": "disconnect_before_spawn_initialization",
+      "success": true
+    },
+    {
+      "check": "status_and_nearby_goto",
+      "position": {
+        "x": 2.3120976874608914,
+        "y": 64,
+        "z": 3.3739343615965334
+      },
+      "observer": {
+        "x": 2.31,
+        "y": 64,
+        "z": 3.37,
+        "timestamp": 1794745868036
+      }
+    },
+    {
+      "check": "stop_movement_and_stay_paused",
+      "position": {
+        "x": 2.3120976874608914,
+        "y": 64,
+        "z": 3.3739343615965334
+      }
+    },
+    {
+      "check": "deadline_cancels_operation",
+      "record": {
+        "task": "move_to",
+        "params": {
+          "x": 100,
+          "y": 100,
+          "z": 0
+        },
+        "startedAt": 1794745869725,
+        "completedAt": 1794745869878,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": false,
+          "reason": "OPERATION_FAILED",
+          "error": "Operation deadline exceeded (149ms)"
+        },
+        "cancelled": false
+      }
+    },
+    {
+      "check": "goto_after_cancellation",
+      "record": {
+        "task": "move_to",
+        "params": {
+          "x": 0,
+          "y": 64,
+          "z": 2
+        },
+        "startedAt": 1794745870679,
+        "completedAt": 1794745870991,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": true,
+          "position": {
+            "x": 1.5,
+            "y": 64,
+            "z": 2.6660106720325905
+          }
+        },
+        "cancelled": false
+      }
+    },
+    {
+      "check": "stop_digging",
+      "record": {
+        "task": "gather_wood",
+        "params": {
+          "amount": 3
+        },
+        "startedAt": 1794745871392,
+        "completedAt": 1794745871940,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": false,
+          "reason": "OPERATION_FAILED",
+          "error": "Stopped by command"
+        },
+        "cancelled": true
+      }
+    },
+    {
+      "check": "failure_TARGET_NOT_FOUND",
+      "record": {
+        "task": "gather_wood",
+        "params": {
+          "amount": 1
+        },
+        "startedAt": 1794745873543,
+        "completedAt": 1794745873838,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": false,
+          "reason": "TARGET_NOT_FOUND",
+          "error": "No logs within 32 blocks"
+        },
+        "cancelled": false
+      }
+    },
+    {
+      "check": "failure_MISSING_MATERIALS",
+      "record": {
+        "task": "craft_workbench",
+        "params": {},
+        "startedAt": 1794745874239,
+        "completedAt": 1794745874240,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": false,
+          "reason": "MISSING_MATERIALS",
+          "error": "Need 4 planks"
+        },
+        "cancelled": false
+      }
+    },
+    {
+      "check": "failure_NO_TOOL",
+      "record": {
+        "task": "mine_block",
+        "params": {
+          "blockType": "stone",
+          "amount": 1
+        },
+        "startedAt": 1794745874641,
+        "completedAt": 1794745874641,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": false,
+          "reason": "NO_TOOL",
+          "error": "A pickaxe is required to collect stone"
+        },
+        "cancelled": false
+      }
+    },
+    {
+      "check": "failure_UNREACHABLE",
+      "record": {
+        "task": "gather_wood",
+        "params": {
+          "amount": 1
+        },
+        "startedAt": 1794745875042,
+        "completedAt": 1794745875256,
+        "before": {},
+        "after": {},
+        "result": {
+          "success": false,
+          "reason": "UNREACHABLE",
+          "error": "oak_log"
+        },
+        "cancelled": false
+      }
+    },
+    {
+      "check": "npm_start_and_sigterm_shutdown",
+      "success": true
+    }
+  ],
+  "listener": "LISTEN 0      0      [::ffff:127.0.0.1]:25565            *:*    users:((\"java\",pid=101405,fd=143))",
+  "success": true,
+  "completedAt": "2026-11-15T12:32:26.079Z"
+}

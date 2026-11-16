@@ -1,19 +1,14 @@
 const InventoryUtils = require('./InventoryUtils');
-const { PathfindingCache } = require('./PathfindingCache');
 const { ValidationUtils } = require('./utils/ValidationUtils');
 const { Logger } = require('./utils/Logger');
 
 class TaskPlanner {
   constructor(bot, pathfindingCache = null) {
     this.bot = bot;
-    this.pathfindingCache = pathfindingCache || new PathfindingCache();
+    this.pathfindingCache = pathfindingCache;
     this.activeTasks = new Map();
     this.taskHistory = [];
     this.logger = Logger.createLogger('TaskPlanner');
-
-    if (!pathfindingCache) {
-      this.logger.log('独自PathfindingCacheを初期化');
-    }
   }
 
   async planTask(goal) {
@@ -24,65 +19,34 @@ class TaskPlanner {
       return null;
     }
 
+    let task;
     switch (goal.type) {
-    case 'explore':
-      return this.planExploration(goal);
-
-    case 'gather_wood':
-      return this.planWoodGathering(goal);
-
-    case 'craft_tools':
-    case 'craft_basic_tools':
-      return this.planToolCrafting(goal);
-
+    case 'gather_wood': task = this.planWoodGathering(goal); break;
     case 'craft_workbench':
-      return this.planWorkbenchCrafting(goal);
-
+      task = { type: 'craft_workbench', params: {}, timeout: Date.now() + 30000 }; break;
     case 'place_workbench':
-      return this.planWorkbenchPlacement(goal);
-
-    case 'craft_with_workbench':
-      return this.planAdvancedCrafting(goal);
-
-    case 'craft_stone_tools':
-      return this.planStoneToolCrafting(goal);
-
-    case 'move_to':
-      return this.planMovement(goal);
-
-    case 'follow':
-      return this.planFollowing(goal);
-
-    case 'find_food':
-      return this.planFoodGathering(goal);
-
-    case 'find_stone':
-      return this.planStoneGathering(goal);
-
-    case 'build_shelter':
-      return this.planShelterBuilding(goal);
-
-    case 'mine_safely':
-      return this.planSafeMining(goal);
-
-      // Handle AI-generated goal types
-    case 'task':
-    case 'skill_improvement':
-    case 'goal_progression':
-    case 'failure_analysis':
-    case 'new_capability_exploration':
-    case 'integration_task':
-      return this.planGenericTask(goal);
-
-    default:
-      if (goal.type && typeof goal.type === 'string') {
-        this.logger.log(`不明な目標タイプ: ${goal.type}, 汎用タスクを作成`);
-        return this.planGenericTask(goal);
-      } else {
-        this.logger.error('無効な目標タイプで汎用タスクを作成できません');
-        return null;
-      }
+      task = { type: 'place_workbench', params: {}, timeout: Date.now() + 30000 }; break;
+    case 'craft_tools':
+    case 'craft_basic_tools': task = this.planToolCrafting(goal); break;
+    case 'find_stone': task = this.planStoneGathering(goal); break;
+    case 'mine_block':
+      task = {
+        type: 'mine_block',
+        params: {
+          blockType: goal.blockType,
+          amount: goal.amount ?? 1,
+          position: goal.position
+        },
+        timeout: Date.now() + 60000
+      }; break;
+    case 'move_to': task = this.planMovement(goal); break;
+    default: throw new Error(`Unsupported goal: ${goal.type}`);
     }
+    if (goal.timeoutMs !== undefined) {
+      if (!Number.isFinite(goal.timeoutMs) || goal.timeoutMs <= 0) throw new Error('Invalid timeoutMs');
+      task.timeout = Date.now() + goal.timeoutMs;
+    }
+    return task;
   }
 
   planExploration(goal) {
@@ -98,37 +62,16 @@ class TaskPlanner {
   }
 
   planWoodGathering(goal) {
-    const { amount = 20 } = goal;
-
-    // Check if we have an axe
-    let hasAxe = false;
-    if (this.bot && this.bot.inventory) {
-      hasAxe = this.bot.inventory.items().some(item =>
-        item && item.name && item.name.includes('axe')
-      );
-    }
-
-    const task = {
+    return {
       type: 'gather_wood',
-      params: { amount },
-      priority: goal.priority || 3,
-      timeout: Date.now() + 300000, // 5 minutes
+      params: { amount: goal.amount ?? 3 },
+      timeout: Date.now() + 90000,
       prerequisites: []
     };
-
-    if (!hasAxe) {
-      // Need to craft axe first
-      task.prerequisites.push({
-        type: 'craft_tools',
-        params: { tools: ['wooden_axe'] }
-      });
-    }
-
-    return task;
   }
 
   planToolCrafting(goal) {
-    const { tools = ['wooden_pickaxe', 'wooden_axe', 'wooden_sword'] } = goal;
+    const { tools = ['wooden_pickaxe'] } = goal;
     this.logger.log(`ツールクラフトタスクを計画中: ${tools.join(', ')}`);
 
     const needsWood = this.checkWoodRequirements(tools);

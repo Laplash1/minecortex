@@ -10,6 +10,7 @@ class MultiplePlayersManager {
   constructor() {
     this.players = new Map();
     this.isShuttingDown = false;
+    this.reconnectTimers = new Set();
 
     // Performance optimization components for multi-bot scenarios
     const playerCount = parseInt(process.env.MULTIPLE_PLAYERS_COUNT) || 3;
@@ -81,7 +82,8 @@ class MultiplePlayersManager {
     return {
       host: process.env[`${prefix}_HOST`] || process.env.MINECRAFT_HOST || 'localhost',
       port: parseInt(process.env[`${prefix}_PORT`]) || parseInt(process.env.MINECRAFT_PORT) || 25565,
-      username: process.env[`${prefix}_USERNAME`] || this.generateRandomUsername(),
+      username: process.env[`${prefix}_USERNAME`] || `MineCortexBot${playerIndex}`,
+      version: process.env.MINECRAFT_VERSION || '1.21.4',
       auth: process.env[`${prefix}_AUTH`] || process.env.MINECRAFT_AUTH || 'offline',
       personality: process.env[`${prefix}_PERSONALITY`] || 'generalist',
       spawnDelay: parseInt(process.env[`${prefix}_SPAWN_DELAY`]) || (playerIndex * 2000)
@@ -152,8 +154,14 @@ class MultiplePlayersManager {
 
     bot.on('spawn', async () => {
       console.log(`[プレイヤー${playerIndex}] ワールドにスポーンしました`);
-      ai.onSpawn();
-      await ai.initialize(); // initializeを非同期で実行
+      try {
+        ai.onSpawn();
+        await ai.initialize();
+      } catch (error) {
+        console.error(`[プレイヤー${playerIndex}] 初期化失敗: ${error.message}`);
+        await ai.shutdown('initialization_failed');
+        bot.quit('initialization_failed');
+      }
     });
 
     bot.on('chat', async (username, message) => {
@@ -199,13 +207,15 @@ class MultiplePlayersManager {
 
     console.log(`[プレイヤー${playerIndex}] ${delay / 1000}秒後に再接続を試行... (試行回数: ${playerInfo.reconnectAttempts})`);
 
-    setTimeout(async () => {
+    const timer = setTimeout(async () => {
+      this.reconnectTimers.delete(timer);
       if (!this.isShuttingDown && playerInfo.reconnectAttempts <= 10) {
         console.log(`[プレイヤー${playerIndex}] 再接続中...`);
         if (playerInfo.ai) playerInfo.ai.shutdown('reconnect');
         await this.spawnPlayer(playerIndex);
       }
     }, delay);
+    this.reconnectTimers.add(timer);
   }
 
   // 複数プレイヤーの起動
@@ -271,17 +281,26 @@ class MultiplePlayersManager {
   async shutdown() {
     console.log('全プレイヤーをシャットダウン中...');
     this.isShuttingDown = true;
+    for (const timer of this.reconnectTimers) clearTimeout(timer);
+    this.reconnectTimers.clear();
 
     for (const [index, playerInfo] of this.players.entries()) {
       if (playerInfo.bot) {
         console.log(`プレイヤー${index}を停止中...`);
 
         if (playerInfo.ai) {
-          playerInfo.ai.shutdown('manager_shutdown');
+          await playerInfo.ai.shutdown('manager_shutdown');
         }
 
         if (typeof playerInfo.bot.quit === 'function') {
-          playerInfo.bot.quit('manager_shutdown');
+          const bot = playerInfo.bot;
+          if (bot._client?.socket && !bot._client.socket.destroyed) {
+            await new Promise(resolve => {
+              const timer = setTimeout(() => { bot.end('shutdown_timeout'); resolve(); }, 3000);
+              bot.once('end', () => { clearTimeout(timer); resolve(); });
+              bot.quit('manager_shutdown');
+            });
+          } else bot.end('manager_shutdown');
         }
       }
     }
@@ -322,47 +341,27 @@ class MultiplePlayersManager {
   }
 }
 
-// メイン実行
-const manager = new MultiplePlayersManager();
+module.exports = { MultiplePlayersManager };
 
-console.log('=== 複数AIプレイヤー管理システム ===');
-console.log('Ctrl+C で全プレイヤーを停止できます');
-console.log('============================\n');
-
-// コマンドライン引数をチェック
-const useConfigFile = process.argv.includes('--config');
-
-// プレイヤー起動
-manager.spawnMultiplePlayers(useConfigFile).catch(error => {
-  console.error('プレイヤー起動エラー:', error);
-});
-
-// ステータス表示（定期実行）
-setInterval(() => {
-  if (manager.players.size > 0) {
-    manager.showStatus();
+if (require.main === module) {
+  const manager = new MultiplePlayersManager();
+  const statusTimer = setInterval(() => manager.showStatus(), 30000);
+  manager.spawnMultiplePlayers(process.argv.includes('--config')).catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+  let shuttingDown = false;
+  async function shutdown(code) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    clearInterval(statusTimer);
+    await manager.shutdown();
+    process.exitCode = code;
   }
-}, 30000); // 30秒ごと
-
-// 優雅なシャットダウン
-process.on('SIGINT', async () => {
-  console.log('\nシャットダウン信号を受信しました...');
-  await manager.shutdown();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\n終了信号を受信しました...');
-  await manager.shutdown();
-  process.exit(0);
-});
-
-// 未処理エラーのキャッチ
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('未処理のPromise拒否:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('未処理の例外:', error);
-  manager.shutdown().then(() => process.exit(1));
-});
+  process.on('SIGINT', () => shutdown(0));
+  process.on('SIGTERM', () => shutdown(0));
+  process.on('unhandledRejection', error => {
+    console.error('Unhandled rejection:', error);
+    shutdown(1);
+  });
+}
